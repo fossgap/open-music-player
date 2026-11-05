@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources><gresource prefix="/io/github/openaudio/Player">
+  <file>icons/scalable/actions/open-audio-star-outline-symbolic.svg</file>
+</gresource></gresources>

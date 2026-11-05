@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <object class="GtkWindow" id="settings_window"><property name="title">Settings</property><property name="default-width">560</property><property name="default-height">580</property><property name="modal">true</property>
+    <child><object class="GtkScrolledWindow"><property name="hscrollbar-policy">never</property><property name="child"><object class="GtkBox"><property name="orientation">vertical</property><property name="spacing">22</property><style><class name="settings-body"/></style>
+      <child><object class="GtkLabel"><property name="label">Make yourself at home.</property><property name="xalign">0</property><style><class name="empty-title"/></style></object></child>
+      <child><object class="GtkBox"><property name="spacing">20</property><child><object class="GtkLabel"><property name="label">Language</property><property name="hexpand">true</property><property name="xalign">0</property></object></child><child><object class="GtkDropDown" id="language"><property name="tooltip-text">Language</property></object></child></object></child>
+      <child><object class="GtkLabel" id="restart_note"><property name="label">Restart to apply language changes.</property><property name="visible">false</property><property name="xalign">0</property><style><class name="muted"/><class name="small"/></style></object></child>
+      <child><object class="GtkBox"><property name="spacing">20</property><child><object class="GtkLabel"><property name="label">Keep playing when the window closes</property><property name="wrap">true</property><property name="hexpand">true</property><property name="xalign">0</property></object></child><child><object class="GtkSwitch" id="background"><property name="valign">center</property><property name="tooltip-text">Background playback</property></object></child></object></child>
+      <child><object class="GtkLabel" id="tray_note"><property name="label">A system tray is required to close into the background.</property><property name="wrap">true</property><property name="xalign">0</property><style><class name="small"/><class name="muted"/></style></object></child>
+      <child><object class="GtkSeparator"/></child>
+      <child><object class="GtkLabel"><property name="label">Music folders</property><property name="xalign">0</property><style><class name="section-title"/></style></object></child>
+      <child><object class="GtkListBox" id="folders"><property name="selection-mode">none</property></object></child>
+      <child><object class="GtkButton" id="add_folder"><property name="label">Add music</property><property name="halign">start</property></object></child>
+      <child><object class="GtkLabel"><property name="label">Subscriptions</property><property name="xalign">0</property><style><class name="section-title"/></style></object></child>
+      <child><object class="GtkListBox" id="subscriptions"><property name="selection-mode">none</property></object></child>
+      <child><object class="GtkButton" id="delete_playlist"><property name="label">Delete selected playlist</property><property name="halign">start</property></object></child>
+      <child><object class="GtkSeparator"/></child>
+      <child><object class="GtkLabel"><property name="label">Open Audio Player · 0.1.0</property><property name="xalign">0</property><style><class name="muted"/><class name="small"/></style></object></child>
+      <child><object class="GtkButton" id="close"><property name="label">Done</property><property name="halign">end</property><style><class name="suggested-action"/></style></object></child>
+    </object></property></object></child>
+  </object>
+</interface>

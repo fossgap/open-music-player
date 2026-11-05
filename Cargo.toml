@@ -1,0 +1,28 @@
+[package]
+name = "open-audio-player"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "A native Linux home for music, podcasts, and radio"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.10.3", features = ["v4_8"] }
+gst = { package = "gstreamer", version = "0.21.3" }
+gst-app = { package = "gstreamer-app", version = "0.21.2" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+roxmltree = "0.20"
+url = "2"
+walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.dev]
+debug = 0
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

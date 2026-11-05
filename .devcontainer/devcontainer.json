@@ -1,0 +1,15 @@
+{
+  "name": "Open Audio Player · Rust / GTK",
+  "build": { "dockerfile": "../Dockerfile", "context": ".." },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "containerEnv": { "GDK_BACKEND": "x11", "GSK_RENDERER": "cairo" },
+  "customizations": {
+    "vscode": {
+      "extensions": ["rust-lang.rust-analyzer", "tamasfe.even-better-toml", "redhat.vscode-xml"],
+      "settings": { "editor.formatOnSave": true }
+    }
+  },
+  "postCreateCommand": "cargo fetch --locked",
+  "remoteUser": "root"
+}

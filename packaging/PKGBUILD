@@ -1,0 +1,21 @@
+pkgname=open-audio-player
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='A native home for music, podcasts, and radio'
+arch=('x86_64' 'aarch64')
+license=('LicenseRef-Unspecified')
+depends=('gtk4' 'gstreamer' 'gst-plugins-base' 'gst-plugins-good' 'ffmpeg' 'ca-certificates')
+optdepends=('gst-libav: additional audio codecs' 'gst-plugins-bad: additional streams' 'yt-dlp: YouTube audio')
+makedepends=('rust' 'pkgconf')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "$srcdir/$pkgname-$pkgver"
+    cargo build --release --locked
+}
+
+package() {
+    cd "$srcdir/$pkgname-$pkgver"
+    make DESTDIR="$pkgdir" PREFIX=/usr install
+}

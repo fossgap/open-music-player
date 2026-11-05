@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -e
+
+# Support both the AppImage runtime and direct execution after extraction.
+export APPDIR="${APPDIR:-$(cd -- "$(dirname -- "$0")" && pwd)}"
+export APPIMAGE_GTK_THEME="${APPIMAGE_GTK_THEME:-Adwaita:dark}"
+source "$APPDIR/apprun-hooks/linuxdeploy-plugin-gtk.sh"
+source "$APPDIR/apprun-hooks/linuxdeploy-plugin-gstreamer.sh"
+export GIO_EXTRA_MODULES="$APPDIR/usr/lib/gio/modules"
+export PATH="$APPDIR/usr/bin:$PATH"
+export LD_LIBRARY_PATH="$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$APPDIR/usr/bin/open-audio-player" "$@"

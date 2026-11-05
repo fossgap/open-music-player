@@ -1,0 +1,476 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-04T23:14:27Z",
+  "title": "Design System: Open Audio Player",
+  "extensions": {
+    "colorMeta": {
+      "sage": {
+        "role": "primary",
+        "displayName": "Soft Sage",
+        "tonalRamp": [
+          "oklch(15.00% 0.0389 129.02)",
+          "oklch(26.43% 0.0632 129.02)",
+          "oklch(37.86% 0.0795 129.02)",
+          "oklch(49.29% 0.0856 129.02)",
+          "oklch(60.71% 0.0808 129.02)",
+          "oklch(72.14% 0.0657 129.02)",
+          "oklch(83.57% 0.0422 129.02)",
+          "oklch(95.00% 0.0134 129.02)"
+        ]
+      },
+      "sage-hover": {
+        "role": "primary",
+        "displayName": "Light Sage",
+        "tonalRamp": [
+          "oklch(15.00% 0.0320 130.50)",
+          "oklch(26.43% 0.0521 130.50)",
+          "oklch(37.86% 0.0655 130.50)",
+          "oklch(49.29% 0.0706 130.50)",
+          "oklch(60.71% 0.0666 130.50)",
+          "oklch(72.14% 0.0542 130.50)",
+          "oklch(83.57% 0.0348 130.50)",
+          "oklch(95.00% 0.0110 130.50)"
+        ]
+      },
+      "sage-ink": {
+        "role": "primary",
+        "displayName": "Dark Sage Ink",
+        "tonalRamp": [
+          "oklch(15.00% 0.0154 138.08)",
+          "oklch(26.43% 0.0250 138.08)",
+          "oklch(37.86% 0.0314 138.08)",
+          "oklch(49.29% 0.0339 138.08)",
+          "oklch(60.71% 0.0320 138.08)",
+          "oklch(72.14% 0.0260 138.08)",
+          "oklch(83.57% 0.0167 138.08)",
+          "oklch(95.00% 0.0053 138.08)"
+        ]
+      },
+      "window": {
+        "role": "neutral",
+        "displayName": "Green-Black Canvas",
+        "tonalRamp": [
+          "oklch(15.00% 0.0038 169.59)",
+          "oklch(26.43% 0.0061 169.59)",
+          "oklch(37.86% 0.0077 169.59)",
+          "oklch(49.29% 0.0083 169.59)",
+          "oklch(60.71% 0.0078 169.59)",
+          "oklch(72.14% 0.0064 169.59)",
+          "oklch(83.57% 0.0041 169.59)",
+          "oklch(95.00% 0.0013 169.59)"
+        ]
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "Deep Green-Black",
+        "tonalRamp": [
+          "oklch(15.00% 0.0039 169.39)",
+          "oklch(26.43% 0.0063 169.39)",
+          "oklch(37.86% 0.0079 169.39)",
+          "oklch(49.29% 0.0085 169.39)",
+          "oklch(60.71% 0.0081 169.39)",
+          "oklch(72.14% 0.0066 169.39)",
+          "oklch(83.57% 0.0042 169.39)",
+          "oklch(95.00% 0.0013 169.39)"
+        ]
+      },
+      "raised": {
+        "role": "neutral",
+        "displayName": "Raised Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.0060 163.96)",
+          "oklch(26.43% 0.0097 163.96)",
+          "oklch(37.86% 0.0122 163.96)",
+          "oklch(49.29% 0.0131 163.96)",
+          "oklch(60.71% 0.0124 163.96)",
+          "oklch(72.14% 0.0101 163.96)",
+          "oklch(83.57% 0.0065 163.96)",
+          "oklch(95.00% 0.0021 163.96)"
+        ]
+      },
+      "raised-hover": {
+        "role": "neutral",
+        "displayName": "Raised Green Hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.0104 154.91)",
+          "oklch(26.43% 0.0169 154.91)",
+          "oklch(37.86% 0.0212 154.91)",
+          "oklch(49.29% 0.0229 154.91)",
+          "oklch(60.71% 0.0216 154.91)",
+          "oklch(72.14% 0.0176 154.91)",
+          "oklch(83.57% 0.0113 154.91)",
+          "oklch(95.00% 0.0036 154.91)"
+        ]
+      },
+      "raised-active": {
+        "role": "neutral",
+        "displayName": "Raised Green Pressed",
+        "tonalRamp": [
+          "oklch(15.00% 0.0150 144.97)",
+          "oklch(26.43% 0.0243 144.97)",
+          "oklch(37.86% 0.0306 144.97)",
+          "oklch(49.29% 0.0329 144.97)",
+          "oklch(60.71% 0.0311 144.97)",
+          "oklch(72.14% 0.0253 144.97)",
+          "oklch(83.57% 0.0163 144.97)",
+          "oklch(95.00% 0.0052 144.97)"
+        ]
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "Field Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.0065 157.95)",
+          "oklch(26.43% 0.0106 157.95)",
+          "oklch(37.86% 0.0133 157.95)",
+          "oklch(49.29% 0.0144 157.95)",
+          "oklch(60.71% 0.0135 157.95)",
+          "oklch(72.14% 0.0110 157.95)",
+          "oklch(83.57% 0.0071 157.95)",
+          "oklch(95.00% 0.0022 157.95)"
+        ]
+      },
+      "detail": {
+        "role": "neutral",
+        "displayName": "Detail Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.0076 155.93)",
+          "oklch(26.43% 0.0124 155.93)",
+          "oklch(37.86% 0.0156 155.93)",
+          "oklch(49.29% 0.0168 155.93)",
+          "oklch(60.71% 0.0158 155.93)",
+          "oklch(72.14% 0.0129 155.93)",
+          "oklch(83.57% 0.0083 155.93)",
+          "oklch(95.00% 0.0026 155.93)"
+        ]
+      },
+      "ivory": {
+        "role": "neutral",
+        "displayName": "Warm Ivory",
+        "tonalRamp": [
+          "oklch(15.00% 0.0049 118.02)",
+          "oklch(26.43% 0.0080 118.02)",
+          "oklch(37.86% 0.0100 118.02)",
+          "oklch(49.29% 0.0108 118.02)",
+          "oklch(60.71% 0.0102 118.02)",
+          "oklch(72.14% 0.0083 118.02)",
+          "oklch(83.57% 0.0053 118.02)",
+          "oklch(95.00% 0.0017 118.02)"
+        ]
+      },
+      "control-ink": {
+        "role": "neutral",
+        "displayName": "Control Ivory",
+        "tonalRamp": [
+          "oklch(15.00% 0.0062 134.90)",
+          "oklch(26.43% 0.0100 134.90)",
+          "oklch(37.86% 0.0126 134.90)",
+          "oklch(49.29% 0.0136 134.90)",
+          "oklch(60.71% 0.0128 134.90)",
+          "oklch(72.14% 0.0104 134.90)",
+          "oklch(83.57% 0.0067 134.90)",
+          "oklch(95.00% 0.0021 134.90)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Grey-Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.0083 153.47)",
+          "oklch(26.43% 0.0135 153.47)",
+          "oklch(37.86% 0.0170 153.47)",
+          "oklch(49.29% 0.0183 153.47)",
+          "oklch(60.71% 0.0173 153.47)",
+          "oklch(72.14% 0.0141 153.47)",
+          "oklch(83.57% 0.0090 153.47)",
+          "oklch(95.00% 0.0029 153.47)"
+        ]
+      },
+      "outline": {
+        "role": "neutral",
+        "displayName": "Outline Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.0097 158.24)",
+          "oklch(26.43% 0.0158 158.24)",
+          "oklch(37.86% 0.0199 158.24)",
+          "oklch(49.29% 0.0214 158.24)",
+          "oklch(60.71% 0.0202 158.24)",
+          "oklch(72.14% 0.0164 158.24)",
+          "oklch(83.57% 0.0106 158.24)",
+          "oklch(95.00% 0.0034 158.24)"
+        ]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Divider Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.0100 152.78)",
+          "oklch(26.43% 0.0163 152.78)",
+          "oklch(37.86% 0.0205 152.78)",
+          "oklch(49.29% 0.0220 152.78)",
+          "oklch(60.71% 0.0208 152.78)",
+          "oklch(72.14% 0.0169 152.78)",
+          "oklch(83.57% 0.0109 152.78)",
+          "oklch(95.00% 0.0034 152.78)"
+        ]
+      },
+      "selected": {
+        "role": "neutral",
+        "displayName": "Selected Moss",
+        "tonalRamp": [
+          "oklch(15.00% 0.0158 137.11)",
+          "oklch(26.43% 0.0256 137.11)",
+          "oklch(37.86% 0.0322 137.11)",
+          "oklch(49.29% 0.0347 137.11)",
+          "oklch(60.71% 0.0328 137.11)",
+          "oklch(72.14% 0.0267 137.11)",
+          "oklch(83.57% 0.0171 137.11)",
+          "oklch(95.00% 0.0054 137.11)"
+        ]
+      },
+      "nav-selected": {
+        "role": "neutral",
+        "displayName": "Navigation Moss",
+        "tonalRamp": [
+          "oklch(15.00% 0.0150 136.60)",
+          "oklch(26.43% 0.0244 136.60)",
+          "oklch(37.86% 0.0307 136.60)",
+          "oklch(49.29% 0.0330 136.60)",
+          "oklch(60.71% 0.0312 136.60)",
+          "oklch(72.14% 0.0254 136.60)",
+          "oklch(83.57% 0.0163 136.60)",
+          "oklch(95.00% 0.0052 136.60)"
+        ]
+      },
+      "nav-selected-ink": {
+        "role": "neutral",
+        "displayName": "Navigation Sage",
+        "tonalRamp": [
+          "oklch(15.00% 0.0303 128.11)",
+          "oklch(26.43% 0.0492 128.11)",
+          "oklch(37.86% 0.0619 128.11)",
+          "oklch(49.29% 0.0667 128.11)",
+          "oklch(60.71% 0.0629 128.11)",
+          "oklch(72.14% 0.0512 128.11)",
+          "oklch(83.57% 0.0329 128.11)",
+          "oklch(95.00% 0.0104 128.11)"
+        ]
+      },
+      "row-hover": {
+        "role": "neutral",
+        "displayName": "Row Hover Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.0084 154.68)",
+          "oklch(26.43% 0.0136 154.68)",
+          "oklch(37.86% 0.0171 154.68)",
+          "oklch(49.29% 0.0184 154.68)",
+          "oklch(60.71% 0.0174 154.68)",
+          "oklch(72.14% 0.0142 154.68)",
+          "oklch(83.57% 0.0091 154.68)",
+          "oklch(95.00% 0.0029 154.68)"
+        ]
+      },
+      "notice": {
+        "role": "neutral",
+        "displayName": "Notice Green",
+        "tonalRamp": [
+          "oklch(15.00% 0.0118 144.98)",
+          "oklch(26.43% 0.0193 144.98)",
+          "oklch(37.86% 0.0242 144.98)",
+          "oklch(49.29% 0.0261 144.98)",
+          "oklch(60.71% 0.0246 144.98)",
+          "oklch(72.14% 0.0200 144.98)",
+          "oklch(83.57% 0.0129 144.98)",
+          "oklch(95.00% 0.0041 144.98)"
+        ]
+      },
+      "error-surface": {
+        "role": "neutral",
+        "displayName": "Error Umber",
+        "tonalRamp": [
+          "oklch(15.00% 0.0166 29.71)",
+          "oklch(26.43% 0.0271 29.71)",
+          "oklch(37.86% 0.0340 29.71)",
+          "oklch(49.29% 0.0367 29.71)",
+          "oklch(60.71% 0.0346 29.71)",
+          "oklch(72.14% 0.0281 29.71)",
+          "oklch(83.57% 0.0181 29.71)",
+          "oklch(95.00% 0.0057 29.71)"
+        ]
+      },
+      "error-ink": {
+        "role": "neutral",
+        "displayName": "Error Coral",
+        "tonalRamp": [
+          "oklch(15.00% 0.0407 28.41)",
+          "oklch(26.43% 0.0661 28.41)",
+          "oklch(37.86% 0.0831 28.41)",
+          "oklch(49.29% 0.0895 28.41)",
+          "oklch(60.71% 0.0845 28.41)",
+          "oklch(72.14% 0.0688 28.41)",
+          "oklch(83.57% 0.0442 28.41)",
+          "oklch(95.00% 0.0140 28.41)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "body": {
+        "displayName": "Body",
+        "purpose": "Native GTK interface copy and inherited control text."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Main page headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section headings and the detail track title."
+      },
+      "track": {
+        "displayName": "Track",
+        "purpose": "Track, album, transport, and mini-player titles."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Metadata, table headings, and compact secondary copy."
+      },
+      "time": {
+        "displayName": "Time",
+        "purpose": "Elapsed time and duration with tabular figures."
+      },
+      "lyrics": {
+        "displayName": "Lyrics",
+        "purpose": "Selectable wrapped lyrics."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "button-background",
+        "value": "150ms ease-out",
+        "purpose": "Native button background state transition."
+      },
+      {
+        "name": "content-crossfade",
+        "value": "150ms",
+        "purpose": "GtkStack transition between content views."
+      },
+      {
+        "name": "waveform-update",
+        "value": "100ms",
+        "purpose": "Decoded-audio update interval; stopped playback decays toward the centerline."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "detail-toggle-hides-rail-below",
+        "value": "1100px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Native GtkButton with the suggested-action style; sage fill, dark ink, and a heavier label. Shared focus outline is 2px sage with 2px offset."
+    },
+    {
+      "name": "Ordinary action",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Native GtkButton with raised, hover, and pressed surfaces; disabled opacity is 0.38. Symbolic secondary actions use the transparent flat variant."
+    },
+    {
+      "name": "Play / pause",
+      "kind": "button",
+      "refersTo": "button-play",
+      "description": "Circular native transport action, shared by the full and mini players; its symbolic icon follows playback."
+    },
+    {
+      "name": "Search and URL field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Native GtkSearchEntry or GtkEntry with a thin outline, fully opaque muted placeholder, and the shared focus outline."
+    },
+    {
+      "name": "Listening navigation",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Native buttons in a vertically scrollable rail. The selected destination uses navigation-selected. The header supplies an explicit visibility toggle."
+    },
+    {
+      "name": "Track row",
+      "kind": "custom",
+      "refersTo": "track-row",
+      "description": "Native virtualized GtkListView row with artwork, ellipsized two-line metadata, album, duration, favorite, and options. Playing text, hover, and selection are separate states."
+    },
+    {
+      "name": "Album artwork",
+      "kind": "custom",
+      "refersTo": "album-art",
+      "description": "Native GtkGridView tile with artwork, title, and artist; two to five columns, single-click activation, no enclosing card shadow."
+    },
+    {
+      "name": "Favorite toggle",
+      "kind": "button",
+      "refersTo": "toggle-active",
+      "description": "Native GtkToggleButton. Inactive outline star and Add to favorites label become a filled star, checked state, and Remove from favorites label together."
+    },
+    {
+      "name": "Persistent transport",
+      "kind": "custom",
+      "refersTo": "player-bar",
+      "description": "Native horizontal player outside scrolling content, retaining current-track context, transport, seek, volume, and mini-player access."
+    },
+    {
+      "name": "Now-playing panel",
+      "kind": "custom",
+      "refersTo": "detail-panel",
+      "description": "Native detail pane with real cover pixels softly blended behind contained artwork, an authentic decoded-audio waveform, and independently scrolling lyrics."
+    }
+  ],
+  "narrative": {
+    "northStar": "A quiet listening room",
+    "overview": "Deep green-black surfaces, warm ivory text, and soft sage actions create a calm place to listen. Artwork supplies the individual character of each recording; the surrounding interface stays restrained and legible in low ambient light.\n\nThis is a native Linux GTK application in Operate mode. Familiar symbolic icons, system sans typography, a stable navigation rail, and a persistent transport support repeated listening tasks. The library is compact enough to scan while section headings and artwork retain breathing room.",
+    "keyCharacteristics": [
+      "Dark tonal surfaces with one sage interaction accent.",
+      "Native GTK controls and concise action labels.",
+      "A stable library structure and persistent playback controls.",
+      "Real artwork, a softly blended cover backdrop, and a waveform derived from decoded audio."
+    ],
+    "rules": [
+      {
+        "name": "The Sage State Rule",
+        "body": "Use sage to identify an action, focus, or playback state; let album artwork carry decorative color.",
+        "section": "colors"
+      },
+      {
+        "name": "The Persistent Transport Rule",
+        "body": "Keep current-track context and playback controls outside scrolling library content.",
+        "section": "layout"
+      },
+      {
+        "name": "The Real Media Rule",
+        "body": "Artwork and waveform behavior must be driven by the current media; missing artwork gets a deliberate placeholder and silence does not produce invented activity.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "**Do** keep the rail, library, detail panel, and transport legible as connected tonal regions.",
+      "**Do** use sage for primary actions, focus, checked controls, and current playback state.",
+      "**Do** preserve visible keyboard focus and native accessible control semantics.",
+      "**Do** update favorite icon, checked state, tooltip, and accessible label together.",
+      "**Do** use real media artwork and decoded audio for the backdrop and waveform.",
+      "**Do** keep navigation and library content scrollable while playback controls stay available.",
+      "**Do** retain ellipsis, wrapping, and concise localized action labels where the existing components use them."
+    ],
+    "donts": [
+      "**Don't** replace the native system sans or symbolic icon language with unrelated decorative styles.",
+      "**Don't** add card shadows or extra container borders to the flat library rows and album tiles.",
+      "**Don't** use a frequency spectrum, random bars, or looping decoration in place of the audio waveform.",
+      "**Don't** hide a favorite's state behind color alone or reduce placeholder contrast through opacity.",
+      "**Don't** claim automatic narrow-window navigation collapse; the rail has an explicit toggle and a detail-panel interaction rule."
+    ]
+  }
+}
