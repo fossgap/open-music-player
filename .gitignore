@@ -9,3 +9,6 @@
 *.pkg.tar.zst
 __pycache__/
 *.pyc
+.impeccable/ 
+DESIGN.md 
+PRODUCT.md
