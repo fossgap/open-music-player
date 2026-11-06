@@ -1,6 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <interface>
   <object class="GtkBox" id="album_card">
+    <style><class name="album-card"/></style>
     <property name="orientation">vertical</property>
     <property name="spacing">8</property>
     <property name="margin-start">8</property>
@@ -33,6 +34,13 @@
                 </style>
               </object>
             </child>
+            <child type="overlay"><object class="GtkButton" id="card_play">
+              <property name="icon-name">media-playback-start-symbolic</property>
+              <property name="tooltip-text">Play all</property>
+              <property name="halign">end</property><property name="valign">end</property>
+              <property name="margin-end">10</property><property name="margin-bottom">10</property>
+              <style><class name="play-button"/><class name="card-play"/></style>
+            </object></child>
           </object>
         </property>
         <property name="xalign">0</property>

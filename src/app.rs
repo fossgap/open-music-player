@@ -7,11 +7,15 @@ use crate::{
     playlists, services, storage, youtube_music,
 };
 
+mod artwork;
 mod browse;
+mod interactions;
 mod metadata;
+mod podcasts;
 mod spotify;
 #[cfg(test)]
 mod tests;
+mod updates;
 mod youtube;
 type BoundItems = RefCell<HashMap<usize, (glib::WeakRef<gtk::ListItem>, gtk::Builder)>>;
 use gtk::{gdk, gio, glib, prelude::*};
@@ -29,7 +33,7 @@ enum Message {
     Radio(u64, Result<Vec<Track>, String>),
     PodcastSearch(u64, Result<Vec<services::PodcastShow>, String>),
     PlaylistImport(Result<playlists::Import, String>),
-    Feed(Result<(Subscription, Vec<Track>), String>),
+    Feed(podcasts::FeedReply),
     Youtube(u64, Result<youtube_music::Resolved, String>),
     Music(youtube::Reply),
     Artwork(String, Result<String, String>),
@@ -70,6 +74,11 @@ pub struct App {
     podcast_results: RefCell<Vec<services::PodcastShow>>,
     podcast_generation: Cell<u64>,
     podcast_failed: Cell<bool>,
+    podcasts: podcasts::Controls,
+    refresh_timer: Cell<Instant>,
+    refresh_search: RefCell<HashSet<String>>,
+    radio_refreshing: Cell<bool>,
+    scan_background: Cell<bool>,
     compact_browse: Cell<bool>,
     importing_playlist: Cell<bool>,
     source_generation: Cell<u64>,
@@ -84,11 +93,14 @@ pub struct App {
     last_saved: Cell<Instant>,
     updating: Cell<bool>,
     muted_volume: Cell<f64>,
+    buffering_since: Cell<Option<Instant>>,
+    buffering_percent: Cell<i32>,
+    buffering_notice: Cell<bool>,
     spectrum: RefCell<Vec<f64>>,
     backdrop: Cell<(f64, f64, f64)>,
     backdrop_art: RefCell<Option<gtk::gdk_pixbuf::Pixbuf>>,
     artwork_pending: RefCell<HashSet<String>>,
-    textures: RefCell<HashMap<String, gdk::Texture>>,
+    images: artwork::Images,
     cache: PathBuf,
     pub dbus: RefCell<Option<gio::DBusConnection>>,
 }
@@ -176,6 +188,11 @@ impl App {
             podcast_results: RefCell::new(vec![]),
             podcast_generation: Cell::new(0),
             podcast_failed: Cell::new(false),
+            podcasts: podcasts::Controls::default(),
+            refresh_timer: Cell::new(Instant::now()),
+            refresh_search: RefCell::new(HashSet::new()),
+            radio_refreshing: Cell::new(false),
+            scan_background: Cell::new(false),
             compact_browse: Cell::new(false),
             importing_playlist: Cell::new(false),
             source_generation: Cell::new(0),
@@ -190,11 +207,14 @@ impl App {
             last_saved: Cell::new(Instant::now()),
             updating: Cell::new(false),
             muted_volume: Cell::new(0.75),
+            buffering_since: Cell::new(None),
+            buffering_percent: Cell::new(100),
+            buffering_notice: Cell::new(false),
             spectrum: RefCell::new(vec![0.0; 48]),
             backdrop: Cell::new((0.17, 0.23, 0.17)),
             backdrop_art: RefCell::new(None),
             artwork_pending: RefCell::new(HashSet::new()),
-            textures: RefCell::new(HashMap::new()),
+            images: artwork::Images::default(),
             cache: storage::data_dir().join("artwork"),
             dbus: RefCell::new(None),
         });
@@ -202,6 +222,7 @@ impl App {
         this.setup_lists();
         this.setup_controls();
         this.setup_metadata();
+        this.setup_wheel_controls();
         this.setup_drawing();
         this.audio.borrow().volume(this.state.borrow().volume);
         let (volume, shuffle) = {
@@ -601,24 +622,7 @@ impl App {
     }
 
     fn set_art(&self, picture: &gtk::Picture, path: Option<&str>) {
-        picture.set_paintable(None::<&gdk::Paintable>);
-        let Some(path) = path.filter(|p| !p.starts_with("http://") && !p.starts_with("https://"))
-        else {
-            return;
-        };
-        if let Some(texture) = self.textures.borrow().get(path) {
-            picture.set_paintable(Some(texture));
-            return;
-        }
-        if let Ok(pixbuf) = gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(path, 400, 400, true) {
-            let texture = gdk::Texture::for_pixbuf(&pixbuf);
-            picture.set_paintable(Some(&texture));
-            let mut cache = self.textures.borrow_mut();
-            if cache.len() >= 256 {
-                cache.clear();
-            }
-            cache.insert(path.into(), texture);
-        }
+        self.images.set(picture, path);
     }
 
     pub fn navigate(self: &Rc<Self>, page: &str) {
@@ -703,6 +707,7 @@ impl App {
     }
 
     pub fn notice(&self, text: &str, error: bool, busy: bool) {
+        self.buffering_notice.set(false);
         let notice: gtk::Box = object(&self.ui, "notice");
         notice.set_visible(true);
         if error {
@@ -744,11 +749,18 @@ impl App {
     }
 
     pub fn scan(self: &Rc<Self>, folders: Vec<PathBuf>) {
+        self.scan_folders(folders, false);
+    }
+
+    fn scan_folders(self: &Rc<Self>, folders: Vec<PathBuf>, background: bool) {
         if self.scanning.replace(true) {
             self.notice(&self.tr("A library scan is already running."), false, true);
             return;
         }
-        self.notice(&self.tr("Finding your music…"), false, true);
+        self.scan_background.set(background);
+        if !background {
+            self.notice(&self.tr("Finding your music…"), false, true);
+        }
         self.button("refresh").set_sensitive(false);
         let existing = self.state.borrow().tracks.clone();
         let cache = self.cache.clone();
@@ -774,12 +786,7 @@ impl App {
                     return;
                 }
                 self.notice(&self.tr("Refreshing podcasts…"), false, true);
-                for sub in subscriptions {
-                    let tx = self.tx.clone();
-                    std::thread::spawn(move || {
-                        let _ = tx.send(Message::Feed(services::podcast(&sub.url)));
-                    });
-                }
+                self.refresh_podcasts(false);
             }
             _ => {
                 let folders = self.state.borrow().folders.clone();
@@ -793,6 +800,7 @@ impl App {
     }
 
     fn discover_radio(self: &Rc<Self>) {
+        self.radio_refreshing.set(true);
         let query = object::<gtk::SearchEntry>(&self.ui, "search")
             .text()
             .to_string();
@@ -833,21 +841,6 @@ impl App {
         object::<gtk::Box>(&self.ui, "entry_bar").set_visible(false);
     }
 
-    fn subscribe(&self, input: &str) {
-        let url = match services::http_url(input) {
-            Ok(url) => url.to_string(),
-            Err(e) => {
-                self.notice(&e, true, false);
-                return;
-            }
-        };
-        self.notice(&self.tr("Loading podcast…"), false, true);
-        let tx = self.tx.clone();
-        std::thread::spawn(move || {
-            let _ = tx.send(Message::Feed(services::podcast(&url)));
-        });
-    }
-
     fn toggle_details(&self) {
         let panel: gtk::Revealer = object(&self.ui, "detail_revealer");
         let visible = !panel.is_visible();
@@ -880,6 +873,7 @@ impl App {
         let Some(track) = track else {
             return;
         };
+        self.set_buffering(100);
         self.remember_position();
         let generation = self.play_generation.get() + 1;
         self.play_generation.set(generation);
@@ -974,6 +968,7 @@ impl App {
     }
 
     pub fn stop_playback(&self) {
+        self.set_buffering(100);
         self.play_generation.set(self.play_generation.get() + 1);
         self.resolving.set(false);
         self.audio.borrow_mut().stop();
@@ -1204,25 +1199,7 @@ impl App {
             self.set_art(&object::<gtk::Picture>(&self.ui, id), art);
         }
         self.set_art(&object::<gtk::Picture>(&self.mini_ui, "mini_art"), art);
-        if let Some(path) = art.filter(|p| !p.starts_with("http")) {
-            *self.backdrop_art.borrow_mut() =
-                gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(path, 16, 16, false).ok();
-            if let Ok(pixbuf) = gtk::gdk_pixbuf::Pixbuf::from_file_at_scale(path, 1, 1, false) {
-                let bytes = pixbuf.read_pixel_bytes();
-                let b = bytes.as_ref();
-                if b.len() >= 3 {
-                    self.backdrop.set((
-                        f64::from(b[0]) / 255.0,
-                        f64::from(b[1]) / 255.0,
-                        f64::from(b[2]) / 255.0,
-                    ));
-                }
-            }
-        } else {
-            self.backdrop_art.borrow_mut().take();
-            self.backdrop.set((0.17, 0.23, 0.17));
-        }
-        object::<gtk::DrawingArea>(&self.ui, "detail_backdrop").queue_draw();
+        self.update_backdrop();
         drop(state);
         self.schedule_metadata();
         self.update_metadata();
@@ -1282,6 +1259,9 @@ impl App {
     }
 
     fn tick(self: &Rc<Self>) {
+        if self.images.take_changed() {
+            self.update_backdrop();
+        }
         let compact = self.window.width() < 1000 || self.window.height() < 700;
         if self.compact_browse.replace(compact) != compact {
             self.refresh();
@@ -1340,6 +1320,7 @@ impl App {
                     }
                 }
                 Message::Scan(result, folders) => {
+                    let background = self.scan_background.replace(false);
                     self.scanning.set(false);
                     self.button("refresh").set_sensitive(true);
                     match result {
@@ -1378,20 +1359,24 @@ impl App {
                                 for id in removed {
                                     state.forget(&id);
                                 }
-                                state.folders = folders;
+                                if !background {
+                                    state.folders = folders;
+                                }
                                 state.merge(scan.tracks);
                             }
-                            self.notice(
-                                &format!(
-                                    "{} {} · {} {}",
-                                    count,
-                                    self.tr("tracks found"),
-                                    scan.skipped,
-                                    self.tr("files skipped")
-                                ),
-                                false,
-                                false,
-                            );
+                            if !background {
+                                self.notice(
+                                    &format!(
+                                        "{} {} · {} {}",
+                                        count,
+                                        self.tr("tracks found"),
+                                        scan.skipped,
+                                        self.tr("files skipped")
+                                    ),
+                                    false,
+                                    false,
+                                );
+                            }
                             self.refresh();
                             self.update_player();
                             self.persist();
@@ -1402,6 +1387,7 @@ impl App {
                 Message::Radio(generation, result)
                     if generation == self.source_generation.get() =>
                 {
+                    self.radio_refreshing.set(false);
                     match result {
                         Ok(tracks) => {
                             *self.radio_results.borrow_mut() =
@@ -1415,23 +1401,7 @@ impl App {
                         Err(e) => self.notice(&e, true, false),
                     }
                 }
-                Message::Feed(result) => match result {
-                    Ok((sub, tracks)) => {
-                        let mut state = self.state.borrow_mut();
-                        if let Some(s) = state.subscriptions.iter_mut().find(|s| s.url == sub.url) {
-                            *s = sub;
-                        } else {
-                            state.subscriptions.push(sub);
-                        }
-                        state.merge(tracks);
-                        drop(state);
-                        self.notice(&self.tr("Podcast updated"), false, false);
-                        self.refresh();
-                        self.ensure_artwork();
-                        self.persist();
-                    }
-                    Err(e) => self.notice(&e, true, false),
-                },
+                Message::Feed(reply) => self.handle_feed(reply),
                 Message::Youtube(generation, result)
                     if generation == self.play_generation.get() =>
                 {
@@ -1486,6 +1456,7 @@ impl App {
             self.handle_spotify(reply);
         }
         self.poll_metadata();
+        self.poll_source_refresh();
         let events = self.audio.borrow_mut().poll();
         for event in events {
             match event {
@@ -1513,34 +1484,34 @@ impl App {
                     let duration = self.audio.borrow().duration();
                     let mut state = self.state.borrow_mut();
                     let current = state.current.clone();
-                    if let Some(track) = state
+                    let changed = if let Some(track) = state
                         .tracks
                         .iter_mut()
                         .find(|t| Some(&t.id) == current.as_ref())
                     {
-                        if duration > 0.0 {
+                        if duration > 0.0 && track.duration != duration {
                             track.duration = duration;
+                            true
+                        } else {
+                            false
                         }
-                    }
+                    } else {
+                        false
+                    };
                     drop(state);
-                    self.update_player();
+                    if changed {
+                        self.update_player();
+                    }
                 }
                 Event::Buffering(percent) => {
-                    if percent < 100 {
-                        self.notice(
-                            &format!("{} {percent}%", self.tr("Buffering…")),
-                            false,
-                            true,
-                        );
-                    } else {
-                        object::<gtk::Box>(&self.ui, "notice").set_visible(false);
-                    }
+                    self.set_buffering(percent);
                 }
                 Event::Waveform(values) => {
                     *self.spectrum.borrow_mut() = values;
                 }
             }
         }
+        self.update_buffering_notice();
         if !self.audio.borrow().playing {
             for value in self.spectrum.borrow_mut().iter_mut() {
                 *value *= 0.8;
@@ -1617,6 +1588,7 @@ impl App {
             }
         });
         self.metadata_settings(&ui);
+        self.refresh_settings(&ui);
         object::<gtk::Label>(&ui, "tray_note").set_visible(!self.tray_available.get());
         for folder in self.state.borrow().folders.clone() {
             let builder = gtk::Builder::from_string(include_str!("../resources/setting-row.ui"));
@@ -1653,12 +1625,7 @@ impl App {
             let weak_row = row.downgrade();
             object::<gtk::Button>(&builder, "remove").connect_clicked(move |_| {
                 if let Some(a) = weak.upgrade() {
-                    a.state
-                        .borrow_mut()
-                        .subscriptions
-                        .retain(|s| s.url != sub.url);
-                    a.persist();
-                    a.refresh();
+                    a.unsubscribe(&sub.url);
                     if let Some(row) = weak_row.upgrade() {
                         row.set_sensitive(false);
                     }

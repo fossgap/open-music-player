@@ -52,6 +52,21 @@ pub enum PodcastDirectory {
     Gpodder,
 }
 
+impl PodcastDirectory {
+    pub fn from_index(index: u32) -> Self {
+        match index {
+            1 => Self::Gpodder,
+            _ => Self::Apple,
+        }
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Apple => "Apple Podcasts",
+            Self::Gpodder => "gPodder",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PodcastShow {
     pub id: String,

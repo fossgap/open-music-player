@@ -17,10 +17,10 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 
 | Area | Included |
 | --- | --- |
-| Local library | Recursive folder discovery, metadata, search, track and album views, manual refresh, duplicate detection |
-| Collections | Favorites, playlist artwork grid, create/rename/delete playlists, M3U/M3U8/PLS/XSPF import, queue, shuffle, repeat one/all |
+| Local library | Recursive folder discovery, metadata, search, track and album views, configurable automatic refresh, duplicate detection |
+| Collections | Favorites, playlist artwork grid, hover/focus Play all on album and playlist cards, create/rename/delete playlists, M3U/M3U8/PLS/XSPF import, queue, shuffle, repeat one/all |
 | Playback | GStreamer audio, play/pause, previous/next, seeking, volume, mute, automatic next track |
-| Podcasts | Apple Podcasts/iTunes and gPodder search and discovery, RSS/Atom subscriptions, feed refresh, per-episode resume positions |
+| Podcasts | Apple Podcasts/iTunes and gPodder search/discovery, subscribe/unsubscribe toggles, RSS/Atom subscriptions, feed refresh, per-episode resume positions |
 | Internet radio | Search and discovery through Radio Browser, station artwork, favorites, playback |
 | Streaming | One view for YouTube Music, Spotify and direct HTTP(S) audio |
 | YouTube Music | Song search, personal browser-session connection, native playback, two-way playlist sync and private playlist publishing |
@@ -32,6 +32,24 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 | Languages | English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean; new service copy falls back to English where untranslated |
 
 **Service boundaries:** Spotify uses [librespot](https://github.com/librespot-org/librespot) and requires Premium. Search and playlist operations use Spotify’s Web API, whose account/app restrictions still apply. YouTube Music uses the unofficial `ytmusicapi` and `yt-dlp` libraries, with no API key or Premium subscription requirement in Open Audio Player. Availability depends on your account, region and YouTube; sessions can expire and provider changes can require dependency updates. Podcast downloads, synchronized lyric highlighting, and automatic filesystem watching are not included. This is an initial implementation, not a published stable release.
+
+
+### Provider access
+
+These requirements apply to the features implemented in Open Audio Player. Anonymous access means no user account, API key, or saved sign-in is needed.
+
+| Provider | Anonymous access | Account requirements |
+| --- | --- | --- |
+| [Apple Podcasts / iTunes](https://performance-partners.apple.com/search-api) | Yes: podcast search and discovery | None |
+| [gPodder directory](https://gpoddernet.readthedocs.io/en/latest/api/reference/directory.html) | Yes: podcast search and top lists | None; subscriptions are stored locally |
+| [Radio Browser](https://api.radio-browser.info/) | Yes: station search and discovery | None |
+| [MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API) / [Cover Art Archive](https://musicbrainz.org/doc/Cover_Art_Archive/API) | Yes: metadata lookups and cover retrieval | None |
+| [LRCLIB](https://lrclib.net/docs) | Yes: lyrics retrieval | None; developer registration is optional |
+| [YouTube Music](https://ytmusicapi.readthedocs.io/en/stable/usage.html) | Partial: public search and eligible public-track playback | Personal playlist synchronization and publishing require a signed-in Google account |
+| [Spotify](https://developer.spotify.com/documentation/web-api/concepts/authorization) | No: the integration requires sign-in | [Premium is required for librespot playback](https://github.com/librespot-org/librespot) |
+| Direct RSS/Atom feeds and HTTP(S) audio streams | Yes, when the host serves them publicly | Host-dependent; authenticated feed login is not implemented |
+
+YouTube playback uses [yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies); restricted content or service checks can require sign-in. Public podcast directory access does not unlock a publisher's paid or private episodes.
 
 ## Get started
 
@@ -109,7 +127,7 @@ Offline tests cover authentication callback validation, playlist conflicts, stal
 1. Select **Add music** and choose a folder. Scanning runs in the background; additional folders are managed in **Settings**.
 2. Single-click to select a track or album. Double-click a track to play, or double-click an album to open its tracks. Use **Back** to return to the album grid. Playback keeps the list's scroll position; playing a track from a filtered queue preserves the whole queue.
 3. Use the star to save a favorite. The track menu adds to the queue or a playlist. Removing a local track only removes its index entry; refreshing its folder can discover it again.
-4. Select **Podcasts → Discover podcasts**. Choose **Apple Podcasts** (the iTunes directory) or **gPodder**, search by title, topic, or creator, then select **Subscribe**. **Your episodes** lists subscribed episodes. You can also add any RSS or Atom feed URL. Use **Refresh** to fetch new episodes. Removing a subscription stops refreshes and retains previously indexed episodes.
+4. Select **Podcasts → Discover podcasts**. Choose **Apple Podcasts** (the iTunes directory) or **gPodder**, search by title, topic, or creator, then select **Subscribe**. The same button changes to **Unsubscribe**; unsubscribing retains indexed episodes and ignores any feed refresh still in flight. **Your episodes** lists subscribed episodes. You can also add any RSS or Atom feed URL. Use **Refresh** to fetch new episodes. Removing a subscription stops refreshes and retains previously indexed episodes.
 5. Select **Live radio → Discover radio**, or type a station name and press Enter. Radio results are provided by the community-maintained [Radio Browser directory](https://www.radio-browser.info/).
 6. Select **Streaming** for YouTube Music and Spotify. **Streaming → Internet streams → Add stream** accepts an HTTP(S) audio address or station URL. The sidebar remembers the last streaming service you used.
 
@@ -127,15 +145,19 @@ Neither lookup needs an account or API key. **Settings → Online artwork and ly
 The detail panel links to the matched source and offers **Retry cover lookup** / **Retry lyrics lookup** for missing results or errors. Instrumental recordings are identified explicitly. Downloads and misses are cached under `metadata/` beside `library.json`; misses expire after seven days, and manual retry bypasses a cached miss. Temporary failures are not saved as misses. Requests are paced and respect provider backoff. Network failures do not stop playback. Downloaded synced lyrics retain their timing data in the cache and are displayed as plain text; synchronized highlighting is not implemented.
 
 
+Scroll over the volume control to adjust volume by **5 percentage points** per wheel step. Scroll over the seek bar to move **5 seconds** per step. Up/right increases volume or moves forward; down/left decreases volume or moves backward. Seeking is disabled for sources without a known duration, and both controls clamp to their limits.
+
+**Settings → Automatic refresh (minutes)** accepts **0–1440** minutes; **0** (the default) keeps refresh manual. A positive interval refreshes all saved music folders, podcast subscriptions, connected YouTube Music/Spotify playlists, and the open podcast/radio/streaming search view. Linked streaming playlists use their existing **two-way synchronization**, including eligible local edits and conflict handling. In-progress work is not duplicated; missing or expired streaming sign-ins never open an unattended login dialog. Changing the interval restarts the timer. Generic Internet stream URLs have no directory to refresh.
+
 The session is restored without automatically starting audio. Press Play to continue. Podcast episodes also retain individual positions.
 
 ### Playlists
 
-**Playlists** opens a grid of your collections, showing a member's artwork and the playlist name. Click a playlist to see its tracks; double-click a track to play it. Use **New playlist** to create a collection and a track's options menu to add it. Rename or delete a playlist from its card menu or while viewing its tracks. In a compact window, these actions move into **Playlist options** beside the heading. Deletion asks for confirmation and retains the music files, library, and playing queue.
+**Playlists** opens a grid of your collections, showing a member's artwork and the playlist name. Hover over an album or nonempty playlist card to reveal **Play all**; keyboard focus reveals the same button. It queues the whole collection and starts playback without opening or leaving the grid. Playlist order is retained unless shuffle is enabled. Click a playlist to see its tracks; double-click a track to play it. Use **New playlist** to create a collection and a track's options menu to add it. Rename or delete a playlist from its card menu or while viewing its tracks. In a compact window, these actions move into **Playlist options** beside the heading. Deletion asks for confirmation and retains the music files, library, and playing queue.
 
 The **Import playlist** button beside **New playlist** accepts UTF-8 `.m3u`, `.m3u8`, `.pls`, and `.xspf` files. Relative paths resolve beside the playlist file; absolute paths, `file://` URLs, and HTTP(S) audio links are supported. Imports preserve order and existing track metadata and favorites. Missing, unsupported, and duplicate entries are skipped with a count. An imported name that already exists gets a numbered suffix. Importing creates a playlist without starting playback.
 
-Directory discovery uses an initial podcast search on Apple and the public top list on gPodder; it does not require an account. Results and feed availability depend on those services. A failed directory request offers connection and provider recovery; direct RSS subscription remains available.
+Apple discovery uses an initial podcast search; gPodder uses its public top list. Both support anonymous access without an account or API key. Results and feed availability depend on those services. A failed directory request offers connection and provider recovery; direct RSS subscription remains available.
 
 Closing the main window keeps audio playing **only while playback is active and a compatible system tray is available**. Otherwise the application exits cleanly. On GNOME, a StatusNotifier/AppIndicator extension is needed for tray integration; MPRIS and the mini player work independently of the tray. Choose **Quit** to stop playback and exit explicitly.
 
@@ -159,7 +181,7 @@ Closing the main window keeps audio playing **only while playback is active and 
 
 The library is stored in `$XDG_DATA_HOME/open-audio-player/library.json`, defaulting to `~/.local/share/open-audio-player/library.json`. Cached service artwork lives in `artwork/` beside it; fetched covers, lyrics and lookup results live in `metadata/`. Saves use a temporary file, synchronization, and atomic replacement. A corrupt or unsupported library is reported and left untouched.
 
-`OPEN_AUDIO_DATA_DIR=/some/directory` selects an isolated library, useful for testing. The app makes no directory or feed requests on first launch. Network requests begin when you explicitly discover/search podcasts or radio, subscribe/refresh a feed, or play an online source. With automatic lookups enabled, browsing saved music can fetch missing covers and selecting/restoring the current track can fetch missing lyrics. Searches go to the selected directory; result artwork may be fetched from its image hosts. Saved Spotify accounts also reconnect in the background at startup. There is no analytics collection. Existing playlists receive persistent identifiers automatically when an older library is loaded.
+`OPEN_AUDIO_DATA_DIR=/some/directory` selects an isolated library, useful for testing. The app makes no directory or feed requests on first launch. Network requests begin when you explicitly discover/search podcasts or radio, subscribe/refresh a feed, or play an online source. With automatic lookups enabled, browsing saved music can fetch missing covers and selecting/restoring the current track can fetch missing lyrics. Searches go to the selected directory; result artwork may be fetched from its image hosts. If you enable automatic refresh, source updates and linked playlist synchronization run at that interval. Saved Spotify accounts also reconnect in the background at startup. There is no analytics collection. Existing playlists receive persistent identifiers automatically when an older library is loaded.
 
 ## Development
 
@@ -182,7 +204,7 @@ make smoke
 make ui-test
 ```
 
-The integration test generates original audio, starts local feed and podcast-directory fixtures, and drives the real application over D-Bus and keyboard input. It checks library and playlist import, metadata, artwork, playback, seek, pause, favorites, queue, playlist creation/renaming, both podcast directories, subscriptions, empty/error states, MPRIS, mini mode, dialogs, compact layouts, and session restoration. The GTK regression test also checks artwork/lyrics against local provider fixtures, settings switches, attribution, retries, and compact detail-panel scrolling. It scrolls long lists and checks that activation preserves scroll and selection, album browsing does not start playback, filtered queue playback retains its members, and playlist deletion respects cancellation. All library and audio data are temporary. External services and real audio hardware are not required.
+The integration test generates original audio, starts local feed and podcast-directory fixtures, and drives the real application over D-Bus and keyboard input. It checks library and playlist import, metadata, artwork, playback, seek, pause, favorites, queue, playlist creation/renaming, both podcast directories, subscription toggles, empty/error states, MPRIS, mini mode, dialogs, compact layouts, and session restoration. The GTK regression test checks card Play all, wheel volume/seek limits, refresh scheduling, unsubscribe races, and artwork/lyrics against local provider fixtures, settings switches, attribution, retries, and compact detail-panel scrolling. It scrolls long lists and checks that activation preserves scroll and selection, album browsing does not start playback, filtered queue playback retains its members, and playlist deletion respects cancellation. All library and audio data are temporary. External services and real audio hardware are not required.
 
 The unit suite includes offline cover/lyric matching, positive/negative caching, invalid/oversized images, rate-limit backoff, cancellation, and Spotify authentication, catalog, sync and PCM-output checks; the display-dependent GTK regression runs separately through `make ui-test`. CI targets the Rust 1.85/GTK 4.8 Debian development container; native Linux checks include strict Clippy validation. The same integration suite can exercise native, release, and AppImage builds. The Arch recipe has not been built on Arch.
 

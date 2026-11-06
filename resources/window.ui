@@ -1080,7 +1080,7 @@
                         <property name="hexpand">true</property>
                         <property name="draw-value">false</property>
                         <property name="sensitive">false</property>
-                        <property name="tooltip-text">Seek</property>
+                        <property name="tooltip-text">Seek — scroll to move by 5 seconds</property>
                       </object>
                     </child>
                     <child>
@@ -1114,7 +1114,7 @@
                     <property name="adjustment">volume_adjustment</property>
                     <property name="width-request">80</property>
                     <property name="draw-value">false</property>
-                    <property name="tooltip-text">Volume</property>
+                    <property name="tooltip-text">Volume — scroll to adjust by 5%</property>
                   </object>
                 </child>
               </object>

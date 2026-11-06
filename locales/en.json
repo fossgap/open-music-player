@@ -300,5 +300,13 @@
   "The provider returned an invalid response.": "The provider returned an invalid response.",
   "View this release on MusicBrainz": "View this release on MusicBrainz",
   "Waiting to find cover…": "Waiting to find cover…",
-  "Waiting to find lyrics…": "Waiting to find lyrics…"
+  "Waiting to find lyrics…": "Waiting to find lyrics…",
+  "0 means manual only. Refreshes music folders, podcast subscriptions, connected streaming playlists and open discovery views. Linked playlists use two-way synchronization.": "0 means manual only. Refreshes music folders, podcast subscriptions, connected streaming playlists and open discovery views. Linked playlists use two-way synchronization.",
+  "Automatic refresh (minutes)": "Automatic refresh (minutes)",
+  "Automatic refresh interval in minutes; 0 means manual only": "Automatic refresh interval in minutes; 0 means manual only",
+  "Seek — scroll to move by 5 seconds": "Seek — scroll to move by 5 seconds",
+  "Subscribing…": "Subscribing…",
+  "Unsubscribe": "Unsubscribe",
+  "Unsubscribed. Existing episodes are kept.": "Unsubscribed. Existing episodes are kept.",
+  "Volume — scroll to adjust by 5%": "Volume — scroll to adjust by 5%"
 }

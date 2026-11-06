@@ -194,6 +194,17 @@ impl App {
                     }
                 });
             }
+            if !matches!(kind, Grid::Podcasts) {
+                let weak_item = item.downgrade();
+                let weak_app = Rc::downgrade(&app);
+                object::<gtk::Button>(&ui, "card_play").connect_clicked(move |_| {
+                    if let (Some(app), Some(item)) = (weak_app.upgrade(), weak_item.upgrade()) {
+                        if let Some(id) = item.item().and_downcast::<gtk::StringObject>() {
+                            app.play_card(kind, &id.string());
+                        }
+                    }
+                });
+            }
             app.cards(kind)
                 .borrow_mut()
                 .insert(item.as_ptr() as usize, (item.downgrade(), ui));
@@ -271,12 +282,15 @@ impl App {
             self.set_art(&object::<gtk::Picture>(ui, "art"), show.artwork.as_deref());
             let subscribed = state.subscriptions.iter().any(|s| s.url == show.feed_url);
             let button: gtk::Button = object(ui, "subscribe");
+            let pending = self.podcast_pending(&show.feed_url);
             button.set_label(&self.tr(if subscribed {
-                "Subscribed"
+                "Unsubscribe"
+            } else if pending {
+                "Subscribing…"
             } else {
                 "Subscribe"
             }));
-            button.set_sensitive(!subscribed);
+            button.set_sensitive(subscribed || !pending);
             let website: gtk::LinkButton = object(ui, "website");
             website.set_visible(show.website.is_some());
             website.set_uri(
@@ -367,11 +381,60 @@ impl App {
                 track.artwork.clone(),
             )
         };
+        let play: gtk::Button = object(ui, "card_play");
+        play.set_sensitive(!self.card_tracks(kind, &id).is_empty());
+        let label = format!("{}: {title}", self.tr("Play all"));
+        play.set_tooltip_text(Some(&label));
+        play.update_property(&[gtk::accessible::Property::Label(&label)]);
         object::<gtk::Label>(ui, "title").set_label(&title);
         object::<gtk::Label>(ui, "artist").set_label(&subtitle);
         object::<gtk::Box>(ui, "album_card")
             .set_tooltip_text(Some(&format!("{title}\n{subtitle}")));
         self.set_art(&object::<gtk::Picture>(ui, "art"), art.as_deref());
+    }
+
+    fn card_tracks(&self, kind: Grid, id: &str) -> Vec<String> {
+        let state = self.state.borrow();
+        match kind {
+            Grid::Playlists => state
+                .playlist(id)
+                .map(|p| {
+                    p.tracks
+                        .iter()
+                        .filter(|id| state.track(id).is_some())
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default(),
+            Grid::Albums => {
+                let Some(album) = state.track(id) else {
+                    return vec![];
+                };
+                let mut tracks: Vec<_> = state
+                    .tracks
+                    .iter()
+                    .filter(|t| {
+                        t.kind == Kind::Music && t.artist == album.artist && t.album == album.album
+                    })
+                    .collect();
+                tracks.sort_by_key(|t| (t.number, t.title.to_lowercase()));
+                tracks.into_iter().map(|t| t.id.clone()).collect()
+            }
+            Grid::Podcasts => vec![],
+        }
+    }
+
+    fn play_card(self: &Rc<Self>, kind: Grid, id: &str) {
+        let mut tracks = self.card_tracks(kind, id);
+        if tracks.is_empty() {
+            return;
+        }
+        if self.state.borrow().shuffle {
+            model::shuffle(&mut tracks);
+        }
+        let first = tracks[0].clone();
+        self.state.borrow_mut().queue = tracks;
+        self.play_track(&first, None);
     }
 
     pub(super) fn setup_browse_controls(self: &Rc<Self>) {
@@ -421,7 +484,9 @@ impl App {
         let spotify = page == "spotify";
         let spotify_search = spotify && !self.spotify.playlists.get();
         let service = youtube || spotify;
-        let compact_service = (service || page == "streams") && self.compact_browse.get();
+        let compact_service =
+            (service || page == "streams" || (page == "podcasts" && self.podcast_discovery.get()))
+                && self.compact_browse.get();
         let content: gtk::Box = object(&self.ui, "content");
         content.set_spacing(if compact_service { 10 } else { 20 });
         content.set_margin_top(if compact_service { 16 } else { 26 });
@@ -755,11 +820,10 @@ impl App {
                 "podcasts" if podcast_browser => format!(
                     "{}: {}",
                     self.tr("Podcast directory"),
-                    if object::<gtk::DropDown>(&self.ui, "podcast_provider").selected() == 0 {
-                        "Apple Podcasts"
-                    } else {
-                        "gPodder"
-                    }
+                    services::PodcastDirectory::from_index(
+                        object::<gtk::DropDown>(&self.ui, "podcast_provider").selected()
+                    )
+                    .name()
                 ),
                 "podcasts" => format!("{} {}", state.subscriptions.len(), self.tr("subscriptions")),
                 "streams" => self.tr("Internet audio streams"),
@@ -1022,11 +1086,9 @@ impl App {
             object::<gtk::ToggleButton>(&self.ui, "podcast_discover").set_active(true);
             return;
         }
-        let directory = if object::<gtk::DropDown>(&self.ui, "podcast_provider").selected() == 0 {
-            services::PodcastDirectory::Apple
-        } else {
-            services::PodcastDirectory::Gpodder
-        };
+        let directory = services::PodcastDirectory::from_index(
+            object::<gtk::DropDown>(&self.ui, "podcast_provider").selected(),
+        );
         let query = object::<gtk::SearchEntry>(&self.ui, "search")
             .text()
             .to_string();
@@ -1054,13 +1116,15 @@ impl App {
             .find(|s| s.id == id)
             .cloned();
         if let Some(show) = show {
-            if !self
+            let subscribed = self
                 .state
                 .borrow()
                 .subscriptions
                 .iter()
-                .any(|s| s.url == show.feed_url)
-            {
+                .any(|s| s.url == show.feed_url);
+            if subscribed {
+                self.unsubscribe(&show.feed_url);
+            } else {
                 self.subscribe(&show.feed_url);
             }
         }

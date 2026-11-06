@@ -254,8 +254,10 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         action('subscribe-show', show_id(base + '/feed-0.xml'))
         wait_until(lambda: len(state()['subscriptions']) == 2)
         action('subscribe-show', show_id(base + '/feed-0.xml'))
-        time.sleep(0.3)
-        assert len(state()['subscriptions']) == 2
+        wait_until(lambda: len(state()['subscriptions']) == 1)
+        assert any(t['title'] == 'Directory episode 0' for t in state()['tracks'])
+        action('subscribe-show', show_id(base + '/feed-0.xml'))
+        wait_until(lambda: len(state()['subscriptions']) == 2)
         def search_podcasts(term):
             subprocess.run(['xdotool', 'windowfocus', '--sync', window('Open Audio Player')], check=True)
             keys('ctrl+f', 'ctrl+a')
@@ -271,7 +273,7 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         action('subscribe-show', show_id(base + '/feed-1.xml'))
         wait_until(lambda: len(state()['subscriptions']) == 3)
         # With an empty search, Tab reaches the native directory selector.
-        keys('ctrl+f', 'ctrl+a', 'BackSpace', 'Tab', 'space', 'End', 'Return')
+        keys('ctrl+f', 'ctrl+a', 'BackSpace', 'Tab', 'space', 'Home', 'Down', 'Return')
         wait_until(lambda: any('/gpodder/toplist/50.json' in url for url in directory_requests))
         time.sleep(0.5)
         action('subscribe-show', show_id(base + '/feed-2.xml'))
@@ -279,6 +281,7 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         search_podcasts('listening')
         wait_until(lambda: any('/gpodder/search.json?' in url for url in directory_requests))
         snapshot('desktop-podcasts-gpodder.png')
+
         for page in ['favorites', 'queue', 'podcasts', 'radio', 'streams', 'playlists', 'library']:
             action('page', page)
             assert child.poll() is None
@@ -326,7 +329,7 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         log.seek(0)
         output = log.read()
         assert 'panicked' not in output and 'CRITICAL' not in output, output
-        print('PASS: library/audio/MPRIS, albums, playlist create/add/rename/import/grid, Apple and gPodder discovery/search/subscription, empty/error states, mini player, compact layouts, and session restoration.')
+        print('PASS: library/audio/MPRIS, albums, playlist create/add/rename/import/grid, Apple and gPodder discovery/search/subscription toggles, empty/error states, mini player, compact layouts, and session restoration.')
     except Exception:
         log.seek(0)
         print(log.read())

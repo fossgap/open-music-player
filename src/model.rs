@@ -128,6 +128,7 @@ pub struct State {
     pub spotify_ignored_playlists: Vec<String>,
     pub fetch_covers: bool,
     pub fetch_lyrics: bool,
+    pub refresh_minutes: u32,
     #[serde(skip)]
     pub(crate) track_index: std::collections::HashMap<String, usize>,
 }
@@ -155,6 +156,7 @@ impl Default for State {
             spotify_ignored_playlists: vec![],
             fetch_covers: true,
             fetch_lyrics: true,
+            refresh_minutes: 0,
             track_index: Default::default(),
         }
     }
@@ -193,6 +195,7 @@ impl State {
     }
 
     pub fn sanitize(&mut self) {
+        self.refresh_minutes = self.refresh_minutes.min(1440);
         let mut ids = HashSet::new();
         self.tracks
             .retain(|t| !t.id.is_empty() && !t.uri.is_empty() && ids.insert(t.id.clone()));
@@ -373,6 +376,19 @@ pub fn shuffle<T>(items: &mut [T]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn refresh_preferences_default_to_manual_and_survive_storage() {
+        let mut state: State = serde_json::from_str("{}").unwrap();
+        assert_eq!(state.refresh_minutes, 0);
+        state.refresh_minutes = 45;
+        let restored: State =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert_eq!(restored.refresh_minutes, 45);
+        state.refresh_minutes = u32::MAX;
+        state.sanitize();
+        assert_eq!(state.refresh_minutes, 1440);
+    }
+
     fn state() -> State {
         State {
             queue: vec!["a".into(), "b".into()],

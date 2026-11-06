@@ -76,6 +76,85 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     application.register(None::<&gio::Cancellable>).unwrap();
     let app = App::new(&application, state).unwrap();
     settle();
+    // Large podcast libraries must not decode hundreds of covers inside navigation.
+    let cover =
+        gtk::gdk_pixbuf::Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 64, 64).unwrap();
+    cover.fill(0x668844ff);
+    let png = cover.save_to_bufferv("png", &[]).unwrap();
+    let cover_paths: Vec<_> = (0..300)
+        .map(|i| {
+            let path = directory.path().join(format!("cover-{i}.png"));
+            std::fs::write(&path, &png).unwrap();
+            path.to_string_lossy().into_owned()
+        })
+        .collect();
+    for i in 0..1000 {
+        let mut episode = Track::new(
+            &format!("https://example.org/episode-{i}.mp3"),
+            &format!("Episode {i}"),
+            Kind::Podcast,
+        );
+        episode.artwork = Some(cover_paths[i % cover_paths.len()].clone());
+        app.state.borrow_mut().tracks.push(episode);
+    }
+    for _ in 0..2 {
+        let start = Instant::now();
+        app.button("nav_podcasts").emit_clicked();
+        assert!(
+            start.elapsed() < Duration::from_secs(3),
+            "Podcast navigation blocked on artwork"
+        );
+        settle();
+        assert_eq!(app.tracks_model.n_items(), 1000);
+        app.button("nav_library").emit_clicked();
+        settle();
+    }
+    app.state
+        .borrow_mut()
+        .tracks
+        .retain(|t| t.kind != Kind::Podcast);
+    app.refresh();
+    // Cache eviction must not clear and reload images already displayed by widgets.
+    let pictures: Vec<_> = cover_paths
+        .iter()
+        .map(|path| {
+            let picture = gtk::Picture::new();
+            app.set_art(&picture, Some(path));
+            picture
+        })
+        .collect();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while pictures.iter().any(|p| p.paintable().is_none()) && Instant::now() < deadline {
+        settle();
+    }
+    assert!(pictures.iter().all(|p| p.paintable().is_some()));
+    let replacements = Rc::new(Cell::new(0));
+    for (picture, path) in pictures.iter().zip(&cover_paths) {
+        let count = replacements.clone();
+        picture.connect_paintable_notify(move |_| count.set(count.get() + 1));
+        app.set_art(picture, Some(path));
+    }
+    settle();
+    assert_eq!(
+        replacements.get(),
+        0,
+        "Unchanged artwork must not flicker after cache eviction"
+    );
+    let late = directory.path().join("late-cover.png");
+    std::fs::write(&late, &png).unwrap();
+    let late = late.to_str().unwrap();
+    let recycled = gtk::Picture::new();
+    let waiting = gtk::Picture::new();
+    app.set_art(&recycled, Some(late));
+    app.set_art(&waiting, Some(late));
+    app.set_art(&recycled, None);
+    settle();
+    assert!(waiting.paintable().is_some());
+    assert!(
+        recycled.paintable().is_none(),
+        "A late cover must not overwrite a recycled row"
+    );
+    drop(pictures);
     let scroller: gtk::ScrolledWindow = object(&app.ui, "track_scroller");
     let view: gtk::ListView = object(&app.ui, "track_list");
     assert!(!view.is_single_click_activate());
@@ -185,11 +264,67 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
             .as_deref(),
         Some("albums")
     );
+    // Play the entire album directly from its card without leaving the grid.
+    let album_card = app
+        .album_cards
+        .borrow()
+        .values()
+        .find_map(|(item, ui)| {
+            item.upgrade()
+                .filter(|item| item.position() == 0)
+                .map(|_| ui.clone())
+        })
+        .unwrap();
+    let play: gtk::Button = object(&album_card, "card_play");
+    play.grab_focus();
+    settle();
+    screenshot(app.window.upcast_ref(), "album-quick-play.png");
+    play.emit_clicked();
+    settle();
+    assert_eq!(app.state.borrow().queue.len(), 30);
+    assert_eq!(app.state.borrow().current.as_deref(), Some("test000"));
+    assert!(app.album.borrow().is_none());
+    assert_eq!(
+        object::<gtk::Stack>(&app.ui, "content_stack")
+            .visible_child_name()
+            .as_deref(),
+        Some("albums")
+    );
+
     app.navigate("playlists");
     settle();
     let playlists: gtk::GridView = object(&app.ui, "playlist_grid");
     assert!(playlists.is_single_click_activate());
     assert_eq!(app.playlists_model.n_items(), 2);
+    for (item, ui) in app.playlist_cards.borrow().values() {
+        let id = item
+            .upgrade()
+            .unwrap()
+            .item()
+            .and_downcast::<gtk::StringObject>()
+            .unwrap()
+            .string();
+        if id != list {
+            assert!(!object::<gtk::Button>(ui, "card_play").is_sensitive());
+        }
+    }
+    let card = app
+        .playlist_cards
+        .borrow()
+        .values()
+        .find_map(|(item, ui)| {
+            item.upgrade()
+                .filter(|item| item.position() == 0)
+                .map(|_| ui.clone())
+        })
+        .unwrap();
+    object::<gtk::Button>(&card, "card_play").grab_focus();
+    settle();
+    screenshot(app.window.upcast_ref(), "playlist-quick-play.png");
+    object::<gtk::Button>(&card, "card_play").emit_clicked();
+    settle();
+    assert_eq!(app.state.borrow().queue, vec!["test003", "test001"]);
+    assert!(app.playlist.borrow().is_none());
     playlists.emit_by_name::<()>("activate", &[&0_u32]);
     settle();
     assert_eq!(app.playlist.borrow().as_deref(), Some(list.as_str()));
@@ -713,7 +848,7 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     let settings = gtk::Window::list_toplevels()
         .into_iter()
         .filter_map(|w| w.downcast::<gtk::Window>().ok())
-        .find(|w| w.title().as_deref() == Some("Settings"))
+        .find(|w| w.is_visible() && w.title().as_deref() == Some("Settings"))
         .unwrap();
     screenshot(&settings, "metadata-settings.png");
     let covers = descendant(settings.upcast_ref(), "fetch_covers")
@@ -780,6 +915,222 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
         "Retry bypasses a negative cache entry"
     );
     screenshot(app.window.upcast_ref(), "metadata-missing-compact.png");
+    // Mouse-wheel controls use fixed musical steps and clamp at the ends.
+    app.play_track("metadatafixture", None);
+    settle();
+    app.set_volume(0.5);
+    let volume = scroll_controller(
+        &object::<gtk::Widget>(&app.ui, "volume_box"),
+        "volume-wheel",
+    );
+    assert_eq!(volume.propagation_phase(), gtk::PropagationPhase::Capture);
+    assert!(volume.emit_by_name::<bool>("scroll", &[&0.0_f64, &-1.0_f64]));
+    assert!((app.state.borrow().volume - 0.55).abs() < 0.001);
+    let seek: gtk::Scale = object(&app.ui, "seek");
+    seek.set_value(12.0);
+    let wheel = scroll_controller(seek.upcast_ref(), "seek-wheel");
+    assert!(wheel.emit_by_name::<bool>("scroll", &[&0.0_f64, &1.0_f64]));
+    assert!((app.state.borrow().position - 7.0).abs() < 0.01);
+    assert!(wheel.emit_by_name::<bool>("scroll", &[&0.0_f64, &100.0_f64]));
+    assert_eq!(app.state.borrow().position, 0.0);
+
+    // Repeated completed seeks leave artwork, list geometry and scroll untouched.
+    app.state.borrow_mut().fetch_covers = false;
+    app.state.borrow_mut().fetch_lyrics = false;
+    app.state
+        .borrow_mut()
+        .tracks
+        .iter_mut()
+        .find(|t| t.id == "metadatafixture")
+        .unwrap()
+        .artwork = Some(cover_paths[0].clone());
+    app.update_player();
+    app.navigate("library");
+    object::<gtk::ToggleButton>(&app.ui, "tracks_view").set_active(true);
+    object::<gtk::Box>(&app.ui, "notice").set_visible(false);
+    settle();
+    let player_art: gtk::Picture = object(&app.ui, "player_art");
+    assert!(player_art.paintable().is_some());
+    let repaints = Rc::new(Cell::new(0));
+    let count = repaints.clone();
+    let paint_handler = player_art.connect_paintable_notify(move |_| count.set(count.get() + 1));
+    scroller.vadjustment().set_value(1000.0);
+    settle();
+    let scroll_before = scroller.vadjustment().value();
+    let height_before = scroller.height();
+    for dy in [-1.0_f64, 1.0, -1.0, 1.0] {
+        assert!(wheel.emit_by_name::<bool>("scroll", &[&0.0_f64, &dy]));
+        app.set_buffering(20);
+        app.update_buffering_notice();
+        app.set_buffering(100);
+        settle();
+        assert!(!object::<gtk::Box>(&app.ui, "notice").is_visible());
+        assert_eq!(scroller.height(), height_before);
+        assert!((scroller.vadjustment().value() - scroll_before).abs() < 1.0);
+    }
+    assert_eq!(repaints.get(), 0, "Seeking must not replace player artwork");
+    player_art.disconnect(paint_handler);
+    app.set_buffering(30);
+    app.buffering_since
+        .set(Some(Instant::now() - Duration::from_secs(1)));
+    app.update_buffering_notice();
+    assert!(
+        object::<gtk::Box>(&app.ui, "notice").is_visible(),
+        "Sustained buffering still needs feedback"
+    );
+    app.set_buffering(100);
+    assert!(!object::<gtk::Box>(&app.ui, "notice").is_visible());
+    app.set_buffering(30);
+    app.play_track("metadatafixture", Some(0.0));
+    assert!(
+        app.buffering_since.get().is_none(),
+        "A new track must clear old buffering state"
+    );
+    app.notice("Keep this unrelated status", false, false);
+    app.set_buffering(100);
+    assert!(
+        object::<gtk::Box>(&app.ui, "notice").is_visible(),
+        "Buffering must not dismiss another operation's status"
+    );
+    object::<gtk::Box>(&app.ui, "notice").set_visible(false);
+
+    let feed = b"<rss><channel><title>Auto refresh fixture</title><item><title>Original fixture episode</title><guid>fixture-episode</guid><enclosure url='https://example.org/audio.mp3' type='audio/mpeg'/></item></channel></rss>".to_vec();
+    let feeds = enrichment::tests::Fixture::new(vec![("/feed".into(), 200, String::new(), feed)]);
+    let url = format!("{}feed", feeds.url);
+    let show_id = model::stable_id(&url);
+    app.podcast_failed.set(false);
+    app.podcast_results.borrow_mut().clear();
+    app.podcast_results
+        .borrow_mut()
+        .push(services::PodcastShow {
+            id: show_id.clone(),
+            title: "Auto refresh fixture".into(),
+            author: "Fixture creator".into(),
+            feed_url: url.clone(),
+            artwork: None,
+            website: None,
+        });
+    app.navigate("podcasts");
+    object::<gtk::ToggleButton>(&app.ui, "podcast_discover").set_active(true);
+    app.refresh();
+    settle();
+    app.subscribe_show(&show_id);
+    settle();
+    assert!(
+        app.state
+            .borrow()
+            .subscriptions
+            .iter()
+            .any(|s| s.url == url)
+    );
+    let card = app
+        .podcast_cards
+        .borrow()
+        .values()
+        .find_map(|(item, ui)| {
+            item.upgrade()
+                .and_then(|item| item.item())
+                .map(|_| ui.clone())
+        })
+        .unwrap();
+    assert_eq!(
+        object::<gtk::Button>(&card, "subscribe").label().as_deref(),
+        Some("Unsubscribe")
+    );
+    screenshot(app.window.upcast_ref(), "podcast-unsubscribe.png");
+    let episodes = app
+        .state
+        .borrow()
+        .tracks
+        .iter()
+        .filter(|t| t.kind == Kind::Podcast)
+        .count();
+    object::<gtk::Button>(&card, "subscribe").emit_clicked();
+    assert!(
+        !app.state
+            .borrow()
+            .subscriptions
+            .iter()
+            .any(|s| s.url == url)
+    );
+    assert_eq!(
+        app.state
+            .borrow()
+            .tracks
+            .iter()
+            .filter(|t| t.kind == Kind::Podcast)
+            .count(),
+        episodes
+    );
+    assert_eq!(
+        object::<gtk::Button>(&card, "subscribe").label().as_deref(),
+        Some("Subscribe")
+    );
+    app.subscribe_show(&show_id);
+    settle();
+    app.refresh_podcasts(true);
+    app.unsubscribe(&url);
+    settle();
+    assert!(
+        !app.state
+            .borrow()
+            .subscriptions
+            .iter()
+            .any(|s| s.url == url),
+        "A late refresh must not re-subscribe a show"
+    );
+    app.subscribe_show(&show_id);
+    settle();
+
+    app.navigate("queue");
+    app.state.borrow_mut().folders = vec![directory.path().to_path_buf()];
+    let auto_file = directory.path().join("auto-new.wav");
+    std::fs::copy(&audio, &auto_file).unwrap();
+    let auto_uri = url::Url::from_file_path(&auto_file).unwrap().to_string();
+    let current = app.state.borrow().current.clone();
+    let requests = feeds.count();
+    app.state.borrow_mut().refresh_minutes = 0;
+    app.refresh_timer
+        .set(Instant::now() - Duration::from_secs(61));
+    app.poll_source_refresh();
+    assert!(!app.scanning.get());
+    assert_eq!(feeds.count(), requests);
+    app.state.borrow_mut().refresh_minutes = 1;
+    app.poll_source_refresh();
+    assert!(app.scanning.get());
+    assert!(app.podcast_pending(&url));
+    app.poll_source_refresh();
+    let until = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < until && app.scanning.get() {
+        settle();
+    }
+    settle();
+    assert!(app.state.borrow().tracks.iter().any(|t| t.uri == auto_uri));
+    assert_eq!(
+        feeds.count(),
+        requests + 1,
+        "The refresh must not overlap its previous requests"
+    );
+    assert_eq!(app.state.borrow().current, current);
+    app.state.borrow_mut().refresh_minutes = 0;
+    app.settings();
+    settle();
+    let settings = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|w| w.downcast::<gtk::Window>().ok())
+        .find(|w| w.is_visible() && w.title().as_deref() == Some("Settings"))
+        .unwrap();
+    let interval = descendant(settings.upcast_ref(), "refresh_minutes")
+        .unwrap()
+        .downcast::<gtk::SpinButton>()
+        .unwrap();
+    interval.set_value(45.0);
+    assert_eq!(app.state.borrow().refresh_minutes, 45);
+    assert!(app.refresh_timer.get().elapsed() < Duration::from_secs(1));
+    settle();
+    screenshot(&settings, "refresh-settings.png");
+    interval.set_value(0.0);
+    settings.close();
     app.shutdown();
     drop(spotify_runtime);
     app.window.destroy();
@@ -815,4 +1166,16 @@ fn descendant(widget: &gtk::Widget, id: &str) -> Option<gtk::Widget> {
         child = current.next_sibling();
     }
     None
+}
+
+fn scroll_controller(widget: &gtk::Widget, name: &str) -> gtk::EventControllerScroll {
+    let controllers = widget.observe_controllers();
+    (0..controllers.n_items())
+        .filter_map(|i| {
+            controllers
+                .item(i)
+                .and_downcast::<gtk::EventControllerScroll>()
+        })
+        .find(|c| c.name().as_deref() == Some(name))
+        .unwrap()
 }
