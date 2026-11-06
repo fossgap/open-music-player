@@ -105,6 +105,33 @@ pub enum Repeat {
     One,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReplayGain {
+    #[default]
+    Off,
+    Track,
+    Album,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct PlaybackSettings {
+    pub gapless: bool,
+    pub crossfade_seconds: u32,
+    pub replay_gain: ReplayGain,
+}
+
+impl Default for PlaybackSettings {
+    fn default() -> Self {
+        Self {
+            gapless: true,
+            crossfade_seconds: 0,
+            replay_gain: ReplayGain::Off,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct State {
@@ -129,6 +156,7 @@ pub struct State {
     pub fetch_covers: bool,
     pub fetch_lyrics: bool,
     pub refresh_minutes: u32,
+    pub playback: PlaybackSettings,
     #[serde(skip)]
     pub(crate) track_index: std::collections::HashMap<String, usize>,
 }
@@ -157,6 +185,7 @@ impl Default for State {
             fetch_covers: true,
             fetch_lyrics: true,
             refresh_minutes: 0,
+            playback: PlaybackSettings::default(),
             track_index: Default::default(),
         }
     }
@@ -196,6 +225,7 @@ impl State {
 
     pub fn sanitize(&mut self) {
         self.refresh_minutes = self.refresh_minutes.min(1440);
+        self.playback.crossfade_seconds = self.playback.crossfade_seconds.min(12);
         let mut ids = HashSet::new();
         self.tracks
             .retain(|t| !t.id.is_empty() && !t.uri.is_empty() && ids.insert(t.id.clone()));
@@ -297,16 +327,22 @@ impl State {
     }
 
     pub fn adjacent(&self, forward: bool, automatic: bool) -> Option<String> {
+        self.adjacent_from(self.current.as_deref(), forward, automatic)
+    }
+
+    pub fn adjacent_from(
+        &self,
+        current: Option<&str>,
+        forward: bool,
+        automatic: bool,
+    ) -> Option<String> {
         if automatic && self.repeat == Repeat::One {
-            return self.current.clone();
+            return current.map(str::to_string);
         }
         if self.queue.is_empty() {
             return None;
         }
-        let index = self
-            .current
-            .as_ref()
-            .and_then(|id| self.queue.iter().position(|i| i == id));
+        let index = current.and_then(|id| self.queue.iter().position(|i| i == id));
         let next = match (index, forward) {
             (None, _) => 0,
             (Some(i), true) if i + 1 < self.queue.len() => i + 1,
@@ -461,6 +497,25 @@ mod tests {
         assert_eq!(state.playlist(&id).unwrap().tracks, vec!["track"]);
         let copy: State = serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
         assert_eq!(copy.playlists[0].id, id);
+    }
+
+    #[test]
+    fn playback_settings_migrate_round_trip_and_bound_crossfade() {
+        let mut state: State = serde_json::from_str(r#"{"volume":0.5}"#).unwrap();
+        assert!(state.playback.gapless);
+        assert_eq!(state.playback.crossfade_seconds, 0);
+        assert_eq!(state.playback.replay_gain, ReplayGain::Off);
+        state.playback = PlaybackSettings {
+            gapless: false,
+            crossfade_seconds: 900,
+            replay_gain: ReplayGain::Album,
+        };
+        state.sanitize();
+        assert_eq!(state.playback.crossfade_seconds, 12);
+        let restored: State =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert_eq!(restored.playback, state.playback);
+        assert_eq!(restored.volume, 0.5);
     }
 
     #[test]

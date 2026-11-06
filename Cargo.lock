@@ -1250,6 +1250,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "gstreamer-controller"
+version = "0.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc92e1e4b00e8a732d17604d5d86b62498a6322834bd77864a0c5709f601cfbc"
+dependencies = [
+ "glib 0.18.5",
+ "gstreamer",
+ "gstreamer-controller-sys",
+]
+
+[[package]]
+name = "gstreamer-controller-sys"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc163bb40358a23981273dc42a94cd91f12d3e7519418b28d63ea4db90d09180"
+dependencies = [
+ "glib-sys 0.18.1",
+ "gobject-sys 0.18.0",
+ "gstreamer-sys",
+ "libc",
+ "pkg-config",
+ "system-deps 6.2.2",
+]
+
+[[package]]
 name = "gstreamer-sys"
 version = "0.21.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2250,6 +2275,7 @@ version = "0.1.0"
 dependencies = [
  "gstreamer",
  "gstreamer-app",
+ "gstreamer-controller",
  "gtk4",
  "httpdate",
  "keyring",

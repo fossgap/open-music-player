@@ -1130,6 +1130,54 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     settle();
     screenshot(&settings, "refresh-settings.png");
     interval.set_value(0.0);
+    let gapless = descendant(settings.upcast_ref(), "gapless")
+        .unwrap()
+        .downcast::<gtk::Switch>()
+        .unwrap();
+    let crossfade = descendant(settings.upcast_ref(), "crossfade_seconds")
+        .unwrap()
+        .downcast::<gtk::SpinButton>()
+        .unwrap();
+    let gain = descendant(settings.upcast_ref(), "replay_gain")
+        .unwrap()
+        .downcast::<gtk::DropDown>()
+        .unwrap();
+    assert!(gapless.is_active());
+    assert_eq!(crossfade.value_as_int(), 0);
+    assert_eq!(gain.selected(), 0);
+    gapless.set_active(false);
+    crossfade.set_value(6.0);
+    gain.set_selected(2);
+    assert_eq!(
+        app.state.borrow().playback,
+        model::PlaybackSettings {
+            gapless: false,
+            crossfade_seconds: 6,
+            replay_gain: model::ReplayGain::Album
+        }
+    );
+    settings.close();
+    app.settings();
+    settle();
+    let settings = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|w| w.downcast::<gtk::Window>().ok())
+        .find(|w| w.is_visible() && w.title().as_deref() == Some("Settings"))
+        .unwrap();
+    let crossfade = descendant(settings.upcast_ref(), "crossfade_seconds")
+        .unwrap()
+        .downcast::<gtk::SpinButton>()
+        .unwrap();
+    assert_eq!(crossfade.value_as_int(), 6);
+    settings
+        .child()
+        .unwrap()
+        .downcast::<gtk::ScrolledWindow>()
+        .unwrap()
+        .vadjustment()
+        .set_value(450.0);
+    settle();
+    screenshot(&settings, "playback-settings.png");
     settings.close();
     app.shutdown();
     drop(spotify_runtime);

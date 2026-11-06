@@ -19,7 +19,7 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 | --- | --- |
 | Local library | Recursive folder discovery, metadata, search, track and album views, configurable automatic refresh, duplicate detection |
 | Collections | Favorites, playlist artwork grid, hover/focus Play all on album and playlist cards, create/rename/delete playlists, M3U/M3U8/PLS/XSPF import, queue, shuffle, repeat one/all |
-| Playback | GStreamer audio, play/pause, previous/next, seeking, volume, mute, automatic next track |
+| Playback | GStreamer audio, play/pause, previous/next, seeking, volume, mute, automatic next track, gapless, optional crossfade and ReplayGain |
 | Podcasts | Apple Podcasts/iTunes and gPodder search/discovery, subscribe/unsubscribe toggles, RSS/Atom subscriptions, feed refresh, per-episode resume positions |
 | Internet radio | Search and discovery through Radio Browser, station artwork, favorites, playback |
 | Streaming | One view for YouTube Music, Spotify and direct HTTP(S) audio |
@@ -151,6 +151,20 @@ Scroll over the volume control to adjust volume by **5 percentage points** per w
 
 The session is restored without automatically starting audio. Press Play to continue. Podcast episodes also retain individual positions.
 
+### Playback settings
+
+**Settings → Playback** saves these preferences between sessions:
+
+| Option | Default | Behavior |
+|---|---|---|
+| Gapless playback | On | Prepares the next queued song without restarting the audio output. Works between GStreamer music sources and between Spotify tracks; changing playback backends uses a normal transition. |
+| Crossfade | Off (0 seconds) | Overlaps music for 1–12 seconds, with shorter fades for short songs. Applies to local music, YouTube Music and finite direct music streams. Podcasts, radio and repeat-one playback never crossfade. Spotify crossfade is not implemented. |
+| ReplayGain | Off | Track gain evens out tagged tracks; Album gain preserves an album's relative levels and falls back to track gain when album tags are missing. Existing ReplayGain tags are read during playback, with peak protection when peak tags are present. Untagged audio is unchanged; no analysis or file rewriting takes place. Spotify uses librespot's own loudness data, with changes applied on the next track. |
+
+Crossfade takes precedence over gapless for eligible transitions. Manual next/previous starts the selected song immediately; seeking ends any active overlap. Pause, mute and volume affect both songs during a fade. Queue edits, shuffle and repeat determine the prepared successor. If a speculative preload fails, ordinary next-track playback retries it.
+
+YouTube Music resolves the next playback URL shortly before the transition, retaining its request headers. Network delays, expiring URLs and missing loudness tags can limit streaming transitions or normalization. These features add no provider accounts, subscriptions or API keys.
+
 ### Playlists
 
 **Playlists** opens a grid of your collections, showing a member's artwork and the playlist name. Hover over an album or nonempty playlist card to reveal **Play all**; keyboard focus reveals the same button. It queues the whole collection and starts playback without opening or leaving the grid. Playlist order is retained unless shuffle is enabled. Click a playlist to see its tracks; double-click a track to play it. Use **New playlist** to create a collection and a track's options menu to add it. Rename or delete a playlist from its card menu or while viewing its tracks. In a compact window, these actions move into **Playlist options** beside the heading. Deletion asks for confirmation and retains the music files, library, and playing queue.
@@ -280,7 +294,8 @@ src/
   app/tests.rs   GTK scroll, selection, collection and streaming regressions
   app/spotify.rs Spotify account and playlist interface
   app/youtube.rs YouTube Music account and playlist interface
-  audio.rs       GStreamer playback and decoded-audio waveform
+  audio.rs       Playback routing, next-track preparation and crossfades
+  audio/         Gapless GStreamer decks, ReplayGain and PCM regression tests
   desktop.rs     MPRIS, StatusNotifierItem, and tray menu
   i18n.rs        Embedded translation catalogues
   enrichment.rs  Background cover/lyric jobs, cancellation, metadata matching

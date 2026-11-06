@@ -11,6 +11,7 @@ mod artwork;
 mod browse;
 mod interactions;
 mod metadata;
+mod playback;
 mod podcasts;
 mod spotify;
 #[cfg(test)]
@@ -35,6 +36,7 @@ enum Message {
     PlaylistImport(Result<playlists::Import, String>),
     Feed(podcasts::FeedReply),
     Youtube(u64, Result<youtube_music::Resolved, String>),
+    Prepared((u64, String), Result<crate::audio::NextTrack, String>),
     Music(youtube::Reply),
     Artwork(String, Result<String, String>),
     SaveError(String),
@@ -85,6 +87,7 @@ pub struct App {
     play_generation: Cell<u64>,
     resolving: Cell<bool>,
     resolve_autoplay: Cell<bool>,
+    preparation: RefCell<playback::Preparation>,
     scanning: Cell<bool>,
     tx: mpsc::Sender<Message>,
     rx: RefCell<mpsc::Receiver<Message>>,
@@ -129,7 +132,8 @@ fn close_on_escape(window: &gtk::Window) {
 
 impl App {
     pub fn new(application: &gtk::Application, state: State) -> Result<Rc<Self>, String> {
-        let audio = Audio::new()?;
+        let mut audio = Audio::new()?;
+        audio.configure(state.playback);
         let i18n = I18n::new(&state.language);
         let ui = gtk::Builder::from_string(include_str!("../resources/window.ui"));
         let mini_ui = gtk::Builder::from_string(include_str!("../resources/mini.ui"));
@@ -199,6 +203,7 @@ impl App {
             play_generation: Cell::new(0),
             resolving: Cell::new(false),
             resolve_autoplay: Cell::new(true),
+            preparation: Default::default(),
             scanning: Cell::new(false),
             tx,
             rx: RefCell::new(rx),
@@ -879,6 +884,7 @@ impl App {
         self.play_generation.set(generation);
         self.resolving.set(false);
         self.resolve_autoplay.set(true);
+        *self.preparation.borrow_mut() = playback::Preparation::default();
         let position = resume.unwrap_or_else(|| {
             if track.kind == Kind::Podcast {
                 self.state
@@ -914,7 +920,15 @@ impl App {
                 ));
             });
         } else {
-            let result = self.audio.borrow_mut().load(&track.uri, position, true);
+            let (next, fade) = self.next_playback();
+            let result = self.audio.borrow_mut().load_queued(
+                &track.uri,
+                position,
+                true,
+                HashMap::new(),
+                next,
+                fade,
+            );
             if let Err(e) = result {
                 self.notice(&e, true, false);
             }
@@ -1003,7 +1017,8 @@ impl App {
         } else {
             seconds.max(0.0)
         };
-        match self.audio.borrow().seek(seconds) {
+        let result = self.audio.borrow_mut().seek(seconds);
+        match result {
             Ok(()) => {
                 self.state.borrow_mut().position = seconds;
                 crate::desktop::seeked(self, seconds);
@@ -1409,11 +1424,14 @@ impl App {
                     match result {
                         Ok(resolved) => {
                             let position = self.state.borrow().position;
-                            let result = self.audio.borrow_mut().load_with_headers(
+                            let (next, fade) = self.next_playback();
+                            let result = self.audio.borrow_mut().load_queued(
                                 &resolved.uri,
                                 position,
                                 self.resolve_autoplay.get(),
                                 resolved.headers,
+                                next,
+                                fade,
                             );
                             if let Err(e) = result {
                                 self.notice(&e, true, false);
@@ -1431,6 +1449,7 @@ impl App {
                         }
                     }
                 }
+                Message::Prepared(key, result) => self.prepared(key, result),
                 Message::Music(reply) => self.handle_youtube(reply),
                 Message::Artwork(uri, result) => {
                     self.artwork_pending.borrow_mut().remove(&uri);
@@ -1460,6 +1479,11 @@ impl App {
         let events = self.audio.borrow_mut().poll();
         for event in events {
             match event {
+                Event::Advanced(id) => {
+                    if !self.advanced(id) {
+                        break;
+                    }
+                }
                 Event::End => {
                     self.remember_position();
                     self.audio.borrow_mut().stop();
@@ -1468,6 +1492,7 @@ impl App {
                         self.state.borrow_mut().podcast_positions.remove(&id);
                     }
                     self.next(true);
+                    break;
                 }
                 Event::Error(e) => {
                     self.notice(
@@ -1511,6 +1536,7 @@ impl App {
                 }
             }
         }
+        self.prepare_transition();
         self.update_buffering_notice();
         if !self.audio.borrow().playing {
             for value in self.spectrum.borrow_mut().iter_mut() {
@@ -1589,6 +1615,7 @@ impl App {
         });
         self.metadata_settings(&ui);
         self.refresh_settings(&ui);
+        self.playback_settings(&ui);
         object::<gtk::Label>(&ui, "tray_note").set_visible(!self.tray_available.get());
         for folder in self.state.borrow().folders.clone() {
             let builder = gtk::Builder::from_string(include_str!("../resources/setting-row.ui"));

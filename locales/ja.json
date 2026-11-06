@@ -308,5 +308,15 @@
   "Subscribing…": "Subscribing…",
   "Unsubscribe": "Unsubscribe",
   "Unsubscribed. Existing episodes are kept.": "Unsubscribed. Existing episodes are kept.",
-  "Volume — scroll to adjust by 5%": "Volume — scroll to adjust by 5%"
+  "Volume — scroll to adjust by 5%": "Volume — scroll to adjust by 5%",
+  "Playback": "Playback",
+  "Gapless playback": "Gapless playback",
+  "Crossfade (seconds)": "Crossfade (seconds)",
+  "Crossfade duration in seconds; 0 means off": "Crossfade duration in seconds; 0 means off",
+  "Gapless works with music files, YouTube Music and Spotify. Crossfade works with music files and YouTube Music; 0 turns it off. Podcasts and radio never crossfade.": "Gapless works with music files, YouTube Music and Spotify. Crossfade works with music files and YouTube Music; 0 turns it off. Podcasts and radio never crossfade.",
+  "ReplayGain": "ReplayGain",
+  "Uses existing loudness tags; untagged audio stays unchanged. Album gain preserves relative track volumes. Spotify uses its own loudness data; changes apply on the next track.": "Uses existing loudness tags; untagged audio stays unchanged. Album gain preserves relative track volumes. Spotify uses its own loudness data; changes apply on the next track.",
+  "Off": "Off",
+  "Track gain": "Track gain",
+  "Album gain": "Album gain"
 }

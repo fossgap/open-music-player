@@ -1,10 +1,13 @@
 //! librespot decodes; the application's GStreamer version owns the audio device.
-use crate::audio::Event;
+use crate::{
+    audio::{Event, NextTrack},
+    model::{PlaybackSettings, ReplayGain},
+};
 use gst::prelude::*;
 use librespot_core::{session::Session, spotify_uri::SpotifyUri};
 use librespot_playback::{
     audio_backend::{Sink, SinkError, SinkResult},
-    config::PlayerConfig,
+    config::{NormalisationMethod, NormalisationType, PlayerConfig},
     convert::Converter,
     decoder::AudioPacket,
     mixer::NoOpVolume,
@@ -115,7 +118,13 @@ impl Drop for PcmSink {
 
 pub struct Playback {
     player: Arc<Player>,
-    events: PlayerEventChannel,
+    events: tokio::sync::mpsc::UnboundedReceiver<Feedback>,
+    monitor: tokio::task::JoinHandle<()>,
+    transition: Arc<Mutex<Transition>>,
+    session: Session,
+    runtime: tokio::runtime::Handle,
+    settings: PlaybackSettings,
+    applied: PlaybackSettings,
     bus: gst::Bus,
     volume: gst::Element,
     waveform: Arc<Mutex<Vec<f64>>>,
@@ -131,20 +140,44 @@ pub struct Playback {
 impl Playback {
     /// Called while the service runtime is entered; librespot keeps it for its I/O.
     pub fn new(session: Session) -> Result<Self, String> {
+        Self::with_settings(session, PlaybackSettings::default())
+    }
+    fn with_settings(session: Session, settings: PlaybackSettings) -> Result<Self, String> {
         let (sink, volume) = PcmSink::new()?;
         let waveform = sink.waveform.clone();
         let bus = sink.pipeline.bus().unwrap();
         let config = PlayerConfig {
             position_update_interval: Some(Duration::from_secs(1)),
+            gapless: settings.gapless,
+            normalisation: settings.replay_gain != ReplayGain::Off,
+            normalisation_type: if settings.replay_gain == ReplayGain::Album {
+                NormalisationType::Album
+            } else {
+                NormalisationType::Track
+            },
+            normalisation_method: NormalisationMethod::Basic,
             ..PlayerConfig::default()
         };
-        let player = Player::new(config, session, Box::new(NoOpVolume), move || {
+        let player = Player::new(config, session.clone(), Box::new(NoOpVolume), move || {
             Box::new(sink)
         });
-        let events = player.get_player_event_channel();
+        let transition = Arc::new(Mutex::new(Transition::default()));
+        let (tx, events) = tokio::sync::mpsc::unbounded_channel();
+        let monitor = tokio::spawn(forward_events(
+            player.clone(),
+            player.get_player_event_channel(),
+            transition.clone(),
+            tx,
+        ));
         Ok(Self {
             player,
             events,
+            monitor,
+            transition,
+            session,
+            runtime: tokio::runtime::Handle::current(),
+            settings,
+            applied: settings,
             bus,
             volume,
             waveform,
@@ -158,6 +191,30 @@ impl Playback {
             ready: false,
         })
     }
+    pub fn configure(&mut self, settings: PlaybackSettings) {
+        self.settings = settings;
+        if !self.can_chain() {
+            self.transition.lock().unwrap().next = None;
+        }
+    }
+    fn can_chain(&self) -> bool {
+        self.settings.gapless
+            && self.applied.gapless
+            && self.settings.replay_gain == self.applied.replay_gain
+    }
+    pub fn prepare_next(&mut self, next: Option<NextTrack>) {
+        let next = next.filter(|n| self.can_chain() && super::track_id(&n.uri).is_some());
+        let mut transition = self.transition.lock().unwrap();
+        if transition.next == next {
+            return;
+        }
+        if let Some(next) = next.as_ref() {
+            if let Ok(uri) = SpotifyUri::from_uri(&next.uri) {
+                self.player.preload(uri);
+            }
+        }
+        transition.next = next;
+    }
     pub fn load(
         &mut self,
         uri: &str,
@@ -169,9 +226,17 @@ impl Playback {
             return Err("Invalid Spotify track.".into());
         }
         let track = SpotifyUri::from_uri(uri).map_err(|_| "Invalid Spotify track.")?;
+        if self.settings.replay_gain != self.applied.replay_gain
+            || self.settings.gapless != self.applied.gapless
+        {
+            let runtime = self.runtime.clone();
+            let _entered = runtime.enter();
+            let replacement = Self::with_settings(self.session.clone(), self.settings)?;
+            replacement.volume(self.volume.property("volume"));
+            *self = replacement;
+        }
         self.stop();
-        // A fresh channel plus Loading/request-id matching isolates previous loads.
-        self.events = self.player.get_player_event_channel();
+        while self.events.try_recv().is_ok() {}
         while self.bus.pop().is_some() {}
         self.track = Some(track.clone());
         self.request = None;
@@ -180,10 +245,16 @@ impl Playback {
         self.duration = duration;
         self.anchor.set((position, Instant::now()));
         self.playing = autoplay;
+        {
+            let mut transition = self.transition.lock().unwrap();
+            transition.current = Some(track.clone());
+            transition.playing = autoplay;
+        }
         self.player.load(track, autoplay, millis(position));
         Ok(())
     }
     pub fn set_playing(&mut self, playing: bool) {
+        self.transition.lock().unwrap().playing = playing;
         self.anchor.set((self.position(), Instant::now()));
         if !playing {
             self.running = false;
@@ -196,6 +267,7 @@ impl Playback {
         }
     }
     pub fn stop(&mut self) {
+        *self.transition.lock().unwrap() = Transition::default();
         self.player.stop();
         self.track = None;
         self.request = None;
@@ -233,7 +305,24 @@ impl Playback {
             let Ok(event) = self.events.try_recv() else {
                 break;
             };
+            let event = match event {
+                Feedback::Advanced(next) => {
+                    self.track = SpotifyUri::from_uri(&next.uri).ok();
+                    self.request = None;
+                    self.ready = false;
+                    self.running = false;
+                    self.started = Instant::now();
+                    self.duration = next.duration;
+                    self.anchor.set((0.0, Instant::now()));
+                    out.push(Event::Advanced(next.id));
+                    continue;
+                }
+                Feedback::Native(event) => event,
+            };
             match event {
+                PlayerEvent::PlayRequestIdChanged { play_request_id } if self.track.is_some() => {
+                    self.request = Some(play_request_id);
+                }
                 PlayerEvent::Loading {
                     play_request_id,
                     track_id,
@@ -335,7 +424,82 @@ impl Playback {
 }
 impl Drop for Playback {
     fn drop(&mut self) {
+        self.monitor.abort();
         self.player.stop();
+    }
+}
+
+enum Feedback {
+    Native(PlayerEvent),
+    Advanced(NextTrack),
+}
+
+#[derive(Default)]
+struct Transition {
+    playing: bool,
+    current: Option<SpotifyUri>,
+    request: Option<u64>,
+    next: Option<NextTrack>,
+}
+
+impl Transition {
+    fn accept(&mut self, event: &PlayerEvent) -> Option<NextTrack> {
+        match event {
+            PlayerEvent::PlayRequestIdChanged { play_request_id } if self.current.is_some() => {
+                self.request = Some(*play_request_id)
+            }
+            PlayerEvent::Loading {
+                play_request_id,
+                track_id,
+                ..
+            } if self.current.as_ref() == Some(track_id) => self.request = Some(*play_request_id),
+            PlayerEvent::EndOfTrack {
+                play_request_id,
+                track_id,
+            } if self.current.as_ref() == Some(track_id)
+                && self.request == Some(*play_request_id) =>
+            {
+                let mut next = self.next.take()?;
+                let mut following = std::mem::take(&mut next.following).into_iter();
+                self.next = following.next().map(|mut track| {
+                    track.following = following.collect();
+                    track
+                });
+                self.current = SpotifyUri::from_uri(&next.uri).ok();
+                self.request = None;
+                return Some(next);
+            }
+            _ => {}
+        }
+        None
+    }
+}
+
+// Advance on the service runtime, not the GTK poll timer. Keep the PCM sink running
+// so queued samples and the preloaded decoder join without reopening the device.
+async fn forward_events(
+    player: Arc<Player>,
+    mut events: PlayerEventChannel,
+    transition: Arc<Mutex<Transition>>,
+    tx: tokio::sync::mpsc::UnboundedSender<Feedback>,
+) {
+    while let Some(event) = events.recv().await {
+        let mut state = transition.lock().unwrap();
+        if let Some(next) = state.accept(&event) {
+            if let Ok(uri) = SpotifyUri::from_uri(&next.uri) {
+                if tx.send(Feedback::Advanced(next)).is_err() {
+                    break;
+                }
+                player.load(uri, state.playing, 0);
+                if let Some(next) = state.next.as_ref() {
+                    if let Ok(uri) = SpotifyUri::from_uri(&next.uri) {
+                        player.preload(uri);
+                    }
+                }
+            }
+        } else if tx.send(Feedback::Native(event)).is_err() {
+            break;
+        }
     }
 }
 fn millis(seconds: f64) -> u32 {
@@ -345,6 +509,60 @@ fn millis(seconds: f64) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn gapless_successor_accepts_preloaded_requests_without_loading_event() {
+        let current = SpotifyUri::from_uri("spotify:track:4uLU6hMCjMI75M1A2tKUQC").unwrap();
+        let next = NextTrack {
+            id: "next".into(),
+            uri: "spotify:track:6rqhFgbbKwnb9MLmUQDhG6".into(),
+            headers: Default::default(),
+            duration: 120.0,
+            following: Vec::new(),
+        };
+        let mut state = Transition {
+            current: Some(current.clone()),
+            request: Some(8),
+            next: Some(next.clone()),
+            playing: true,
+        };
+        assert!(
+            state
+                .accept(&PlayerEvent::EndOfTrack {
+                    play_request_id: 7,
+                    track_id: current.clone()
+                })
+                .is_none()
+        );
+        assert_eq!(
+            state
+                .accept(&PlayerEvent::EndOfTrack {
+                    play_request_id: 8,
+                    track_id: current
+                })
+                .unwrap(),
+            next
+        );
+        assert!(state.next.is_none());
+        assert!(state.request.is_none());
+        // A ready preload skips Loading, but still emits PlayRequestIdChanged.
+        state.accept(&PlayerEvent::PlayRequestIdChanged { play_request_id: 9 });
+        assert_eq!(state.request, Some(9));
+        assert_eq!(
+            state.current,
+            Some(SpotifyUri::from_uri(&next.uri).unwrap())
+        );
+        state.next = Some(next);
+        state = Transition::default();
+        assert!(
+            state
+                .accept(&PlayerEvent::EndOfTrack {
+                    play_request_id: 9,
+                    track_id: SpotifyUri::from_uri("spotify:track:6rqhFgbbKwnb9MLmUQDhG6").unwrap()
+                })
+                .is_none(),
+            "Stop invalidates every prepared successor"
+        );
+    }
     #[test]
     fn pcm_output_can_pause_restart_and_produces_real_waveform() {
         gst::init().unwrap();
@@ -391,23 +609,23 @@ mod tests {
         playback.events = events;
         playback.track = Some(track.clone());
         playback.duration = 180.0;
-        tx.send(PlayerEvent::EndOfTrack {
+        tx.send(Feedback::Native(PlayerEvent::EndOfTrack {
             play_request_id: 1,
             track_id: track.clone(),
-        })
+        }))
         .unwrap();
         assert!(playback.poll().is_empty());
-        tx.send(PlayerEvent::Loading {
+        tx.send(Feedback::Native(PlayerEvent::Loading {
             play_request_id: 2,
             track_id: track.clone(),
             position_ms: 0,
-        })
+        }))
         .unwrap();
-        tx.send(PlayerEvent::Playing {
+        tx.send(Feedback::Native(PlayerEvent::Playing {
             play_request_id: 2,
             track_id: track.clone(),
             position_ms: 12000,
-        })
+        }))
         .unwrap();
         assert!(playback.poll().iter().any(|e| matches!(e, Event::Ready)));
         assert!(
@@ -415,23 +633,23 @@ mod tests {
             "A paused load must stay paused even if an earlier Playing event arrives"
         );
         assert_eq!(playback.position(), 12.0);
-        tx.send(PlayerEvent::EndOfTrack {
+        tx.send(Feedback::Native(PlayerEvent::EndOfTrack {
             play_request_id: 1,
             track_id: track.clone(),
-        })
+        }))
         .unwrap();
         assert!(playback.poll().is_empty());
         playback.stop();
-        tx.send(PlayerEvent::Playing {
+        tx.send(Feedback::Native(PlayerEvent::Playing {
             play_request_id: 2,
             track_id: track.clone(),
             position_ms: 15000,
-        })
+        }))
         .unwrap();
-        tx.send(PlayerEvent::EndOfTrack {
+        tx.send(Feedback::Native(PlayerEvent::EndOfTrack {
             play_request_id: 2,
             track_id: track,
-        })
+        }))
         .unwrap();
         assert!(playback.poll().is_empty());
         assert!(!playback.playing);
