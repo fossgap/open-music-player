@@ -301,7 +301,138 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
         app.button("empty_action").label().as_deref(),
         Some("Try again")
     );
+    // YouTube Music uses the same track list and playlist grid, with stale job protection.
+    app.navigate("youtube");
+    assert!(object::<gtk::Box>(&app.ui, "youtube_tabs").is_visible());
+    assert!(app.button("youtube_search").is_visible());
+    app.handle_youtube(youtube::Reply::Connected(Ok(model::YoutubeAccount {
+        id: "@fixture".into(),
+        name: "Fixture account".into(),
+    })));
+    let song = youtube_music::Song {
+        video_id: "abcdefghijk".into(),
+        title: "Fixture song".into(),
+        artist: "Fixture artist".into(),
+        album: "Fixture album".into(),
+        duration: 30.0,
+        artwork: None,
+    }
+    .into_track()
+    .unwrap();
+    let song_id = song.id.clone();
+    app.youtube.generation.set(5);
+    app.handle_youtube(youtube::Reply::Search(4, Ok(vec![song.clone()])));
+    assert!(app.youtube.results.borrow().is_empty());
+    app.handle_youtube(youtube::Reply::Search(5, Ok(vec![song])));
+    object::<gtk::SearchEntry>(&app.ui, "search")
+        .set_text("query need not occur literally in provider results");
+    app.refresh();
+    assert_eq!(&*app.visible.borrow(), std::slice::from_ref(&song_id));
+    settle();
+    screenshot(app.window.upcast_ref(), "youtube-search-compact.png");
+    // Pausing or stopping before URL resolution must not start delayed audio.
+    app.state.borrow_mut().current = Some(song_id.clone());
+    app.play_generation.set(77);
+    app.resolving.set(true);
+    app.resolve_autoplay.set(true);
+    app.toggle_play();
+    app.tx
+        .send(Message::Youtube(
+            77,
+            Ok(youtube_music::Resolved {
+                uri: uri.clone(),
+                headers: HashMap::new(),
+            }),
+        ))
+        .unwrap();
+    settle();
+    assert!(app.audio.borrow().loaded);
+    assert!(!app.audio.borrow().playing);
+    app.stop_playback();
+    app.tx
+        .send(Message::Youtube(
+            77,
+            Ok(youtube_music::Resolved {
+                uri: uri.clone(),
+                headers: HashMap::new(),
+            }),
+        ))
+        .unwrap();
+    settle();
+    assert!(!app.audio.borrow().loaded);
+    let remote = youtube_music::RemotePlaylist {
+        id: "PL_fixture".into(),
+        name: "YouTube collection".into(),
+        tracks: vec![youtube_music::Song {
+            video_id: "abcdefghijk".into(),
+            title: "Fixture song".into(),
+            artist: "Fixture artist".into(),
+            album: "Fixture album".into(),
+            duration: 30.0,
+            artwork: None,
+        }],
+        editable: true,
+        snapshot: youtube_music::snapshot("YouTube collection", &["abcdefghijk".into()]),
+        unavailable: 0,
+        local_id: None,
+    };
+    app.handle_youtube(youtube::Reply::Synced(
+        "@fixture".into(),
+        vec![],
+        Ok(youtube_music::SyncResult {
+            playlists: vec![remote],
+            ..Default::default()
+        }),
+    ));
+    object::<gtk::ToggleButton>(&app.ui, "youtube_playlists").set_active(true);
+    settle();
+    assert_eq!(app.playlists_model.n_items(), 1);
+    screenshot(app.window.upcast_ref(), "youtube-playlists-compact.png");
+    let playlist_id = app.playlists_model.string(0).unwrap();
+    app.open_playlist(&playlist_id);
+    assert_eq!(app.page.borrow().as_str(), "youtube");
+    assert_eq!(&*app.visible.borrow(), std::slice::from_ref(&song_id));
+    app.remove(&song_id);
+    assert!(
+        app.state
+            .borrow()
+            .playlist(&playlist_id)
+            .unwrap()
+            .tracks
+            .is_empty()
+    );
+    assert!(app.state.borrow().track(&song_id).is_some());
+    app.youtube_primary();
+    settle();
+    let account_window = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|w| w.downcast::<gtk::Window>().ok())
+        .find(|w| w.title().as_deref() == Some("YouTube Music account"))
+        .unwrap();
+    screenshot(&account_window, "youtube-account.png");
+    account_window.close();
+    app.handle_youtube(youtube::Reply::Disconnected(Ok(())));
+    assert!(app.state.borrow().youtube_account.is_none());
+    assert!(app.state.borrow().track(&song_id).is_none());
+    assert!(app.state.borrow().track("test000").is_some());
     app.shutdown();
     app.window.destroy();
     object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+}
+
+fn screenshot(window: &gtk::Window, name: &str) {
+    let Some(directory) = std::env::var_os("OPEN_AUDIO_TEST_SCREENSHOTS") else {
+        return;
+    };
+    std::fs::create_dir_all(&directory).unwrap();
+    let paintable = gtk::WidgetPaintable::new(Some(window));
+    let snapshot = gtk::Snapshot::new();
+    paintable.snapshot(&snapshot, window.width() as f64, window.height() as f64);
+    let node = snapshot.to_node().unwrap();
+    window
+        .renderer()
+        .unwrap()
+        .render_texture(&node, None)
+        .save_to_png(PathBuf::from(directory).join(name))
+        .unwrap();
 }

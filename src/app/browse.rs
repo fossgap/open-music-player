@@ -277,6 +277,34 @@ impl App {
             );
             return;
         }
+        if matches!(kind, Grid::Playlists) {
+            let compact = self.compact_browse.get() && *self.page.borrow() == "youtube";
+            let card: gtk::Box = object(ui, "album_card");
+            card.set_orientation(if compact {
+                gtk::Orientation::Horizontal
+            } else {
+                gtk::Orientation::Vertical
+            });
+            card.set_margin_bottom(if compact { 8 } else { 20 });
+            let frame: gtk::AspectFrame = object(ui, "art_frame");
+            frame.set_size_request(if compact { 64 } else { -1 }, if compact { 64 } else { -1 });
+            frame.set_halign(if compact {
+                gtk::Align::Start
+            } else {
+                gtk::Align::Fill
+            });
+            object::<gtk::Image>(ui, "placeholder").set_size_request(
+                if compact { 64 } else { 160 },
+                if compact { 64 } else { 160 },
+            );
+            object::<gtk::Image>(ui, "placeholder").set_pixel_size(if compact { 28 } else { 64 });
+            object::<gtk::Box>(ui, "card_metadata").set_hexpand(compact);
+            object::<gtk::Box>(ui, "card_metadata").set_valign(if compact {
+                gtk::Align::Center
+            } else {
+                gtk::Align::Fill
+            });
+        }
         let (title, subtitle, art) = if matches!(kind, Grid::Playlists) {
             let Some(playlist) = state.playlist(&id) else {
                 return;
@@ -292,6 +320,7 @@ impl App {
                 entry.set_action_and_target_value(Some(action), Some(&playlist.id.to_variant()));
                 menu.append_item(&entry);
             }
+            self.youtube_playlist_menu(&menu, playlist);
             let options: gtk::MenuButton = object(ui, "menu");
             options.set_visible(true);
             options.set_menu_model(Some(&menu));
@@ -376,9 +405,35 @@ impl App {
         let album = self.album.borrow().clone();
         let playlist_id = self.playlist.borrow().clone();
         let playlist = playlist_id.as_deref().and_then(|id| state.playlist(id));
-        let playlist_overview = page == "playlists" && playlist.is_none();
+        let youtube = page == "youtube";
+        let youtube_search = youtube && !self.youtube.playlists.get();
+        let playlist_overview = (page == "playlists" || (youtube && self.youtube.playlists.get()))
+            && playlist.is_none();
         let podcast_browser = page == "podcasts" && self.podcast_discovery.get();
         let (title, action, empty_title, empty_description, empty_action) = match page.as_str() {
+            "youtube" => (
+                "YouTube Music",
+                if state.youtube_account.is_some() {
+                    "Account"
+                } else {
+                    "Connect account"
+                },
+                if self.youtube.playlists.get() {
+                    "Your YouTube Music playlists"
+                } else {
+                    "Find music you love."
+                },
+                if self.youtube.playlists.get() {
+                    "Connect your account and sync your playlists."
+                } else {
+                    "Search for a song or artist, then double-click a track to play."
+                },
+                if self.youtube.playlists.get() {
+                    "Sync playlists"
+                } else {
+                    "Search music"
+                },
+            ),
             "favorites" => (
                 "Favorites",
                 "Add music",
@@ -411,7 +466,7 @@ impl App {
                 "Streaming",
                 "Add stream",
                 "The world is on air.",
-                "Play a YouTube video or an audio stream.",
+                "Play an internet audio stream.",
                 "Add stream",
             ),
             "queue" => (
@@ -460,6 +515,11 @@ impl App {
         let ordered = match page.as_str() {
             "queue" => Some(state.queue.clone()),
             "playlists" => Some(playlist.map(|p| p.tracks.clone()).unwrap_or_default()),
+            "youtube" => Some(if youtube_search {
+                self.youtube.results.borrow().clone()
+            } else {
+                playlist.map(|p| p.tracks.clone()).unwrap_or_default()
+            }),
             "radio" if !self.radio_results.borrow().is_empty() => {
                 Some(self.radio_results.borrow().clone())
             }
@@ -470,7 +530,7 @@ impl App {
         } else if let Some(ids) = ordered {
             ids.iter()
                 .filter_map(|id| state.track(id))
-                .filter(|t| t.matches(&query))
+                .filter(|t| youtube_search || t.matches(&query))
                 .collect()
         } else {
             state
@@ -526,6 +586,15 @@ impl App {
             .playlists
             .iter()
             .filter(|p| {
+                !youtube
+                    || p.youtube.as_ref().is_some_and(|l| {
+                        state
+                            .youtube_account
+                            .as_ref()
+                            .is_some_and(|a| l.account_id == a.id)
+                    })
+            })
+            .filter(|p| {
                 !playlist_overview
                     || query
                         .split_whitespace()
@@ -552,7 +621,11 @@ impl App {
         };
         self.label(
             "page_subtitle",
-            &if podcast_browser && self.podcast_failed.get() {
+            &if youtube_search && self.youtube.searching.get() {
+                self.tr("Searching YouTube Music…")
+            } else if (youtube_search && self.youtube.failed.get())
+                || (podcast_browser && self.podcast_failed.get())
+            {
                 self.tr("Search unavailable")
             } else if podcast_browser && !self.button("podcast_search").is_sensitive() {
                 self.tr("Finding podcasts…")
@@ -615,19 +688,52 @@ impl App {
                     }
                 ),
                 "podcasts" => format!("{} {}", state.subscriptions.len(), self.tr("subscriptions")),
-                "streams" => self.tr("YouTube uses yt-dlp. Spotify opens in its own player."),
+                "streams" => self.tr("Internet audio streams"),
+                "youtube" => self.tr(if playlist_overview {
+                    "Sync downloads online changes and uploads edits to linked playlists."
+                } else {
+                    "Double-click a track to play."
+                }),
                 "playlists" if playlist_overview => self.tr("Select a playlist to see its tracks."),
                 _ => self.tr("Double-click a track to play."),
             },
         );
         object::<gtk::Box>(&self.ui, "view_switch")
             .set_visible(page == "library" && album.is_none());
-        object::<gtk::Box>(&self.ui, "stream_services").set_visible(page == "streams");
+        object::<gtk::Box>(&self.ui, "youtube_tabs").set_visible(youtube);
+        object::<gtk::Label>(&self.ui, "youtube_status").set_visible(!self.compact_browse.get());
+        let grid: gtk::GridView = object(&self.ui, "playlist_grid");
+        if youtube && self.compact_browse.get() {
+            grid.set_min_columns(1);
+            grid.set_max_columns(1);
+        } else {
+            grid.set_max_columns(5);
+            grid.set_min_columns(2);
+        }
+        self.button("youtube_search").set_visible(youtube_search);
+        self.button("youtube_search")
+            .set_sensitive(!self.youtube.searching.get() && !self.youtube.busy.get());
+        self.button("youtube_sync")
+            .set_sensitive(!self.youtube.busy.get());
+        self.label(
+            "youtube_status",
+            &state
+                .youtube_account
+                .as_ref()
+                .map(|a| a.name.clone())
+                .unwrap_or_else(|| self.tr("Connect to access your playlists")),
+        );
+        self.button("page_action")
+            .set_sensitive(!youtube || !self.youtube.busy.get());
+        self.button("refresh").set_sensitive(
+            !self.scanning.get()
+                && (!youtube || (!self.youtube.busy.get() && !self.youtube.searching.get())),
+        );
         object::<gtk::Box>(&self.ui, "podcast_tabs").set_visible(page == "podcasts");
         object::<gtk::DropDown>(&self.ui, "podcast_provider").set_visible(podcast_browser);
         self.button("podcast_search").set_visible(podcast_browser);
         let compact_playlist =
-            page == "playlists" && playlist.is_some() && self.compact_browse.get();
+            (page == "playlists" || youtube) && playlist.is_some() && self.compact_browse.get();
         let options: gtk::MenuButton = object(&self.ui, "playlist_options");
         options.set_visible(compact_playlist);
         if let Some(playlist) = playlist {
@@ -644,6 +750,7 @@ impl App {
                 Some(&self.tr("Import playlist")),
                 Some("app.playlist-import"),
             );
+            self.youtube_playlist_menu(&menu, playlist);
             options.set_menu_model(Some(&menu));
         }
         self.button("page_action").set_visible(!compact_playlist);
@@ -666,7 +773,9 @@ impl App {
             .set_visible(!playlist_overview && !podcast_browser);
         self.button("play_all").set_sensitive(!tracks.is_empty());
         object::<gtk::SearchEntry>(&self.ui, "search").set_placeholder_text(Some(&self.tr(
-            if podcast_browser {
+            if youtube_search {
+                "Search YouTube Music, then press Enter"
+            } else if podcast_browser {
                 "Search podcasts, then press Enter"
             } else if playlist_overview {
                 "Search playlists"
@@ -679,12 +788,18 @@ impl App {
         let stack: gtk::Stack = object(&self.ui, "content_stack");
         if count == 0 {
             stack.set_visible_child_name("empty");
-            let loading = podcast_browser && !self.button("podcast_search").is_sensitive();
-            let failed = podcast_browser && self.podcast_failed.get();
+            let loading = (podcast_browser && !self.button("podcast_search").is_sensitive())
+                || (youtube_search && self.youtube.searching.get());
+            let failed = (podcast_browser && self.podcast_failed.get())
+                || (youtube_search && self.youtube.failed.get());
             self.label(
                 "empty_title",
-                &self.tr(if loading {
+                &self.tr(if loading && youtube_search {
+                    "Searching YouTube Music…"
+                } else if loading {
                     "Finding podcasts…"
+                } else if failed && youtube_search {
+                    "YouTube Music unavailable"
                 } else if failed {
                     "Podcast directory unavailable"
                 } else if query.is_empty() {
@@ -697,6 +812,8 @@ impl App {
                 "empty_description",
                 &self.tr(if loading {
                     ""
+                } else if failed && youtube_search {
+                    "Check the message above, then try again."
                 } else if failed {
                     "Could not search podcasts. Check your connection or try another directory."
                 } else if query.is_empty() {
@@ -710,8 +827,9 @@ impl App {
             } else {
                 empty_action
             }));
-            self.button("empty_action")
-                .set_visible(!loading && (query.is_empty() || page == "radio" || podcast_browser));
+            self.button("empty_action").set_visible(
+                !loading && (query.is_empty() || page == "radio" || podcast_browser || youtube),
+            );
         } else {
             stack.set_visible_child_name(if playlist_overview {
                 "playlists"
@@ -759,7 +877,7 @@ impl App {
         if self.state.borrow().playlist(id).is_none() {
             return;
         }
-        if *self.page.borrow() != "playlists" {
+        if !["playlists", "youtube"].contains(&self.page.borrow().as_str()) {
             self.navigate("playlists");
         }
         if self.playlist.borrow().is_none() {
@@ -989,14 +1107,15 @@ impl App {
     }
 
     pub(super) fn delete_playlist(self: &Rc<Self>, id: &str) {
-        let name = self.state.borrow().playlist(id).map(|p| p.name.clone());
-        let Some(name) = name else { return };
+        let playlist = self.state.borrow().playlist(id).cloned();
+        let Some(playlist) = playlist else { return };
+        let name = playlist.name;
         let dialog = gtk::MessageDialog::builder()
             .transient_for(&self.window)
             .modal(true)
             .title(self.tr("Delete playlist"))
             .text(format!("{} “{name}”?", self.tr("Delete playlist")))
-            .secondary_text(self.tr("Tracks remain in your library and play queue."))
+            .secondary_text(self.tr(if playlist.youtube.is_some() { "Removes this local copy and stops syncing it. The online playlist and your tracks stay unchanged." } else { "Tracks remain in your library and play queue." }))
             .build();
         dialog.add_button(&self.tr("Cancel"), gtk::ResponseType::Cancel);
         dialog.add_button(&self.tr("Delete"), gtk::ResponseType::Accept);
@@ -1006,7 +1125,14 @@ impl App {
         dialog.connect_response(move |dialog, response| {
             if response == gtk::ResponseType::Accept {
                 if let Some(app) = weak.upgrade() {
-                    app.state.borrow_mut().playlists.retain(|p| p.id != id);
+                    let mut state = app.state.borrow_mut();
+                    if let Some(link) = state.playlist(&id).and_then(|p| p.youtube.clone()) {
+                        if !state.youtube_ignored_playlists.contains(&link.id) {
+                            state.youtube_ignored_playlists.push(link.id);
+                        }
+                    }
+                    state.playlists.retain(|p| p.id != id);
+                    drop(state);
                     let current = app.playlist.borrow().as_deref() == Some(&id);
                     if current {
                         app.browse_back();

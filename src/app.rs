@@ -3,12 +3,13 @@ use crate::{
     i18n::I18n,
     library,
     model::{self, Kind, Repeat, State, Subscription, Track},
-    playlists, services, storage,
+    playlists, services, storage, youtube_music,
 };
 
 mod browse;
 #[cfg(test)]
 mod tests;
+mod youtube;
 type BoundItems = RefCell<HashMap<usize, (glib::WeakRef<gtk::ListItem>, gtk::Builder)>>;
 use gtk::{gdk, gio, glib, prelude::*};
 use std::{
@@ -26,7 +27,8 @@ enum Message {
     PodcastSearch(u64, Result<Vec<services::PodcastShow>, String>),
     PlaylistImport(Result<playlists::Import, String>),
     Feed(Result<(Subscription, Vec<Track>), String>),
-    Youtube(u64, Result<(Track, String), String>),
+    Youtube(u64, Result<youtube_music::Resolved, String>),
+    Music(youtube::Reply),
     Artwork(String, Result<String, String>),
     SaveError(String),
 }
@@ -51,6 +53,7 @@ pub struct App {
     album_cards: BoundItems,
     playlist_cards: BoundItems,
     podcast_cards: BoundItems,
+    youtube: youtube::Controls,
     radio_results: RefCell<Vec<String>>,
     playlist: RefCell<Option<String>>,
     album: RefCell<Option<(String, String)>>,
@@ -63,6 +66,8 @@ pub struct App {
     importing_playlist: Cell<bool>,
     source_generation: Cell<u64>,
     play_generation: Cell<u64>,
+    resolving: Cell<bool>,
+    resolve_autoplay: Cell<bool>,
     scanning: Cell<bool>,
     tx: mpsc::Sender<Message>,
     rx: RefCell<mpsc::Receiver<Message>>,
@@ -149,6 +154,7 @@ impl App {
             album_cards: Default::default(),
             playlist_cards: Default::default(),
             podcast_cards: Default::default(),
+            youtube: youtube::Controls::default(),
             radio_results: RefCell::new(vec![]),
             playlist: RefCell::new(None),
             album: RefCell::new(None),
@@ -161,6 +167,8 @@ impl App {
             importing_playlist: Cell::new(false),
             source_generation: Cell::new(0),
             play_generation: Cell::new(0),
+            resolving: Cell::new(false),
+            resolve_autoplay: Cell::new(true),
             scanning: Cell::new(false),
             tx,
             rx: RefCell::new(rx),
@@ -330,13 +338,20 @@ impl App {
 
     fn setup_controls(self: &Rc<Self>) {
         self.setup_browse_controls();
+        self.setup_youtube_controls();
         self.on("play", |a| a.toggle_play());
         self.on("next", |a| a.next(false));
         self.on("previous", |a| a.previous());
         self.on("mini", |a| a.mini());
         self.on("page_action", |a| a.primary_action());
         self.on("empty_action", |a| {
-            if *a.page.borrow() == "podcasts" {
+            if *a.page.borrow() == "youtube" {
+                if a.youtube.playlists.get() {
+                    a.sync_youtube();
+                } else {
+                    a.search_youtube();
+                }
+            } else if *a.page.borrow() == "podcasts" {
                 a.discover_podcasts();
             } else if *a.page.borrow() == "playlists" && a.playlist.borrow().is_some() {
                 a.navigate("library");
@@ -393,14 +408,6 @@ impl App {
                 a.muted_volume.get()
             });
         });
-        self.on("spotify", |a| {
-            if let Err(e) = gio::AppInfo::launch_default_for_uri(
-                "https://open.spotify.com/",
-                None::<&gio::AppLaunchContext>,
-            ) {
-                a.notice(&e.to_string(), true, false);
-            }
-        });
         let weak = Rc::downgrade(self);
         object::<gtk::Entry>(&self.ui, "url_entry").connect_activate(move |_| {
             if let Some(a) = weak.upgrade() {
@@ -416,7 +423,9 @@ impl App {
         let weak = Rc::downgrade(self);
         object::<gtk::SearchEntry>(&self.ui, "search").connect_activate(move |_| {
             if let Some(a) = weak.upgrade() {
-                if *a.page.borrow() == "radio" {
+                if *a.page.borrow() == "youtube" && !a.youtube.playlists.get() {
+                    a.search_youtube();
+                } else if *a.page.borrow() == "radio" {
                     a.discover_radio();
                 } else if *a.page.borrow() == "podcasts" && a.podcast_discovery.get() {
                     a.discover_podcasts();
@@ -601,6 +610,7 @@ impl App {
             "podcasts",
             "radio",
             "streams",
+            "youtube",
             "queue",
         ]
         .contains(&page)
@@ -619,6 +629,7 @@ impl App {
             "podcasts",
             "radio",
             "streams",
+            "youtube",
             "queue",
         ] {
             let b = self.button(&format!("nav_{name}"));
@@ -634,6 +645,7 @@ impl App {
     fn primary_action(self: &Rc<Self>) {
         let page = self.page.borrow().clone();
         match page.as_str() {
+            "youtube" => self.youtube_primary(),
             "radio" => self.discover_radio(),
             "podcasts" | "streams" => {
                 object::<gtk::Box>(&self.ui, "entry_bar").set_visible(true);
@@ -641,7 +653,7 @@ impl App {
                 entry.set_placeholder_text(Some(&self.tr(if page == "podcasts" {
                     "Paste a podcast RSS feed URL"
                 } else {
-                    "Paste a YouTube or audio URL"
+                    "Paste an audio stream URL"
                 })));
                 entry.grab_focus();
             }
@@ -719,6 +731,7 @@ impl App {
     fn refresh_sources(self: &Rc<Self>) {
         let page = self.page.borrow().clone();
         match page.as_str() {
+            "youtube" => self.refresh_youtube(),
             "radio" => self.discover_radio(),
             "podcasts" if self.podcast_discovery.get() => self.discover_podcasts(),
             "playlists" => self.refresh(),
@@ -836,6 +849,8 @@ impl App {
         self.remember_position();
         let generation = self.play_generation.get() + 1;
         self.play_generation.set(generation);
+        self.resolving.set(false);
+        self.resolve_autoplay.set(true);
         let position = resume.unwrap_or_else(|| {
             if track.kind == Kind::Podcast {
                 self.state
@@ -858,12 +873,14 @@ impl App {
         }
         if services::youtube_url(&track.uri) {
             self.audio.borrow_mut().stop();
-            self.notice(&self.tr("Opening YouTube audio…"), false, true);
+            self.resolving.set(true);
+            self.notice(&self.tr("Opening YouTube Music…"), false, true);
+            let account = self.state.borrow().youtube_account.clone();
             let tx = self.tx.clone();
             std::thread::spawn(move || {
                 let _ = tx.send(Message::Youtube(
                     generation,
-                    services::resolve_youtube(&track.uri),
+                    youtube_music::resolve(account.as_ref(), &track.uri),
                 ));
             });
         } else {
@@ -879,7 +896,9 @@ impl App {
     }
 
     pub fn toggle_play(self: &Rc<Self>) {
-        if self.audio.borrow().loaded {
+        if self.resolving.get() {
+            self.resolve_autoplay.set(!self.resolve_autoplay.get());
+        } else if self.audio.borrow().loaded {
             let playing = !self.audio.borrow().playing;
             let result = self.audio.borrow_mut().set_playing(playing);
             if let Err(e) = result {
@@ -902,6 +921,26 @@ impl App {
         }
         self.update_player();
         self.persist();
+    }
+
+    pub fn playback_active(&self) -> bool {
+        self.audio.borrow().playing || (self.resolving.get() && self.resolve_autoplay.get())
+    }
+
+    pub fn playback_pending(&self) -> bool {
+        self.resolving.get()
+    }
+
+    pub fn pause_playback(&self) {
+        self.resolve_autoplay.set(false);
+        let _ = self.audio.borrow_mut().set_playing(false);
+        self.update_player();
+    }
+
+    pub fn stop_playback(&self) {
+        self.play_generation.set(self.play_generation.get() + 1);
+        self.resolving.set(false);
+        self.audio.borrow_mut().stop();
     }
 
     pub fn next(self: &Rc<Self>, automatic: bool) {
@@ -1002,7 +1041,7 @@ impl App {
         let page = self.page.borrow().clone();
         if page == "queue" {
             self.state.borrow_mut().queue.retain(|i| i != id);
-        } else if page == "playlists" {
+        } else if page == "playlists" || (page == "youtube" && self.playlist.borrow().is_some()) {
             if let Some(p) = self
                 .state
                 .borrow_mut()
@@ -1014,7 +1053,7 @@ impl App {
             }
         } else {
             if self.state.borrow().current.as_deref() == Some(id) {
-                self.audio.borrow_mut().stop();
+                self.stop_playback();
             }
             self.state.borrow_mut().forget(id);
         }
@@ -1076,7 +1115,7 @@ impl App {
     pub fn update_player(&self) {
         let state = self.state.borrow();
         let track = state.current_track();
-        let playing = self.audio.borrow().playing;
+        let playing = self.playback_active();
         let title = track
             .map(|t| t.title.clone())
             .unwrap_or_else(|| self.tr("Nothing playing"));
@@ -1358,11 +1397,16 @@ impl App {
                 Message::Youtube(generation, result)
                     if generation == self.play_generation.get() =>
                 {
+                    self.resolving.set(false);
                     match result {
-                        Ok((track, uri)) => {
-                            self.state.borrow_mut().merge(vec![track]);
+                        Ok(resolved) => {
                             let position = self.state.borrow().position;
-                            let result = self.audio.borrow_mut().load(&uri, position, true);
+                            let result = self.audio.borrow_mut().load_with_headers(
+                                &resolved.uri,
+                                position,
+                                self.resolve_autoplay.get(),
+                                resolved.headers,
+                            );
                             if let Err(e) = result {
                                 self.notice(&e, true, false);
                             } else {
@@ -1379,6 +1423,7 @@ impl App {
                         }
                     }
                 }
+                Message::Music(reply) => self.handle_youtube(reply),
                 Message::Artwork(uri, result) => {
                     self.artwork_pending.borrow_mut().remove(&uri);
                     let Ok(path) = result else { continue };

@@ -8,7 +8,7 @@
     <property name="margin-bottom">20</property>
     <property name="margin-top">8</property>
     <child>
-      <object class="GtkAspectFrame">
+      <object class="GtkAspectFrame" id="art_frame">
         <property name="ratio">1</property>
         <property name="obey-child">false</property>
         <property name="child">
@@ -38,6 +38,9 @@
         <property name="xalign">0</property>
       </object>
     </child>
+    <child><object class="GtkBox" id="card_metadata">
+      <property name="orientation">vertical</property>
+      <property name="spacing">8</property>
     <child>
       <object class="GtkBox">
         <child>
@@ -74,5 +77,6 @@
         </style>
       </object>
     </child>
+    </object></child>
   </object>
 </interface>

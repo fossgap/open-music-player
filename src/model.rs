@@ -9,6 +9,7 @@ pub enum Kind {
     Podcast,
     Radio,
     Stream,
+    YoutubeMusic,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -61,6 +62,23 @@ pub struct Playlist {
     pub id: String,
     pub name: String,
     pub tracks: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub youtube: Option<YoutubePlaylistLink>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct YoutubeAccount {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct YoutubePlaylistLink {
+    pub id: String,
+    pub account_id: String,
+    pub editable: bool,
+    pub remote_snapshot: String,
+    pub local_snapshot: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -88,6 +106,8 @@ pub struct State {
     pub language: String,
     pub background: bool,
     pub podcast_positions: std::collections::HashMap<String, f64>,
+    pub youtube_account: Option<YoutubeAccount>,
+    pub youtube_ignored_playlists: Vec<String>,
     #[serde(skip)]
     pub(crate) track_index: std::collections::HashMap<String, usize>,
 }
@@ -109,6 +129,8 @@ impl Default for State {
             language: "system".into(),
             background: true,
             podcast_positions: Default::default(),
+            youtube_account: None,
+            youtube_ignored_playlists: vec![],
             track_index: Default::default(),
         }
     }
@@ -217,6 +239,7 @@ impl State {
             id: id.clone(),
             name,
             tracks,
+            youtube: None,
         });
         Ok(id)
     }
@@ -371,6 +394,7 @@ mod tests {
             id: "playlist".into(),
             name: "Set".into(),
             tracks: s.queue.clone(),
+            youtube: None,
         });
         s.forget("b");
         assert!(s.current.is_none());

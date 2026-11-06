@@ -220,6 +220,18 @@
                       </object>
                     </child>
                     <child>
+                      <object class="GtkButton" id="nav_youtube">
+                        <property name="action-name">app.page</property>
+                        <property name="action-target">'youtube'</property>
+                        <style><class name="nav" /></style>
+                        <property name="child"><object class="GtkBox">
+                          <property name="spacing">12</property>
+                          <child><object class="GtkImage"><property name="icon-name">audio-x-generic-symbolic</property></object></child>
+                          <child><object class="GtkLabel"><property name="label">YouTube Music</property></object></child>
+                        </object></property>
+                      </object>
+                    </child>
+                    <child>
                       <object class="GtkButton" id="nav_streams">
                         <property name="action-name">app.page</property>
                         <property name="action-target">'streams'</property>
@@ -472,24 +484,21 @@
                   </object>
                 </child>
                 <child>
-                  <object class="GtkBox" id="stream_services">
+                  <object class="GtkBox" id="youtube_tabs">
                     <property name="visible">false</property>
+                    <property name="orientation">vertical</property>
                     <property name="spacing">12</property>
-                    <child>
-                      <object class="GtkButton" id="spotify">
-                        <property name="label">Open Spotify</property>
-                        <property name="tooltip-text">Open Spotify in its own app or your browser</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLabel">
-                        <property name="label">YouTube audio · Internet streams</property>
-                        <property name="ellipsize">end</property>
-                        <style>
-                          <class name="muted" />
-                        </style>
-                      </object>
-                    </child>
+                    <child><object class="GtkBox">
+                      <property name="spacing">8</property>
+                      <child><object class="GtkToggleButton" id="youtube_songs"><property name="label">Search music</property><property name="active">true</property></object></child>
+                      <child><object class="GtkToggleButton" id="youtube_playlists"><property name="label">Your playlists</property><property name="group">youtube_songs</property></object></child>
+                      <child><object class="GtkBox"><property name="hexpand">true</property></object></child>
+                      <child><object class="GtkButton" id="youtube_sync"><property name="label">Sync playlists</property><property name="tooltip-text">Download online changes and upload local edits to linked playlists</property></object></child>
+                    </object></child>
+                    <child><object class="GtkBox">
+                      <property name="spacing">12</property>
+                      <child><object class="GtkLabel" id="youtube_status"><property name="hexpand">true</property><property name="xalign">0</property><property name="ellipsize">end</property><property name="width-chars">12</property><style><class name="muted" /></style></object></child>
+                    </object></child>
                   </object>
                 </child>
                 <child>
@@ -533,6 +542,7 @@
                         <property name="tooltip-text">Search podcasts</property>
                       </object>
                     </child>
+                    <child><object class="GtkButton" id="youtube_search"><property name="visible">false</property><property name="icon-name">system-search-symbolic</property><property name="tooltip-text">Search YouTube Music</property></object></child>
                     <child>
                       <object class="GtkBox" id="view_switch">
                         <style>

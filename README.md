@@ -18,18 +18,19 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 | Area | Included |
 | --- | --- |
 | Local library | Recursive folder discovery, metadata, search, track and album views, manual refresh, duplicate detection |
-| Collections | Favorites, named playlists, queue, shuffle, repeat one/all, removal from lists without deleting files |
+| Collections | Favorites, playlist artwork grid, create/rename/delete playlists, M3U/M3U8/PLS/XSPF import, queue, shuffle, repeat one/all |
 | Playback | GStreamer audio, play/pause, previous/next, seeking, volume, mute, automatic next track |
-| Podcasts | RSS and Atom subscriptions, audio enclosures, feed refresh, per-episode resume positions |
+| Podcasts | Apple Podcasts/iTunes and gPodder search and discovery, RSS/Atom subscriptions, feed refresh, per-episode resume positions |
 | Internet radio | Search and discovery through Radio Browser, station artwork, favorites, playback |
-| Streaming | Direct HTTP(S) audio and supported streaming playlists; YouTube audio through optional `yt-dlp` |
+| Streaming | Direct HTTP(S) audio and supported streaming playlists |
+| YouTube Music | Song search, personal browser-session connection, native playback, two-way playlist sync and private playlist publishing |
 | Desktop | MPRIS controls and metadata, StatusNotifierItem tray menu, background playback, mini player |
 | Artwork and lyrics | Embedded covers, folder covers, feed/station images, softly blended artwork backdrop, embedded lyrics and `.lrc`/`.txt` sidecars |
 | Visualization | Live waveform from decoded PCM audio; no synthetic playback animation |
 | Persistence | Library, sources, playlists, queue, track, position, volume, repeat, shuffle, and preferences |
-| Languages | English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean |
+| Languages | English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean; new service copy falls back to English where untranslated |
 
-**Service boundaries:** Spotify opens its official web player; native Spotify playback, account authentication, and DRM handling are not implemented. YouTube resolution requires a working `yt-dlp` installation and is subject to the availability of the video. Podcast downloads, synchronized lyric highlighting, and automatic filesystem watching are not included. This is an initial implementation, not a published stable release.
+**Service boundaries:** YouTube Music uses the unofficial `ytmusicapi` and `yt-dlp` libraries, with no API key or Premium subscription requirement in Open Audio Player. Availability depends on your account, region and YouTube; sessions can expire and provider changes can require dependency updates. Podcast downloads, synchronized lyric highlighting, and automatic filesystem watching are not included. This is an initial implementation, not a published stable release.
 
 ## Get started
 
@@ -64,20 +65,49 @@ To add a folder at launch:
 cargo run --locked -- --import "$HOME/Music"
 ```
 
-For YouTube audio, install `yt-dlp` separately and keep it up to date. The application invokes it directly with an argument list, never through a shell. It does not download or store YouTube audio files.
+### Enable YouTube Music
+
+Install Python 3.10+ with venv support, `secret-tool` and a running desktop Secret Service keyring (GNOME Keyring or compatible). On Debian/Ubuntu:
+
+```sh
+sudo apt install python3-venv libsecret-tools
+./scripts/setup-youtube-music.sh
+```
+
+Packaged installations include `open-audio-setup-youtube`. Run it again to update the optional dependencies. It installs `ytmusicapi` and `yt-dlp[default]` into a private virtual environment beside your library; it does not change system Python. Playback also needs **Deno 2.3+** (preferred) or **Node.js 22+** on `PATH`, as described in [yt-dlp’s runtime setup](https://github.com/yt-dlp/yt-dlp/wiki/EJS). The helper enables whichever is available.
+
+1. Open **YouTube Music**, search for a song or artist and press Enter. Double-click a result to play it through GStreamer; queue, favorites, pause, seek and next/previous work as usual. Public search does not need an account.
+2. Select **Connect account**, open YouTube Music in your browser and sign in there. Choose that browser in Open Audio Player and connect. An optional profile path selects a nondefault profile. A Netscape-format cookie file is an alternative when the browser profile cannot be read. Close the browser before importing if its cookie database is locked.
+3. Open **Your playlists → Sync playlists**. Online playlists appear in an artwork grid. Open one to browse or play its tracks. The global **Playlists** view also includes these linked collections.
+4. Edit a linked playlist locally, then sync to upload its name and track changes. Online-only changes download on the next sync. Editing a read-only playlist or changing the same playlist on both sides produces a conflict and preserves both versions. Use **Replace local copy from YouTube Music** in its menu to explicitly accept the online version.
+5. To publish a new local collection, add only YouTube Music tracks and choose **Publish privately to YouTube Music** from its card menu. It creates a private online playlist and links it for later sync. Local audio files cannot be uploaded through this feature.
+
+Connection uses the first signed-in account in the selected browser profile; use a separate profile to select a different account. Google passwords are never entered into this app. Only YouTube-domain cookies are retained, in your desktop keyring. The library stores the account label, catalog metadata and playlist links; expiring audio URLs and credentials are not saved there. Imported cookie files are left untouched; protect or remove your export after connecting.
+
+Sync runs when requested. Order and repeated tracks are preserved. Unavailable entries are reported, and incomplete playlists are left unchanged; the current safety limits are 250 playlists and 5,000 entries per playlist. Uploads add replacement entries before removing old ones, but network failures can leave a partial online update: check the online copy and refresh before retrying. Removing a linked playlist locally stops syncing it without deleting it online. **Account → Disconnect** clears the saved session and removes the local YouTube Music tracks and linked playlists; your online library is unchanged. Reconnect and sync to restore a removed local copy.
+
+The embedded Python helper uses argument vectors and JSON pipes, never a shell. It resolves audio only when playback starts and does not download music files. `OPEN_AUDIO_PYTHON` can select an existing interpreter containing both libraries instead of the managed environment.
 
 ## Listening
 
 1. Select **Add music** and choose a folder. Scanning runs in the background; additional folders are managed in **Settings**.
-2. Double-click a track, select an album, or use **Play all**. Search matches titles, artists, and albums.
+2. Single-click to select a track or album. Double-click a track to play, or double-click an album to open its tracks. Use **Back** to return to the album grid. Playback keeps the list's scroll position; playing a track from a filtered queue preserves the whole queue.
 3. Use the star to save a favorite. The track menu adds to the queue or a playlist. Removing a local track only removes its index entry; refreshing its folder can discover it again.
-4. Select **Podcasts → Add podcast** and paste an RSS or Atom feed URL. Use **Refresh** to fetch new episodes. Removing a subscription stops refreshes and retains previously indexed episodes.
+4. Select **Podcasts → Discover podcasts**. Choose **Apple Podcasts** (the iTunes directory) or **gPodder**, search by title, topic, or creator, then select **Subscribe**. **Your episodes** lists subscribed episodes. You can also add any RSS or Atom feed URL. Use **Refresh** to fetch new episodes. Removing a subscription stops refreshes and retains previously indexed episodes.
 5. Select **Live radio → Discover radio**, or type a station name and press Enter. Radio results are provided by the community-maintained [Radio Browser directory](https://www.radio-browser.info/).
-6. Select **Streaming → Add stream** and paste an HTTP(S) audio address or YouTube video URL. A station URL can also be opened here.
+6. Select **Streaming → Add stream** and paste an HTTP(S) audio address. A station URL can also be opened here. Use the dedicated **YouTube Music** page to search and play music from that service.
 
 Click the current cover to open the artwork, waveform, and lyrics panel. Put `cover.jpg`, `cover.png`, `folder.jpg`, or `folder.png` beside an album, or use embedded artwork. A lyrics sidecar must share the audio filename: `Song.flac` and `Song.lrc`. Refresh after adding a sidecar. LRC text is displayed as supplied.
 
 The session is restored without automatically starting audio. Press Play to continue. Podcast episodes also retain individual positions.
+
+### Playlists
+
+**Playlists** opens a grid of your collections, showing a member's artwork and the playlist name. Click a playlist to see its tracks; double-click a track to play it. Use **New playlist** to create a collection and a track's options menu to add it. Rename or delete a playlist from its card menu or while viewing its tracks. In a compact window, these actions move into **Playlist options** beside the heading. Deletion asks for confirmation and retains the music files, library, and playing queue.
+
+The **Import playlist** button beside **New playlist** accepts UTF-8 `.m3u`, `.m3u8`, `.pls`, and `.xspf` files. Relative paths resolve beside the playlist file; absolute paths, `file://` URLs, and HTTP(S) audio links are supported. Imports preserve order and existing track metadata and favorites. Missing, unsupported, and duplicate entries are skipped with a count. An imported name that already exists gets a numbered suffix. Importing creates a playlist without starting playback.
+
+Directory discovery uses an initial podcast search on Apple and the public top list on gPodder; it does not require an account. Results and feed availability depend on those services. A failed directory request offers connection and provider recovery; direct RSS subscription remains available.
 
 Closing the main window keeps audio playing **only while playback is active and a compatible system tray is available**. Otherwise the application exits cleanly. On GNOME, a StatusNotifier/AppIndicator extension is needed for tray integration; MPRIS and the mini player work independently of the tray. Choose **Quit** to stop playback and exit explicitly.
 
@@ -87,6 +117,7 @@ Closing the main window keeps audio playing **only while playback is active and 
 | --- | --- |
 | Ctrl + Space | Play / pause |
 | Alt + Left / Right | Previous / next |
+| Alt + Up | Back to the album or playlist grid |
 | Ctrl + O | Add a music folder |
 | Ctrl + F | Focus search |
 | Ctrl + R | Refresh the current source |
@@ -100,7 +131,7 @@ Closing the main window keeps audio playing **only while playback is active and 
 
 The library is stored in `$XDG_DATA_HOME/open-audio-player/library.json`, defaulting to `~/.local/share/open-audio-player/library.json`. Cached artwork lives beside it. Saves use a temporary file, synchronization, and atomic replacement. A corrupt or unsupported library is reported and left untouched.
 
-`OPEN_AUDIO_DATA_DIR=/some/directory` selects an isolated library, useful for testing. The app makes no directory or feed requests on first launch. Network requests begin when you explicitly discover radio, subscribe/refresh a feed, or play an online source. There is no analytics collection.
+`OPEN_AUDIO_DATA_DIR=/some/directory` selects an isolated library, useful for testing. The app makes no directory or feed requests on first launch. Network requests begin when you explicitly discover/search podcasts or radio, subscribe/refresh a feed, or play an online source. Searches go to the selected directory; result artwork may be fetched from its image hosts. There is no analytics collection. Existing playlists receive persistent identifiers automatically when an older library is loaded.
 
 ## Development
 
@@ -108,6 +139,7 @@ The library is stored in `$XDG_DATA_HOME/open-audio-player/library.json`, defaul
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
+python3 scripts/test-youtube-music.py
 python3 scripts/check-locales.py
 ```
 
@@ -119,11 +151,12 @@ Install `xvfb`, `xauth`, `dbus-x11`, `libglib2.0-bin` (for `gdbus`), `xdotool`, 
 
 ```sh
 make smoke
+make ui-test
 ```
 
-The integration test generates original audio, starts a local HTTP feed server, and drives the real application over D-Bus and keyboard input. It checks import, metadata, artwork, playback, seek, pause, favorites, queue, playlists, podcast/stream playback, MPRIS, mini mode, dialogs, and session restoration. All library and audio data are temporary. External services and real audio hardware are not required.
+The integration test generates original audio, starts local feed and podcast-directory fixtures, and drives the real application over D-Bus and keyboard input. It checks library and playlist import, metadata, artwork, playback, seek, pause, favorites, queue, playlist creation/renaming, both podcast directories, subscriptions, empty/error states, MPRIS, mini mode, dialogs, compact layouts, and session restoration. The GTK regression test scrolls long lists and checks that activation preserves scroll and selection, album browsing does not start playback, filtered queue playback retains its members, and playlist deletion respects cancellation. All library and audio data are temporary. External services and real audio hardware are not required.
 
-Validation for this implementation: 12 unit tests and strict Clippy checks pass, including with Rust 1.85 and GTK 4.8 in the Debian development container. Native, release, and AppImage builds pass the integration suite. The AppImage was exercised in a minimal Debian container without system GTK or GStreamer plugins, and its bundled TLS backend was checked. Debian and RPM packages build successfully; the Arch recipe has not been built on Arch.
+The unit suite contains 19 tests; the display-dependent GTK regression runs separately through `make ui-test`. Validation uses native Linux and the Rust 1.85/GTK 4.8 Debian development container, with strict Clippy checks. The same integration suite can exercise native, release, and AppImage builds. The Arch recipe has not been built on Arch.
 
 For review screenshots:
 
@@ -133,6 +166,8 @@ OPEN_AUDIO_SCREENSHOTS=/tmp/open-audio-screens make smoke
 ```
 
 Set `OPEN_AUDIO_BINARY` to an absolute binary path to run the same checks against a release build or AppImage. Use `APPIMAGE_EXTRACT_AND_RUN=1` when FUSE is unavailable; this keeps the AppImage runtime's library and plugin environment intact.
+
+`OPEN_AUDIO_ITUNES_API` and `OPEN_AUDIO_GPODDER_API` optionally replace the respective API base URLs for a private mirror or offline test server. Normal use needs neither setting.
 
 To explore with a separate demonstration library:
 
@@ -190,14 +225,17 @@ A project distribution license has not yet been selected; package metadata inten
 
 ```text
 src/
-  app.rs         GTK controllers, lists, dialogs, background work
+  app.rs         GTK controllers, playback, background work
+  app/browse.rs  Track/album views, playlist management, podcast browser
+  app/tests.rs   GTK scroll, selection, and collection regressions
   audio.rs       GStreamer playback and decoded-audio waveform
   desktop.rs     MPRIS, StatusNotifierItem, and tray menu
   i18n.rs        Embedded translation catalogues
   library.rs     Folder scanning, FFmpeg metadata, artwork, lyrics
   model.rs       Tracks, collections, queue, persisted session
+  playlists.rs   M3U/M3U8, PLS, and XSPF parsing and import
   process.rs     Bounded subprocess execution without a shell
-  services.rs    Podcast feeds, Radio Browser, artwork, YouTube
+  services.rs    Podcast directories/feeds, Radio Browser, artwork, YouTube
   storage.rs     XDG data location and atomic state storage
 resources/       GtkBuilder layouts, D-Bus interfaces, CSS, icon
 locales/         Ten translation catalogues
@@ -205,6 +243,6 @@ packaging/       Desktop entry, AppStream metadata, RPM, Arch
 scripts/         Packaging, fixtures, checks, integration tests
 ```
 
-The [original product brief](docs/brief.md), including the Rhythmbox and Clementine references, is preserved. [PRODUCT.md](PRODUCT.md) records the scope and [DESIGN.md](DESIGN.md) describes the visual system.
+The [original product brief](docs/brief.md), including the Rhythmbox and Clementine references, is preserved.
 
-Implementation references: [GTK list factories](https://gtk-rs.org/gtk4-rs/stable/0.10/docs/gtk4/struct.ListItemFactory.html), [GStreamer playbin](https://gstreamer.freedesktop.org/documentation/playback/playbin.html), [MPRIS specification](https://specifications.freedesktop.org/mpris/latest/Player_Interface.html), and [Radio Browser API](https://docs.radio-browser.info/).
+Implementation references: [GTK list factories](https://gtk-rs.org/gtk4-rs/stable/0.10/docs/gtk4/struct.ListItemFactory.html), [GStreamer playbin](https://gstreamer.freedesktop.org/documentation/playback/playbin.html), [MPRIS specification](https://specifications.freedesktop.org/mpris/latest/Player_Interface.html), [Apple Search API](https://performance-partners.apple.com/search-api), [gPodder API](https://gpoddernet.readthedocs.io/en/latest/api/), and [Radio Browser API](https://docs.radio-browser.info/).

@@ -9,7 +9,7 @@ A fully featured music player with support for local music, podcasts, live radio
 - Favorites
 - Podcast support
 - Live/internet radio discovery and playback
-- Streaming Services support:spotify,youtube audio etc...
+- Streaming services: YouTube Music search, account connection, playback and playlist synchronization; direct internet audio streams.
 - Logos,artworks support
 - Session persistence: resume where left off
 - Mpris integration

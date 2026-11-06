@@ -1,4 +1,8 @@
 use gst::prelude::*;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 pub enum Event {
     End,
@@ -17,6 +21,7 @@ pub struct Audio {
     buffering: bool,
     waveform: Option<gst_app::AppSink>,
     seek_target: std::cell::Cell<Option<f64>>,
+    headers: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl Audio {
@@ -27,6 +32,26 @@ impl Audio {
             .map_err(|_| "Install the GStreamer playback plugins")?;
         // Disable video and subtitles, including for video URLs with audio tracks.
         pipeline.set_property_from_str("flags", "audio+soft-volume+buffering");
+        let headers = Arc::new(Mutex::new(HashMap::<String, String>::new()));
+        let source_headers = headers.clone();
+        pipeline.connect("source-setup", false, move |values| {
+            let source = values[1].get::<gst::Element>().ok()?;
+            let headers = source_headers.lock().ok()?;
+            let mut extra = gst::Structure::new_empty("headers");
+            for (name, value) in headers.iter() {
+                if name.eq_ignore_ascii_case("user-agent") {
+                    if source.find_property("user-agent").is_some() {
+                        source.set_property("user-agent", value);
+                    }
+                } else {
+                    extra.set(name, value);
+                }
+            }
+            if source.find_property("extra-headers").is_some() {
+                source.set_property("extra-headers", &extra);
+            }
+            None
+        });
         // This bounded, leaky visualization branch cannot stall audible playback.
         let waveform = gst::parse_bin_from_description(
             "audioconvert ! tee name=t t. ! queue ! identity name=out \
@@ -63,11 +88,26 @@ impl Audio {
             buffering: false,
             waveform,
             seek_target: std::cell::Cell::new(None),
+            headers,
         })
     }
 
     pub fn load(&mut self, uri: &str, position: f64, autoplay: bool) -> Result<(), String> {
+        self.load_with_headers(uri, position, autoplay, HashMap::new())
+    }
+
+    pub fn load_with_headers(
+        &mut self,
+        uri: &str,
+        position: f64,
+        autoplay: bool,
+        headers: HashMap<String, String>,
+    ) -> Result<(), String> {
         self.stop();
+        *self
+            .headers
+            .lock()
+            .map_err(|_| "Could not prepare media request")? = headers;
         while self.bus.pop().is_some() {}
         self.pipeline.set_property("uri", uri);
         self.pending_seek = (position > 0.0).then_some(position);

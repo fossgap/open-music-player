@@ -1,9 +1,6 @@
-use crate::{
-    model::{Kind, Subscription, Track, stable_id},
-    process,
-};
+use crate::model::{Kind, Subscription, Track, stable_id};
 use reqwest::blocking::Client;
-use std::{fs, io::Read, path::Path, process::Command, time::Duration};
+use std::{fs, io::Read, path::Path, time::Duration};
 
 pub fn http_url(input: &str) -> Result<url::Url, String> {
     let url = url::Url::parse(input.trim())
@@ -366,44 +363,6 @@ pub fn youtube_url(input: &str) -> bool {
             )
         )
     })
-}
-
-pub fn resolve_youtube(uri: &str) -> Result<(Track, String), String> {
-    if !youtube_url(uri) {
-        return Err("Enter a YouTube video address".into());
-    }
-    let bytes = process::output(
-        Command::new("yt-dlp").args([
-            "--no-playlist",
-            "--no-warnings",
-            "--skip-download",
-            "--dump-single-json",
-            "-f",
-            "bestaudio",
-            "--",
-            uri,
-        ]),
-        Duration::from_secs(60),
-        8_000_000,
-    )
-    .map_err(|e| {
-        format!("YouTube could not be opened. Install or update yt-dlp and try again. {e}")
-    })?;
-    let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-    let resolved = value["url"]
-        .as_str()
-        .ok_or("No playable audio URL was returned")?;
-    http_url(resolved)?;
-    let mut t = Track::new(
-        uri,
-        value["title"].as_str().unwrap_or("YouTube"),
-        Kind::Stream,
-    );
-    t.artist = value["uploader"].as_str().unwrap_or("YouTube").into();
-    t.duration = value["duration"].as_f64().unwrap_or(0.0);
-    t.source = "YouTube".into();
-    t.artwork = value["thumbnail"].as_str().map(String::from);
-    Ok((t, resolved.into()))
 }
 
 #[cfg(test)]

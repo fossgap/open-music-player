@@ -59,9 +59,9 @@ fn property(app: &App, name: &str) -> glib::Variant {
         ]
         .to_variant(),
         "HasTrackList" => false.to_variant(),
-        "PlaybackStatus" => if audio.playing {
+        "PlaybackStatus" => if app.playback_active() {
             "Playing"
-        } else if audio.loaded {
+        } else if audio.loaded || app.playback_pending() {
             "Paused"
         } else {
             "Stopped"
@@ -82,7 +82,7 @@ fn property(app: &App, name: &str) -> glib::Variant {
         "CanGoNext" => state.adjacent(true, false).is_some().to_variant(),
         "CanGoPrevious" => state.adjacent(false, false).is_some().to_variant(),
         "CanPlay" => (!state.tracks.is_empty()).to_variant(),
-        "CanPause" => audio.loaded.to_variant(),
+        "CanPause" => (audio.loaded || app.playback_pending()).to_variant(),
         _ => true.to_variant(),
     }
 }
@@ -119,29 +119,29 @@ pub fn setup(app: &Rc<App>) {
                             "Quit" => app.quit(),
                             "PlayPause" => app.toggle_play(),
                             "Play" => {
-                                if !app.audio.borrow().playing {
+                                if !app.playback_active() {
                                     app.toggle_play();
                                 }
                             }
                             "Pause" => {
-                                if app.audio.borrow().playing {
+                                if app.playback_active() {
                                     app.toggle_play();
                                 }
                             }
                             "Next" | "Previous" => {
-                                let playing = app.audio.borrow().playing;
+                                let playing = app.playback_active();
                                 if method == "Next" {
                                     app.next(false);
                                 } else {
                                     app.previous();
                                 }
                                 if !playing {
-                                    let _ = app.audio.borrow_mut().set_playing(false);
+                                    app.pause_playback();
                                     app.update_player();
                                 }
                             }
                             "Stop" => {
-                                app.audio.borrow_mut().stop();
+                                app.stop_playback();
                                 app.state.borrow_mut().position = 0.0;
                                 app.update_player();
                                 app.persist();

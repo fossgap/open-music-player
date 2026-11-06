@@ -1,5 +1,5 @@
 use std::{
-    io::Read,
+    io::{Read, Write},
     process::{Command, Stdio},
     thread,
     time::{Duration, Instant},
@@ -8,12 +8,25 @@ use std::{
 /// Run an argument-vector command with a deadline and capped captured output.
 /// No shell is involved, including for user-supplied paths and URLs.
 pub fn output(command: &mut Command, timeout: Duration, limit: u64) -> Result<Vec<u8>, String> {
+    output_with_input(command, &[], timeout, limit)
+}
+
+/// Input is sent over a pipe, never through argv, environment variables or a shell.
+pub fn output_with_input(
+    command: &mut Command,
+    input: &[u8],
+    timeout: Duration,
+    limit: u64,
+) -> Result<Vec<u8>, String> {
     let mut child = command
-        .stdin(Stdio::null())
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| format!("{}: {e}", command.get_program().to_string_lossy()))?;
+    let mut stdin = child.stdin.take().ok_or("Missing process input")?;
+    let input = input.to_vec();
+    let writer = thread::spawn(move || stdin.write_all(&input));
     let stdout = child.stdout.take().ok_or("Missing process output")?;
     let reader = thread::spawn(move || {
         let mut bytes = Vec::new();
@@ -43,6 +56,7 @@ pub fn output(command: &mut Command, timeout: Duration, limit: u64) -> Result<Ve
         .join()
         .map_err(|_| "Could not read process output")?
         .map_err(|e| e.to_string())?;
+    let _ = writer.join();
     let status = status?;
     if bytes.len() as u64 > limit {
         return Err("Response exceeded the size limit".into());

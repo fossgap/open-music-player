@@ -5,7 +5,7 @@ Summary: A native home for music, podcasts, and radio
 License: Unspecified
 Requires: gtk4 >= 4.8
 Requires: gstreamer1-plugins-base, gstreamer1-plugins-good, ffmpeg, ca-certificates
-Recommends: gstreamer1-plugin-libav, yt-dlp
+Recommends: gstreamer1-plugin-libav, python3, python3-pip, libsecret
 
 %description
 A Rust and GTK music player with local libraries, podcasts, radio,
@@ -17,6 +17,8 @@ cp -a %{_sourcedir}/root/. %{buildroot}/
 
 %files
 /usr/bin/open-audio-player
+/usr/bin/open-audio-setup-youtube
+/usr/share/open-audio-player/youtube-requirements.txt
 /usr/share/applications/io.github.openaudio.Player.desktop
 /usr/share/icons/hicolor/scalable/apps/io.github.openaudio.Player.svg
 /usr/share/metainfo/io.github.openaudio.Player.metainfo.xml

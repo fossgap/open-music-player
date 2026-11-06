@@ -26,7 +26,7 @@ Priority: optional
 Architecture: $architecture
 Maintainer: Open Audio Player contributors
 Depends: libgtk-4-1 (>= 4.8), libgstreamer1.0-0 (>= 1.20), gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-pulseaudio | gstreamer1.0-alsa, ffmpeg, ca-certificates
-Recommends: gstreamer1.0-libav, gstreamer1.0-plugins-bad, gstreamer1.0-plugins-ugly, yt-dlp
+Recommends: gstreamer1.0-libav, gstreamer1.0-plugins-bad, gstreamer1.0-plugins-ugly, python3, python3-venv, libsecret-tools
 Description: A native home for music, podcasts, and radio
  Rust and GTK player with a local library, podcasts, internet radio,
  playlists, desktop media controls, and a mini player.

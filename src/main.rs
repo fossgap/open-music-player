@@ -8,6 +8,7 @@ mod playlists;
 mod process;
 mod services;
 mod storage;
+mod youtube_music;
 
 use gtk::{gio, glib, prelude::*};
 use std::{cell::RefCell, rc::Rc};
