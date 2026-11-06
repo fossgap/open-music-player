@@ -137,6 +137,8 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
     for index in range(3):
         (music / f'feed-{index}.xml').write_text(f'<rss><channel><title>Directory show {index}</title><item><title>Directory episode {index}</title><guid>directory-{index}</guid><enclosure url="{stream_url}?episode={index}" type="audio/flac"/></item></channel></rss>')
     data = temp / 'state'
+    data.mkdir()
+    (data / 'library.json').write_text(json.dumps({'tracks': [], 'folders': [], 'fetch_covers': False, 'fetch_lyrics': False}))
     runtime = temp / 'runtime'
     runtime.mkdir(mode=0o700)
     env = {**os.environ, 'OPEN_AUDIO_DATA_DIR': str(data), 'OPEN_AUDIO_FAKE_SINK': '1',

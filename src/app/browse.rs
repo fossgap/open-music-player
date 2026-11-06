@@ -118,6 +118,7 @@ impl App {
         object::<gtk::Label>(ui, "title").set_label(&track.title);
         object::<gtk::Label>(ui, "artist").set_label(&self.artist(track));
         object::<gtk::Label>(ui, "album").set_label(&track.album);
+        object::<gtk::Label>(ui, "album").set_visible(!self.narrow_details());
         object::<gtk::Label>(ui, "time").set_label(&if track.kind == Kind::Radio {
             self.tr("Live")
         } else {
@@ -965,6 +966,7 @@ impl App {
                 self.bind_card(kind, &item, &ui);
             }
         }
+        self.schedule_metadata();
     }
 
     pub(super) fn open_album(self: &Rc<Self>, id: &str) {

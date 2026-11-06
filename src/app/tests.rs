@@ -50,7 +50,11 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     wav.resize(44 + size as usize, 0);
     std::fs::write(&audio, wav).unwrap();
     let uri = url::Url::from_file_path(&audio).unwrap().to_string();
-    let mut state = State::default();
+    let mut state = State {
+        fetch_covers: false,
+        fetch_lyrics: false,
+        ..State::default()
+    };
     for i in 0..150 {
         let mut track = Track::new(&uri, &format!("Track {i:03}"), Kind::Music);
         track.id = format!("test{i:03}");
@@ -582,6 +586,200 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     app.play_track("test003", Some(0.0));
     settle();
     assert!(app.audio.borrow().playing);
+    // Exercise both real HTTP clients against local fixtures and the actual detail/settings UI.
+    let mut routes = enrichment::tests::artwork_routes();
+    routes.push((
+        "/lyrics/get".into(),
+        200,
+        String::new(),
+        serde_json::to_vec(&enrichment::tests::lyric()).unwrap(),
+    ));
+    let metadata_fixture = enrichment::tests::Fixture::new(routes);
+    let metadata_cache = directory.path().join("metadata");
+    *app.metadata.borrow_mut() = enrichment::Service::new(metadata_fixture.config(&metadata_cache));
+    let mut song = enrichment::tests::song();
+    song.uri = uri.clone();
+    song.id = "metadatafixture".into();
+    let mut sibling = song.clone();
+    sibling.id = "metadatasibling".into();
+    sibling.title = "Another original song".into();
+    {
+        let mut state = app.state.borrow_mut();
+        state.merge(vec![song, sibling]);
+        state.fetch_covers = true;
+        state.fetch_lyrics = true;
+        state.queue = vec!["metadatafixture".into(), "metadatasibling".into()];
+    }
+    app.navigate("queue");
+    app.play_track("metadatafixture", None);
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "lyrics_text").text(),
+        "Finding lyrics…"
+    );
+    assert!(!app.button("lyrics_retry").is_sensitive());
+    let until = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < until
+        && app
+            .state
+            .borrow()
+            .track("metadatafixture")
+            .unwrap()
+            .artwork
+            .is_none()
+    {
+        settle();
+    }
+    settle();
+    {
+        let state = app.state.borrow();
+        let track = state.track("metadatafixture").unwrap();
+        assert!(track.artwork_source.is_some());
+        assert!(track.lyrics_source.is_some());
+        assert!(PathBuf::from(track.artwork.as_ref().unwrap()).is_file());
+        assert_eq!(
+            state.track("metadatasibling").unwrap().artwork,
+            track.artwork
+        );
+        assert!(
+            state.track("metadatasibling").unwrap().lyrics.is_none(),
+            "Only the current track needs lyrics"
+        );
+    }
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "lyrics_text").text(),
+        enrichment::tests::lyric()["plainLyrics"].as_str().unwrap()
+    );
+    if !object::<gtk::Revealer>(&app.ui, "detail_revealer").is_visible() {
+        app.toggle_details();
+    }
+    assert!(object::<gtk::LinkButton>(&app.ui, "lyrics_source").is_visible());
+    assert!(!app.button("lyrics_retry").is_visible());
+    assert!(
+        app.audio.borrow().playing,
+        "Metadata lookup must not interrupt playback"
+    );
+    app.window.set_default_size(1280, 820);
+    if !object::<gtk::Revealer>(&app.ui, "detail_revealer").is_visible() {
+        app.toggle_details();
+    }
+    settle();
+    screenshot(app.window.upcast_ref(), "metadata-desktop.png");
+    object::<gtk::ScrolledWindow>(&app.ui, "sidebar_scroller").set_visible(false);
+    app.window.set_default_size(820, 620);
+    settle();
+    // Continue the resize after GTK has remeasured the compact columns, like a drag.
+    app.window.set_default_size(800, 620);
+    settle();
+    screenshot(app.window.upcast_ref(), "metadata-compact.png");
+    assert!(
+        app.window.width() <= 820,
+        "Compact width {}; content {:?}; panel {:?}; player {:?}; header {:?}",
+        app.window.width(),
+        object::<gtk::Widget>(&app.ui, "content").measure(gtk::Orientation::Horizontal, -1),
+        object::<gtk::Widget>(&app.ui, "detail_panel").measure(gtk::Orientation::Horizontal, -1),
+        object::<gtk::Widget>(&app.ui, "player_bar").measure(gtk::Orientation::Horizontal, -1),
+        object::<gtk::Widget>(&app.ui, "track_header").measure(gtk::Orientation::Horizontal, -1),
+    );
+    let details: gtk::ScrolledWindow = object(&app.ui, "detail_scroller");
+    details
+        .vadjustment()
+        .set_value(details.vadjustment().upper());
+    settle();
+    let bounds = object::<gtk::Label>(&app.ui, "lyrics_text")
+        .compute_bounds(&details)
+        .unwrap();
+    assert!(
+        bounds.y() + bounds.height() <= details.height() as f32 + 1.0,
+        "Lyrics should be reachable by scrolling"
+    );
+
+    // Replacing a downloaded lyric with a local sidecar must also remove provider attribution.
+    let local = audio.with_extension("lrc");
+    std::fs::write(&local, "[00:00.00]My local fixture lyric").unwrap();
+    let fresh = library::scan(
+        std::slice::from_ref(&directory.path().to_path_buf()),
+        &[],
+        &directory.path().join("scan-covers"),
+    )
+    .unwrap();
+    assert_eq!(
+        fresh.tracks[0].lyrics.as_deref(),
+        Some("[00:00.00]My local fixture lyric")
+    );
+    assert!(fresh.tracks[0].lyrics_source.is_none());
+
+    app.settings();
+    settle();
+    let settings = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|w| w.downcast::<gtk::Window>().ok())
+        .find(|w| w.title().as_deref() == Some("Settings"))
+        .unwrap();
+    screenshot(&settings, "metadata-settings.png");
+    let covers = descendant(settings.upcast_ref(), "fetch_covers")
+        .unwrap()
+        .downcast::<gtk::Switch>()
+        .unwrap();
+    let lyrics = descendant(settings.upcast_ref(), "fetch_lyrics")
+        .unwrap()
+        .downcast::<gtk::Switch>()
+        .unwrap();
+    covers.set_active(false);
+    lyrics.set_active(false);
+    assert!(!app.state.borrow().fetch_covers && !app.state.borrow().fetch_lyrics);
+    // Cached content remains available while lookups are switched off.
+    assert!(
+        object::<gtk::Label>(&app.ui, "lyrics_text")
+            .text()
+            .contains("A quiet window")
+    );
+    settings.close();
+
+    // Missing and failed results remain local to the metadata panel and offer retry.
+    let offline = enrichment::tests::Fixture::new(vec![(
+        "/lyrics/get".into(),
+        503,
+        "Retry-After: 60\r\n".into(),
+        b"Busy".to_vec(),
+    )]);
+    *app.metadata.borrow_mut() =
+        enrichment::Service::new(offline.config(&directory.path().join("offline-metadata")));
+    app.state.borrow_mut().fetch_lyrics = true;
+    app.play_track("metadatasibling", None);
+    settle();
+    assert!(
+        object::<gtk::Label>(&app.ui, "lyrics_text")
+            .text()
+            .contains("provider is busy")
+    );
+    assert!(app.button("lyrics_retry").is_visible());
+    assert!(!app.button("lyrics_retry").is_sensitive());
+    screenshot(app.window.upcast_ref(), "metadata-busy-compact.png");
+    assert!(app.audio.borrow().playing);
+    let missing = enrichment::tests::Fixture::new(vec![(
+        "/lyrics/search".into(),
+        200,
+        String::new(),
+        b"[]".to_vec(),
+    )]);
+    *app.metadata.borrow_mut() =
+        enrichment::Service::new(missing.config(&directory.path().join("missing-metadata")));
+    app.schedule_metadata();
+    settle();
+    assert!(
+        object::<gtk::Label>(&app.ui, "lyrics_text")
+            .text()
+            .contains("No matching lyrics")
+    );
+    assert!(app.button("lyrics_retry").is_sensitive());
+    let requests = missing.count();
+    app.button("lyrics_retry").emit_clicked();
+    settle();
+    assert!(
+        missing.count() > requests,
+        "Retry bypasses a negative cache entry"
+    );
+    screenshot(app.window.upcast_ref(), "metadata-missing-compact.png");
     app.shutdown();
     drop(spotify_runtime);
     app.window.destroy();
@@ -603,4 +801,18 @@ fn screenshot(window: &gtk::Window, name: &str) {
         .render_texture(&node, None)
         .save_to_png(PathBuf::from(directory).join(name))
         .unwrap();
+}
+
+fn descendant(widget: &gtk::Widget, id: &str) -> Option<gtk::Widget> {
+    if widget.buildable_id().as_deref() == Some(id) {
+        return Some(widget.clone());
+    }
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        if let Some(found) = descendant(&current, id) {
+            return Some(found);
+        }
+        child = current.next_sibling();
+    }
+    None
 }

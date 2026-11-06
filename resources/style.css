@@ -79,3 +79,5 @@ dropdown button { padding: 8px; }
 scrollbar { background: transparent; }
 scrollbar slider { background: #526253; border-radius: 8px; min-width: 5px; min-height: 24px; }
 .settings-body { padding: 24px; }
+
+.metadata-source { padding: 0; min-height: 24px; font-size: 12px; }

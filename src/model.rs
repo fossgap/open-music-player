@@ -21,11 +21,16 @@ pub struct Track {
     pub title: String,
     pub artist: String,
     pub album: String,
+    pub album_artist: String,
+    pub musicbrainz_release_id: Option<String>,
     pub duration: f64,
     pub number: u32,
     pub kind: Kind,
     pub artwork: Option<String>,
     pub lyrics: Option<String>,
+    pub artwork_source: Option<String>,
+    pub lyrics_source: Option<String>,
+    pub instrumental: bool,
     pub favorite: bool,
     pub source: String,
     pub modified: u64,
@@ -121,6 +126,8 @@ pub struct State {
     pub youtube_ignored_playlists: Vec<String>,
     pub spotify_account: Option<SpotifyAccount>,
     pub spotify_ignored_playlists: Vec<String>,
+    pub fetch_covers: bool,
+    pub fetch_lyrics: bool,
     #[serde(skip)]
     pub(crate) track_index: std::collections::HashMap<String, usize>,
 }
@@ -146,6 +153,8 @@ impl Default for State {
             youtube_ignored_playlists: vec![],
             spotify_account: None,
             spotify_ignored_playlists: vec![],
+            fetch_covers: true,
+            fetch_lyrics: true,
             track_index: Default::default(),
         }
     }
@@ -173,6 +182,7 @@ impl State {
         for mut track in incoming {
             if let Some(&i) = indices.get(&track.id) {
                 track.favorite = self.tracks[i].favorite;
+                crate::enrichment::preserve_downloaded(&self.tracks[i], &mut track);
                 self.tracks[i] = track;
             } else {
                 indices.insert(track.id.clone(), self.tracks.len());

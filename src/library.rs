@@ -161,6 +161,16 @@ pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
     );
     t.artist = tags.get("artist").cloned().unwrap_or_default();
     t.album = tags.get("album").cloned().unwrap_or_default();
+    t.album_artist = tags
+        .get("album_artist")
+        .or_else(|| tags.get("albumartist"))
+        .cloned()
+        .unwrap_or_default();
+    t.musicbrainz_release_id = tags
+        .get("musicbrainz_albumid")
+        .or_else(|| tags.get("musicbrainz album id"))
+        .filter(|id| crate::enrichment::valid_mbid(id))
+        .cloned();
     t.duration = data["format"]["duration"]
         .as_str()
         .and_then(|s| s.parse().ok())
@@ -215,6 +225,8 @@ fn refresh_sidecars(path: &Path, t: &mut Track) {
         if sidecar.metadata().is_ok_and(|m| m.len() < 512_000) {
             if let Ok(text) = fs::read_to_string(sidecar) {
                 t.lyrics = Some(text);
+                t.lyrics_source = None;
+                t.instrumental = false;
                 break;
             }
         }
@@ -232,6 +244,7 @@ fn refresh_sidecars(path: &Path, t: &mut Track) {
         let image = parent.join(name);
         if image.is_file() {
             t.artwork = Some(image.to_string_lossy().into());
+            t.artwork_source = None;
             break;
         }
     }
@@ -240,6 +253,25 @@ fn refresh_sidecars(path: &Path, t: &mut Track) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn new_sidecars_replace_downloaded_metadata_during_cached_scans() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("song.flac");
+        let mut track = Track::new("file:///song.flac", "Song", Kind::Music);
+        track.lyrics_source = Some("https://lrclib.net/api/get/1".into());
+        track.instrumental = true;
+        track.artwork = Some("downloaded.png".into());
+        track.artwork_source = Some("https://musicbrainz.org/".into());
+        fs::write(path.with_extension("lrc"), "[00:01]A local fixture line").unwrap();
+        fs::write(directory.path().join("cover.png"), b"local cover fixture").unwrap();
+        refresh_sidecars(&path, &mut track);
+        assert_eq!(track.lyrics.as_deref(), Some("[00:01]A local fixture line"));
+        assert!(track.lyrics_source.is_none());
+        assert!(!track.instrumental);
+        assert!(track.artwork.as_deref().unwrap().ends_with("cover.png"));
+        assert!(track.artwork_source.is_none());
+    }
+
     #[test]
     fn recognizes_formats_without_case_sensitivity() {
         assert!(supported(Path::new("music.FLAC")));

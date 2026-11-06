@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 description = "A native Linux home for music, podcasts, and radio"
+homepage = "https://github.com/fossgap/open-audio-player"
 
 [dependencies]
 gtk = { package = "gtk4", version = "0.10.3", features = ["v4_8"] }
@@ -15,6 +16,7 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 roxmltree = "0.20"
 url = "2"
 walkdir = "2"
+httpdate = "1"
 librespot-core = { version = "0.8.0", default-features = false, features = ["rustls-tls-webpki-roots"] }
 librespot-playback = { version = "0.8.0", default-features = false, features = ["rustls-tls-webpki-roots"] }
 tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "net"] }

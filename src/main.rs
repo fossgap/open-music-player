@@ -1,6 +1,7 @@
 mod app;
 mod audio;
 mod desktop;
+mod enrichment;
 mod i18n;
 mod library;
 mod model;

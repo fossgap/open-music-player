@@ -26,7 +26,7 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 | YouTube Music | Song search, personal browser-session connection, native playback, two-way playlist sync and private playlist publishing |
 | Spotify | Browser sign-in, librespot playback (Premium), track search, two-way playlist sync and private playlist publishing |
 | Desktop | MPRIS controls and metadata, StatusNotifierItem tray menu, background playback, mini player |
-| Artwork and lyrics | Embedded covers, folder covers, feed/station images, softly blended artwork backdrop, embedded lyrics and `.lrc`/`.txt` sidecars |
+| Artwork and lyrics | Embedded/folder/service covers, missing-cover lookup through MusicBrainz and Cover Art Archive, embedded/sidecar lyrics and LRCLIB lookup, local caching, artwork backdrop |
 | Visualization | Live waveform from decoded PCM audio; no synthetic playback animation |
 | Persistence | Library, sources, playlists, queue, track, position, volume, repeat, shuffle, and preferences |
 | Languages | English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean; new service copy falls back to English where untranslated |
@@ -115,6 +115,18 @@ Offline tests cover authentication callback validation, playlist conflicts, stal
 
 Click the current cover to open the artwork, waveform, and lyrics panel. Put `cover.jpg`, `cover.png`, `folder.jpg`, or `folder.png` beside an album, or use embedded artwork. A lyrics sidecar must share the audio filename: `Song.flac` and `Song.lrc`. Refresh after adding a sidecar. LRC text is displayed as supplied.
 
+Missing covers and lyrics are fetched automatically in the background for local music, Spotify and YouTube Music. Existing embedded, sidecar and service-provided content takes priority. Podcasts, radio and generic streams are excluded from these metadata searches.
+
+| Provider | What it adds | Matching |
+|---|---|---|
+| [MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API) + [Cover Art Archive](https://musicbrainz.org/doc/Cover_Art_Archive/API) | Album covers for the current track and visible tracks/albums/playlists | Tagged MusicBrainz release ID when available; otherwise album artist (or track artist) and album, with alternate editions tried when artwork is absent |
+| [LRCLIB](https://lrclib.net/docs) | Lyrics for the current track, including a restored session | Artist, title and duration within two seconds; album required when duration is unknown |
+
+Neither lookup needs an account or API key. **Settings → Online artwork and lyrics** has independent switches, enabled by default. Disabling a lookup keeps previously downloaded content. Artist/album/title and, for lyrics, duration are sent to the corresponding provider; audio files are not uploaded. Requests identify Open Audio Player with its version and [project repository](https://github.com/fossgap/open-audio-player).
+
+The detail panel links to the matched source and offers **Retry cover lookup** / **Retry lyrics lookup** for missing results or errors. Instrumental recordings are identified explicitly. Downloads and misses are cached under `metadata/` beside `library.json`; misses expire after seven days, and manual retry bypasses a cached miss. Temporary failures are not saved as misses. Requests are paced and respect provider backoff. Network failures do not stop playback. Downloaded synced lyrics retain their timing data in the cache and are displayed as plain text; synchronized highlighting is not implemented.
+
+
 The session is restored without automatically starting audio. Press Play to continue. Podcast episodes also retain individual positions.
 
 ### Playlists
@@ -145,9 +157,9 @@ Closing the main window keeps audio playing **only while playback is active and 
 
 ### Your data
 
-The library is stored in `$XDG_DATA_HOME/open-audio-player/library.json`, defaulting to `~/.local/share/open-audio-player/library.json`. Cached artwork lives beside it. Saves use a temporary file, synchronization, and atomic replacement. A corrupt or unsupported library is reported and left untouched.
+The library is stored in `$XDG_DATA_HOME/open-audio-player/library.json`, defaulting to `~/.local/share/open-audio-player/library.json`. Cached service artwork lives in `artwork/` beside it; fetched covers, lyrics and lookup results live in `metadata/`. Saves use a temporary file, synchronization, and atomic replacement. A corrupt or unsupported library is reported and left untouched.
 
-`OPEN_AUDIO_DATA_DIR=/some/directory` selects an isolated library, useful for testing. The app makes no directory or feed requests on first launch. Network requests begin when you explicitly discover/search podcasts or radio, subscribe/refresh a feed, or play an online source. Searches go to the selected directory; result artwork may be fetched from its image hosts. Saved Spotify accounts also reconnect in the background at startup. There is no analytics collection. Existing playlists receive persistent identifiers automatically when an older library is loaded.
+`OPEN_AUDIO_DATA_DIR=/some/directory` selects an isolated library, useful for testing. The app makes no directory or feed requests on first launch. Network requests begin when you explicitly discover/search podcasts or radio, subscribe/refresh a feed, or play an online source. With automatic lookups enabled, browsing saved music can fetch missing covers and selecting/restoring the current track can fetch missing lyrics. Searches go to the selected directory; result artwork may be fetched from its image hosts. Saved Spotify accounts also reconnect in the background at startup. There is no analytics collection. Existing playlists receive persistent identifiers automatically when an older library is loaded.
 
 ## Development
 
@@ -170,9 +182,9 @@ make smoke
 make ui-test
 ```
 
-The integration test generates original audio, starts local feed and podcast-directory fixtures, and drives the real application over D-Bus and keyboard input. It checks library and playlist import, metadata, artwork, playback, seek, pause, favorites, queue, playlist creation/renaming, both podcast directories, subscriptions, empty/error states, MPRIS, mini mode, dialogs, compact layouts, and session restoration. The GTK regression test scrolls long lists and checks that activation preserves scroll and selection, album browsing does not start playback, filtered queue playback retains its members, and playlist deletion respects cancellation. All library and audio data are temporary. External services and real audio hardware are not required.
+The integration test generates original audio, starts local feed and podcast-directory fixtures, and drives the real application over D-Bus and keyboard input. It checks library and playlist import, metadata, artwork, playback, seek, pause, favorites, queue, playlist creation/renaming, both podcast directories, subscriptions, empty/error states, MPRIS, mini mode, dialogs, compact layouts, and session restoration. The GTK regression test also checks artwork/lyrics against local provider fixtures, settings switches, attribution, retries, and compact detail-panel scrolling. It scrolls long lists and checks that activation preserves scroll and selection, album browsing does not start playback, filtered queue playback retains its members, and playlist deletion respects cancellation. All library and audio data are temporary. External services and real audio hardware are not required.
 
-The unit suite includes offline Spotify authentication, catalog, sync and PCM-output checks; the display-dependent GTK regression runs separately through `make ui-test`. CI targets the Rust 1.85/GTK 4.8 Debian development container; native Linux checks include strict Clippy validation. The same integration suite can exercise native, release, and AppImage builds. The Arch recipe has not been built on Arch.
+The unit suite includes offline cover/lyric matching, positive/negative caching, invalid/oversized images, rate-limit backoff, cancellation, and Spotify authentication, catalog, sync and PCM-output checks; the display-dependent GTK regression runs separately through `make ui-test`. CI targets the Rust 1.85/GTK 4.8 Debian development container; native Linux checks include strict Clippy validation. The same integration suite can exercise native, release, and AppImage builds. The Arch recipe has not been built on Arch.
 
 For review screenshots:
 
@@ -183,7 +195,7 @@ OPEN_AUDIO_SCREENSHOTS=/tmp/open-audio-screens make smoke
 
 Set `OPEN_AUDIO_BINARY` to an absolute binary path to run the same checks against a release build or AppImage. Use `APPIMAGE_EXTRACT_AND_RUN=1` when FUSE is unavailable; this keeps the AppImage runtime's library and plugin environment intact.
 
-`OPEN_AUDIO_ITUNES_API` and `OPEN_AUDIO_GPODDER_API` optionally replace the respective API base URLs for a private mirror or offline test server. Normal use needs neither setting.
+`OPEN_AUDIO_ITUNES_API` and `OPEN_AUDIO_GPODDER_API` optionally replace the respective API base URLs for a private mirror or offline test server. The optional `OPEN_AUDIO_MUSICBRAINZ_API`, `OPEN_AUDIO_COVER_ART_API`, and `OPEN_AUDIO_LRCLIB_API` variables similarly replace metadata API bases. Normal use needs none of these settings.
 
 To explore with a separate demonstration library:
 
@@ -249,6 +261,8 @@ src/
   audio.rs       GStreamer playback and decoded-audio waveform
   desktop.rs     MPRIS, StatusNotifierItem, and tray menu
   i18n.rs        Embedded translation catalogues
+  enrichment.rs  Background cover/lyric jobs, cancellation, metadata matching
+  enrichment/    MusicBrainz, Cover Art Archive, LRCLIB clients, cache and tests
   library.rs     Folder scanning, FFmpeg metadata, artwork, lyrics
   model.rs       Tracks, collections, queue, persisted session
   playlists.rs   M3U/M3U8, PLS, and XSPF parsing and import

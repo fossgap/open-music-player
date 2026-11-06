@@ -2251,6 +2251,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-app",
  "gtk4",
+ "httpdate",
  "keyring",
  "librespot-core",
  "librespot-playback",

@@ -1,5 +1,6 @@
 use crate::{
     audio::{Audio, Event},
+    enrichment,
     i18n::I18n,
     library,
     model::{self, Kind, Repeat, State, Subscription, Track},
@@ -7,6 +8,7 @@ use crate::{
 };
 
 mod browse;
+mod metadata;
 mod spotify;
 #[cfg(test)]
 mod tests;
@@ -56,6 +58,9 @@ pub struct App {
     podcast_cards: BoundItems,
     youtube: youtube::Controls,
     spotify: spotify::Controls,
+    metadata: RefCell<enrichment::Service>,
+    metadata_last: Cell<Instant>,
+    lyrics_key: RefCell<Option<String>>,
     streaming_service: RefCell<String>,
     radio_results: RefCell<Vec<String>>,
     playlist: RefCell<Option<String>>,
@@ -159,6 +164,9 @@ impl App {
             podcast_cards: Default::default(),
             youtube: youtube::Controls::default(),
             spotify: spotify::Controls::default(),
+            metadata: RefCell::new(enrichment::Service::new(enrichment::Config::default())),
+            metadata_last: Cell::new(Instant::now()),
+            lyrics_key: RefCell::new(None),
             streaming_service: RefCell::new("youtube".into()),
             radio_results: RefCell::new(vec![]),
             playlist: RefCell::new(None),
@@ -193,6 +201,7 @@ impl App {
         this.setup_actions();
         this.setup_lists();
         this.setup_controls();
+        this.setup_metadata();
         this.setup_drawing();
         this.audio.borrow().volume(this.state.borrow().volume);
         let (volume, shuffle) = {
@@ -844,6 +853,8 @@ impl App {
         let visible = !panel.is_visible();
         panel.set_visible(visible);
         panel.set_reveal_child(visible);
+        self.schedule_metadata();
+        self.update_metadata();
         if self.window.width() < 1100 {
             object::<gtk::ScrolledWindow>(&self.ui, "sidebar_scroller").set_visible(false);
         }
@@ -1119,6 +1130,7 @@ impl App {
     }
 
     pub fn shutdown(&self) {
+        self.metadata.borrow().stop();
         self.persist();
         self.audio.borrow_mut().stop();
         self.audio.borrow_mut().detach_spotify();
@@ -1211,13 +1223,9 @@ impl App {
             self.backdrop.set((0.17, 0.23, 0.17));
         }
         object::<gtk::DrawingArea>(&self.ui, "detail_backdrop").queue_draw();
-        self.label(
-            "lyrics_text",
-            &track.and_then(|t| t.lyrics.clone()).unwrap_or_else(|| {
-                self.tr("No lyrics found. Add an .lrc or .txt file beside the track, then refresh.")
-            }),
-        );
         drop(state);
+        self.schedule_metadata();
+        self.update_metadata();
         crate::desktop::changed(self);
     }
 
@@ -1277,6 +1285,7 @@ impl App {
         let compact = self.window.width() < 1000 || self.window.height() < 700;
         if self.compact_browse.replace(compact) != compact {
             self.refresh();
+            self.update_metadata();
         }
         let messages: Vec<Message> = self.rx.borrow().try_iter().take(30).collect();
         for message in messages {
@@ -1476,6 +1485,7 @@ impl App {
         for reply in self.spotify.service.poll() {
             self.handle_spotify(reply);
         }
+        self.poll_metadata();
         let events = self.audio.borrow_mut().poll();
         for event in events {
             match event {
@@ -1606,6 +1616,7 @@ impl App {
                 a.persist();
             }
         });
+        self.metadata_settings(&ui);
         object::<gtk::Label>(&ui, "tray_note").set_visible(!self.tray_available.get());
         for folder in self.state.borrow().folders.clone() {
             let builder = gtk::Builder::from_string(include_str!("../resources/setting-row.ui"));
