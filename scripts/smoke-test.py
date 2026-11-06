@@ -138,7 +138,7 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         (music / f'feed-{index}.xml').write_text(f'<rss><channel><title>Directory show {index}</title><item><title>Directory episode {index}</title><guid>directory-{index}</guid><enclosure url="{stream_url}?episode={index}" type="audio/flac"/></item></channel></rss>')
     data = temp / 'state'
     data.mkdir()
-    (data / 'library.json').write_text(json.dumps({'tracks': [], 'folders': [], 'fetch_covers': False, 'fetch_lyrics': False}))
+    (data / 'library.json').write_text(json.dumps({'tracks': [], 'folders': [], 'fetch_covers': False, 'fetch_lyrics': False, 'download_directory': str(temp / 'downloads')}))
     runtime = temp / 'runtime'
     runtime.mkdir(mode=0o700)
     env = {**os.environ, 'OPEN_AUDIO_DATA_DIR': str(data), 'OPEN_AUDIO_FAKE_SINK': '1',
@@ -172,6 +172,13 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         call(PLAYER, 'Pause')
         wait_until(lambda: 'Paused' in prop('PlaybackStatus'))
         call(PLAYER, 'Seek', '5000000')
+        call('org.freedesktop.DBus.Properties', 'Set', PLAYER, 'Rate', '<1.5>')
+        assert '1.5' in prop('Rate')
+        assert '0.5' in prop('MinimumRate') and '2.0' in prop('MaximumRate')
+        assert 'Paused' in prop('PlaybackStatus'), 'Changing speed must preserve pause'
+        action('toggle-time')
+        wait_until(lambda: state()['playback_rate'] == 1.5 and state()['show_remaining'])
+        call('org.freedesktop.DBus.Properties', 'Set', PLAYER, 'Rate', '<1.0>')
         call('org.freedesktop.DBus.Properties', 'Set', PLAYER, 'Volume', '<0.4>')
         assert '0.4' in prop('Volume')
         action('favorite', first)
@@ -210,6 +217,12 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         action('play-track', second)
         wait_until(lambda: 'Playing' in prop('PlaybackStatus') and second in prop('Metadata'))
         call(PLAYER, 'Pause')
+        action('download', episode['id'])
+        wait_until(lambda: len(state()['saved_audio']) == 1)
+        saved_audio = Path(state()['saved_audio'][0]['path'])
+        assert saved_audio.read_bytes() == (music / media).read_bytes()
+        assert next(t for t in state()['tracks'] if t['id'] == episode['id'])['download_path'] == str(saved_audio)
+        snapshot('desktop-downloads.png')
         # Playlist creation and adding a track use the same dialogs as mouse input.
         action('page', 'playlists')
         action('primary')
@@ -317,6 +330,8 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         assert saved['current'] == second
         assert saved['position'] >= 7.8, saved['position']
         assert saved['volume'] == 0.4
+        assert saved['show_remaining'] and saved['playback_rate'] == 1.0
+        assert saved['saved_audio'][0]['path'] == str(saved_audio)
         assert len(saved['playlists']) == 3 and len(saved['subscriptions']) == 4
         child = subprocess.Popen([str(BINARY)], env=env, stdout=log, stderr=log)
         wait_until(lambda: 'Stopped' in prop('PlaybackStatus'))

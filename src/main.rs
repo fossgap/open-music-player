@@ -2,6 +2,7 @@ mod app;
 mod audio;
 mod collections;
 mod desktop;
+mod downloads;
 mod enrichment;
 mod i18n;
 mod library;

@@ -75,7 +75,19 @@ fn property(app: &App, name: &str) -> glib::Variant {
         .to_variant(),
         "Shuffle" => state.shuffle.to_variant(),
         "Volume" => state.volume.to_variant(),
-        "Rate" | "MinimumRate" | "MaximumRate" => 1.0_f64.to_variant(),
+        "Rate" => audio.rate().to_variant(),
+        "MinimumRate" => (if audio.can_change_rate() {
+            0.5_f64
+        } else {
+            1.0
+        })
+        .to_variant(),
+        "MaximumRate" => (if audio.can_change_rate() {
+            2.0_f64
+        } else {
+            1.0
+        })
+        .to_variant(),
         "Position" => ((audio.position() * 1e6) as i64).to_variant(),
         "Metadata" => metadata(app).to_variant(),
         "CanSeek" => (audio.loaded && audio.duration() > 0.0).to_variant(),
@@ -250,7 +262,9 @@ pub fn setup(app: &Rc<App>) {
                                 app.persist();
                                 app.update_player();
                             }
-                            "Rate" => return value.get::<f64>() == Some(1.0),
+                            "Rate" => {
+                                return value.get::<f64>().is_some_and(|rate| app.set_speed(rate));
+                            }
                             _ => return false,
                         }
                         true
@@ -283,6 +297,9 @@ pub fn changed(app: &App) {
         "CanGoPrevious",
         "CanPlay",
         "CanPause",
+        "Rate",
+        "MinimumRate",
+        "MaximumRate",
     ] {
         properties.insert(name.into(), property(app, name));
     }

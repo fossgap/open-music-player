@@ -108,6 +108,80 @@ fn poll_until(audio: &mut Audio, condition: impl Fn(&Audio, &[Event]) -> bool) -
 }
 
 #[test]
+fn playback_speed_changes_output_duration_and_survives_pause_and_seek() {
+    let dir = tempfile::tempdir().unwrap();
+    let track = wav(&dir.path().join("speed.wav"), 2.0);
+    for rate in [0.5, 2.0] {
+        let mut audio = Audio::new().unwrap();
+        audio.set_rate(rate).unwrap();
+        let captured = capture(&audio.deck);
+        let start = Instant::now();
+        audio
+            .load_queued(&track.uri, 0.0, true, HashMap::new(), None, 0.0)
+            .unwrap();
+        poll_until(&mut audio, |_, events| {
+            events.iter().any(|e| matches!(e, Event::End))
+        });
+        let seconds = captured.lock().unwrap().frames as f64 / 48000.0;
+        assert!(
+            (seconds - 2.0 / rate).abs() < 0.15,
+            "rate {rate}: {seconds}s PCM"
+        );
+        assert!((start.elapsed().as_secs_f64() - 2.0 / rate).abs() < 0.8);
+        assert_eq!(audio.rate(), rate);
+    }
+    let mut audio = Audio::new().unwrap();
+    audio
+        .load_queued(&track.uri, 0.0, true, HashMap::new(), None, 0.0)
+        .unwrap();
+    poll_until(&mut audio, |a, _| a.position() > 0.2);
+    audio.set_playing(false).unwrap();
+    audio.set_rate(1.5).unwrap();
+    audio.seek(0.7).unwrap();
+    poll_until(&mut audio, |a, _| {
+        a.deck.ready && (a.position() - 0.7).abs() < 0.05
+    });
+    std::thread::sleep(Duration::from_millis(100));
+    audio.poll();
+    assert!((audio.position() - 0.7).abs() < 0.05);
+    assert_eq!(audio.rate(), 1.5);
+    assert!(!audio.playing);
+    audio.set_playing(true).unwrap();
+    poll_until(&mut audio, |a, _| a.position() > 1.0);
+    assert_eq!(audio.rate(), 1.5);
+    for invalid in [0.0, 3.0, f64::NAN] {
+        assert!(audio.set_rate(invalid).is_err());
+    }
+}
+
+#[test]
+fn unseekable_stream_uses_normal_speed_without_losing_the_preference() {
+    let server = crate::downloads::tests::Server::new(
+        crate::downloads::tests::wav(5),
+        "audio/wav",
+        false,
+        Duration::from_millis(15),
+    );
+    let mut audio = Audio::new().unwrap();
+    audio.set_rate(1.5).unwrap();
+    audio
+        .load_queued(&server.uri, 0.0, true, HashMap::new(), None, 0.0)
+        .unwrap();
+    poll_until(&mut audio, |a, _| a.position() > 0.15);
+    assert_eq!(audio.rate(), 1.0);
+    assert!(!audio.can_change_rate());
+    assert!(audio.set_rate(2.0).is_err());
+    let dir = tempfile::tempdir().unwrap();
+    let track = wav(&dir.path().join("after-radio.wav"), 2.0);
+    audio
+        .load_queued(&track.uri, 0.0, true, HashMap::new(), None, 0.0)
+        .unwrap();
+    poll_until(&mut audio, |a, _| a.position() > 0.15);
+    assert_eq!(audio.rate(), 1.5);
+    assert!(audio.can_change_rate());
+}
+
+#[test]
 fn gapless_handoff_keeps_all_pcm_and_changes_current_once() {
     let dir = tempfile::tempdir().unwrap();
     let first = wav(&dir.path().join("one.wav"), 0.8);

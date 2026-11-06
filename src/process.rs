@@ -18,6 +18,16 @@ pub fn output_with_input(
     timeout: Duration,
     limit: u64,
 ) -> Result<Vec<u8>, String> {
+    output_with_input_cancellable(command, input, timeout, limit, || false)
+}
+
+pub fn output_with_input_cancellable(
+    command: &mut Command,
+    input: &[u8],
+    timeout: Duration,
+    limit: u64,
+    cancelled: impl Fn() -> bool,
+) -> Result<Vec<u8>, String> {
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -37,6 +47,11 @@ pub fn output_with_input(
     });
     let start = Instant::now();
     let status = loop {
+        if cancelled() {
+            let _ = child.kill();
+            let _ = child.wait();
+            break Err("Cancelled".to_string());
+        }
         match child.try_wait() {
             Ok(Some(status)) => break Ok(status),
             Ok(None) if start.elapsed() < timeout => thread::sleep(Duration::from_millis(25)),
@@ -68,4 +83,22 @@ pub fn output_with_input(
         ));
     }
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn cancellation_terminates_a_stalled_helper() {
+        let start = Instant::now();
+        let result = output_with_input_cancellable(
+            Command::new("sleep").arg("30"),
+            &[],
+            Duration::from_secs(40),
+            1024,
+            || start.elapsed() > Duration::from_millis(100),
+        );
+        assert_eq!(result.unwrap_err(), "Cancelled");
+        assert!(start.elapsed() < Duration::from_secs(2));
+    }
 }

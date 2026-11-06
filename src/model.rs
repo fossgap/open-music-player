@@ -35,6 +35,7 @@ pub struct Track {
     pub source: String,
     pub modified: u64,
     pub size: u64,
+    pub download_path: Option<PathBuf>,
 }
 
 impl Track {
@@ -60,6 +61,15 @@ impl Track {
 pub struct Subscription {
     pub url: String,
     pub title: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SavedAudio {
+    pub id: String,
+    pub title: String,
+    pub source_id: String,
+    pub path: PathBuf,
+    pub recording: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -157,6 +167,10 @@ pub struct State {
     pub fetch_lyrics: bool,
     pub refresh_minutes: u32,
     pub watch_music: bool,
+    pub playback_rate: f64,
+    pub show_remaining: bool,
+    pub download_directory: Option<PathBuf>,
+    pub saved_audio: Vec<SavedAudio>,
     pub playback: PlaybackSettings,
     #[serde(skip)]
     pub(crate) track_index: std::collections::HashMap<String, usize>,
@@ -187,6 +201,10 @@ impl Default for State {
             fetch_lyrics: true,
             refresh_minutes: 0,
             watch_music: true,
+            playback_rate: 1.0,
+            show_remaining: false,
+            download_directory: None,
+            saved_audio: Vec::new(),
             playback: PlaybackSettings::default(),
             track_index: Default::default(),
         }
@@ -215,6 +233,7 @@ impl State {
         for mut track in incoming {
             if let Some(&i) = indices.get(&track.id) {
                 track.favorite = self.tracks[i].favorite;
+                track.download_path = self.tracks[i].download_path.clone();
                 crate::enrichment::preserve_downloaded(&self.tracks[i], &mut track);
                 self.tracks[i] = track;
             } else {
@@ -226,6 +245,11 @@ impl State {
     }
 
     pub fn sanitize(&mut self) {
+        self.playback_rate = if self.playback_rate.is_finite() {
+            self.playback_rate.clamp(0.5, 2.0)
+        } else {
+            1.0
+        };
         self.refresh_minutes = self.refresh_minutes.min(1440);
         self.playback.crossfade_seconds = self.playback.crossfade_seconds.min(12);
         let mut ids = HashSet::new();
@@ -420,6 +444,42 @@ pub fn shuffle<T>(items: &mut [T]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saved_audio_preferences_migrate_and_survive_metadata_refresh() {
+        let mut state: State = serde_json::from_str("{}").unwrap();
+        assert_eq!(state.playback_rate, 1.0);
+        assert!(!state.show_remaining);
+        assert!(state.saved_audio.is_empty());
+        assert!(state.download_directory.is_none());
+        state.playback_rate = 1.5;
+        state.show_remaining = true;
+        state.download_directory = Some("/tmp/saved audio".into());
+        let track = Track::new("https://example.test/a.mp3", "Podcast", Kind::Podcast);
+        let mut downloaded = track.clone();
+        downloaded.download_path = Some("/tmp/saved audio/a.mp3".into());
+        state.merge(vec![downloaded]);
+        state.merge(vec![track.clone()]);
+        assert!(state.track(&track.id).unwrap().download_path.is_some());
+        state.saved_audio.push(SavedAudio {
+            id: "1".into(),
+            title: track.title,
+            source_id: track.id,
+            path: "/tmp/saved audio/a.mp3".into(),
+            recording: false,
+        });
+        let restored: State =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert_eq!(restored.playback_rate, 1.5);
+        assert!(restored.show_remaining);
+        assert_eq!(restored.download_directory, state.download_directory);
+        assert_eq!(restored.saved_audio[0].path, state.saved_audio[0].path);
+        state.playback_rate = f64::NAN;
+        state.sanitize();
+        assert_eq!(state.playback_rate, 1.0);
+        state.playback_rate = 20.0;
+        state.sanitize();
+        assert_eq!(state.playback_rate, 2.0);
+    }
     #[test]
     fn refresh_preferences_default_to_manual_and_survive_storage() {
         let mut state: State = serde_json::from_str("{}").unwrap();

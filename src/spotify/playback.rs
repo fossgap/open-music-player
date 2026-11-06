@@ -23,6 +23,7 @@ struct PcmSink {
     pipeline: gst::Pipeline,
     source: gst_app::AppSrc,
     waveform: Arc<Mutex<Vec<f64>>>,
+    capture: Arc<Mutex<Option<crate::downloads::Capture>>>,
     frames: u64,
 }
 impl PcmSink {
@@ -35,7 +36,12 @@ impl PcmSink {
         Self::with_output(output)
     }
     fn with_output(output: &str) -> Result<(Self, gst::Element), String> {
-        let pipeline = gst::parse_launch(&format!("appsrc name=pcm format=time block=true max-bytes=16384 ! audioconvert ! audioresample ! volume name=volume ! {output}"))
+        let tempo = if gst::ElementFactory::find("pitch").is_some() {
+            "pitch"
+        } else {
+            "identity"
+        };
+        let pipeline = gst::parse_launch(&format!("appsrc name=pcm format=time block=true max-bytes=16384 ! audioconvert ! audioresample ! {tempo} name=tempo ! volume name=volume ! {output}"))
             .map_err(|e| e.to_string())?.downcast::<gst::Pipeline>().map_err(|_| "Could not create Spotify audio output.")?;
         let source = pipeline
             .by_name("pcm")
@@ -56,6 +62,7 @@ impl PcmSink {
                 pipeline,
                 source,
                 waveform: Arc::new(Mutex::new(Vec::new())),
+                capture: Arc::new(Mutex::new(None)),
                 frames: 0,
             },
             volume,
@@ -87,6 +94,9 @@ impl Sink for PcmSink {
             .iter()
             .flat_map(|v| (*v as f32).to_le_bytes())
             .collect();
+        if let Some(capture) = self.capture.lock().unwrap().as_ref() {
+            capture.write(&data);
+        }
         if let Ok(mut wave) = self.waveform.lock() {
             *wave = samples
                 .chunks_exact(2)
@@ -127,7 +137,10 @@ pub struct Playback {
     applied: PlaybackSettings,
     bus: gst::Bus,
     volume: gst::Element,
+    tempo: gst::Element,
+    rate: f64,
     waveform: Arc<Mutex<Vec<f64>>>,
+    capture: Arc<Mutex<Option<crate::downloads::Capture>>>,
     track: Option<SpotifyUri>,
     request: Option<u64>,
     anchor: Cell<(f64, Instant)>,
@@ -145,7 +158,9 @@ impl Playback {
     fn with_settings(session: Session, settings: PlaybackSettings) -> Result<Self, String> {
         let (sink, volume) = PcmSink::new()?;
         let waveform = sink.waveform.clone();
+        let capture = sink.capture.clone();
         let bus = sink.pipeline.bus().unwrap();
+        let tempo = sink.pipeline.by_name("tempo").unwrap();
         let config = PlayerConfig {
             position_update_interval: Some(Duration::from_secs(1)),
             gapless: settings.gapless,
@@ -180,7 +195,10 @@ impl Playback {
             applied: settings,
             bus,
             volume,
+            tempo,
+            rate: 1.0,
             waveform,
+            capture,
             track: None,
             request: None,
             anchor: Cell::new((0.0, Instant::now())),
@@ -233,7 +251,9 @@ impl Playback {
             let _entered = runtime.enter();
             let replacement = Self::with_settings(self.session.clone(), self.settings)?;
             replacement.volume(self.volume.property("volume"));
+            let rate = self.rate;
             *self = replacement;
+            self.set_rate(rate)?;
         }
         self.stop();
         while self.events.try_recv().is_ok() {}
@@ -267,6 +287,9 @@ impl Playback {
         }
     }
     pub fn stop(&mut self) {
+        if let Some(capture) = self.capture.lock().unwrap().take() {
+            capture.finish();
+        }
         *self.transition.lock().unwrap() = Transition::default();
         self.player.stop();
         self.track = None;
@@ -281,11 +304,36 @@ impl Playback {
     pub fn duration(&self) -> f64 {
         self.duration
     }
+    pub fn can_change_rate(&self) -> bool {
+        self.tempo.find_property("tempo").is_some()
+    }
+    pub fn rate(&self) -> f64 {
+        self.rate
+    }
+    pub fn record(&self, capture: crate::downloads::Capture) {
+        if let Some(previous) = self.capture.lock().unwrap().replace(capture) {
+            previous.finish();
+        }
+    }
+    pub fn set_rate(&mut self, rate: f64) -> Result<(), String> {
+        if self.rate == rate {
+            return Ok(());
+        }
+        if !self.can_change_rate() {
+            return Err(
+                "Install the GStreamer SoundTouch plugin to change Spotify playback speed.".into(),
+            );
+        }
+        self.anchor.set((self.position(), Instant::now()));
+        self.tempo.set_property("tempo", rate as f32);
+        self.rate = rate;
+        Ok(())
+    }
     pub fn position(&self) -> f64 {
         let (value, time) = self.anchor.get();
         let value = value
             + if self.running && self.playing {
-                time.elapsed().as_secs_f64()
+                time.elapsed().as_secs_f64() * self.rate
             } else {
                 0.0
             };
@@ -509,6 +557,69 @@ fn millis(seconds: f64) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn spotify_tempo_changes_duration_without_transposing_pitch() {
+        gst::init().unwrap();
+        for rate in [0.5f32, 2.0] {
+            let (mut sink, _) = PcmSink::with_output(
+                "audioconvert ! audio/x-raw,format=F32LE ! appsink name=measured sync=false",
+            )
+            .unwrap();
+            sink.pipeline
+                .by_name("tempo")
+                .unwrap()
+                .set_property("tempo", rate);
+            let output = sink
+                .pipeline
+                .by_name("measured")
+                .unwrap()
+                .downcast::<gst_app::AppSink>()
+                .unwrap();
+            sink.start().unwrap();
+            let mut converter = Converter::new(None);
+            for chunk in 0..20 {
+                let samples = (chunk * 4410..(chunk + 1) * 4410)
+                    .flat_map(|i| {
+                        let v =
+                            (f64::from(i) * 440.0 * std::f64::consts::TAU / 44100.0).sin() * 0.25;
+                        [v, v]
+                    })
+                    .collect();
+                sink.write(AudioPacket::Samples(samples), &mut converter)
+                    .unwrap();
+            }
+            sink.source.end_of_stream().unwrap();
+            let mut samples = Vec::new();
+            let start = Instant::now();
+            while !output.is_eos() {
+                assert!(start.elapsed() < Duration::from_secs(5));
+                if let Some(sample) = output.try_pull_sample(gst::ClockTime::from_mseconds(50)) {
+                    let buffer = sample.buffer().unwrap().map_readable().unwrap();
+                    samples.extend(
+                        buffer
+                            .as_slice()
+                            .chunks_exact(8)
+                            .map(|v| f32::from_le_bytes(v[..4].try_into().unwrap())),
+                    );
+                }
+            }
+            let duration = samples.len() as f64 / 44100.0;
+            assert!(
+                (duration - 2.0 / f64::from(rate)).abs() < 0.15,
+                "{rate}x: {duration}s"
+            );
+            let crossings = samples
+                .windows(2)
+                .filter(|v| v[0] <= 0.0 && v[1] > 0.0)
+                .count();
+            let frequency = crossings as f64 / duration;
+            assert!(
+                (frequency - 440.0).abs() < 15.0,
+                "{rate}x transposed to {frequency}Hz"
+            );
+            sink.stop().unwrap();
+        }
+    }
     #[test]
     fn gapless_successor_accepts_preloaded_requests_without_loading_event() {
         let current = SpotifyUri::from_uri("spotify:track:4uLU6hMCjMI75M1A2tKUQC").unwrap();

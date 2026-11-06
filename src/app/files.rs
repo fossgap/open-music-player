@@ -177,13 +177,17 @@ impl App {
     }
 
     fn open_location(self: &Rc<Self>, id: &str) {
-        let path = self
-            .state
-            .borrow()
-            .track(id)
-            .and_then(|t| library::local_path(&t.uri));
+        let path = self.state.borrow().track(id).and_then(|t| {
+            t.download_path
+                .clone()
+                .or_else(|| library::local_path(&t.uri))
+        });
         let Some(path) = path else { return };
-        let uri = gio::File::for_path(&path).uri().to_string();
+        self.show_saved_file(&path);
+    }
+
+    pub(super) fn show_saved_file(self: &Rc<Self>, path: &std::path::Path) {
+        let uri = gio::File::for_path(path).uri().to_string();
         let Some(parent) = path.parent() else { return };
         let parent = gio::File::for_path(parent).uri().to_string();
         let weak = Rc::downgrade(self);

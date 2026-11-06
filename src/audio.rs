@@ -51,6 +51,7 @@ pub struct Audio {
     pub loaded: bool,
     spotify: Option<crate::spotify::playback::Playback>,
     spotify_active: bool,
+    rate: f64,
 }
 
 impl Audio {
@@ -70,6 +71,7 @@ impl Audio {
             loaded: false,
             spotify: None,
             spotify_active: false,
+            rate: 1.0,
         })
     }
 
@@ -117,6 +119,8 @@ impl Audio {
             .as_mut()
             .ok_or("Connect your Spotify account first.")?
             .load(uri, position, duration, autoplay)?;
+        // Missing optional tempo support must not prevent normal playback.
+        let _ = self.spotify.as_mut().unwrap().set_rate(self.rate);
         self.spotify_active = true;
         self.loaded = true;
         self.playing = autoplay;
@@ -136,6 +140,7 @@ impl Audio {
         self.next = next.clone();
         self.fade_seconds = fade_seconds;
         self.deck.gain(self.settings.replay_gain);
+        self.deck.set_rate(self.rate, false)?;
         self.deck.volume(self.volume.get());
         self.deck.load(
             NextTrack {
@@ -220,6 +225,47 @@ impl Audio {
             }
         }
         self.playing = playing;
+        Ok(())
+    }
+    pub fn rate(&self) -> f64 {
+        if !self.loaded {
+            self.rate
+        } else if self.spotify_active {
+            self.spotify.as_ref().unwrap().rate()
+        } else {
+            self.deck.rate()
+        }
+    }
+    pub fn record_spotify(&self, capture: crate::downloads::Capture) -> Result<(), String> {
+        if !self.spotify_active || !self.loaded {
+            return Err("Start Spotify playback before recording.".into());
+        }
+        self.spotify.as_ref().unwrap().record(capture);
+        Ok(())
+    }
+    pub fn can_change_rate(&self) -> bool {
+        !self.loaded
+            || if self.spotify_active {
+                self.spotify.as_ref().unwrap().can_change_rate()
+            } else {
+                self.deck.can_change_rate()
+            }
+    }
+    pub fn set_rate(&mut self, rate: f64) -> Result<(), String> {
+        if !rate.is_finite() || !(0.5..=2.0).contains(&rate) {
+            return Err("Choose a playback speed between 0.5× and 2×.".into());
+        }
+        if self.spotify_active {
+            self.spotify.as_mut().unwrap().set_rate(rate)?;
+        } else {
+            self.standby.take();
+            self.outgoing.take();
+            self.fade_end = None;
+            self.deck.clear_fade();
+            self.deck.set_next(None, self.playing)?;
+            self.deck.set_rate(rate, self.playing)?;
+        }
+        self.rate = rate;
         Ok(())
     }
     pub fn stop(&mut self) {

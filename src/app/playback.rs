@@ -9,6 +9,104 @@ pub(super) struct Preparation {
 }
 
 impl App {
+    pub(super) fn layout_player(&self, compact: bool) {
+        let bar: gtk::Box = object(&self.ui, "player_bar");
+        bar.set_spacing(if compact { 8 } else { 20 });
+        if compact {
+            bar.add_css_class("compact");
+        } else {
+            bar.remove_css_class("compact");
+        }
+        object::<gtk::Box>(&self.ui, "player_metadata").set_width_request(if compact {
+            100
+        } else {
+            150
+        });
+        let cover = if compact { 44 } else { 60 };
+        object::<gtk::Image>(&self.ui, "player_placeholder").set_size_request(cover, cover);
+        object::<gtk::Scale>(&self.ui, "volume").set_width_request(if compact { 64 } else { 80 });
+    }
+
+    pub(super) fn setup_timing(self: &Rc<Self>) {
+        self.action("toggle-time", |app| {
+            let remaining = !app.state.borrow().show_remaining;
+            app.state.borrow_mut().show_remaining = remaining;
+            app.update_timing();
+            app.persist();
+        });
+        let action = gio::SimpleAction::new("speed", Some(glib::VariantTy::DOUBLE));
+        let weak = Rc::downgrade(self);
+        action.connect_activate(move |_, value| {
+            if let (Some(app), Some(rate)) = (weak.upgrade(), value.and_then(|v| v.get::<f64>())) {
+                app.set_speed(rate);
+            }
+        });
+        self.application.add_action(&action);
+        let menu = gio::Menu::new();
+        for rate in [0.5f64, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0] {
+            let item = gio::MenuItem::new(Some(&format!("{rate}×")), None);
+            item.set_action_and_target_value(Some("app.speed"), Some(&rate.to_variant()));
+            menu.append_item(&item);
+        }
+        object::<gtk::MenuButton>(&self.ui, "playback_speed").set_menu_model(Some(&menu));
+        let _ = self
+            .audio
+            .borrow_mut()
+            .set_rate(self.state.borrow().playback_rate);
+        self.update_timing();
+    }
+
+    pub fn set_speed(self: &Rc<Self>, rate: f64) -> bool {
+        let result = self.audio.borrow_mut().set_rate(rate);
+        match result {
+            Ok(()) => {
+                self.state.borrow_mut().playback_rate = rate;
+                self.prepare_transition();
+                self.update_timing();
+                self.persist();
+                crate::desktop::changed(self);
+                true
+            }
+            Err(error) => {
+                self.notice(&self.tr(&error), true, false);
+                false
+            }
+        }
+    }
+
+    pub(super) fn update_timing(&self) {
+        let audio = self.audio.borrow();
+        let state = self.state.borrow();
+        let duration = if audio.loaded {
+            audio.duration()
+        } else {
+            state.current_track().map_or(0.0, |t| t.duration)
+        };
+        let position = if audio.loaded {
+            audio.position()
+        } else {
+            state.position
+        };
+        self.label(
+            "elapsed",
+            &time_label(position, duration, state.show_remaining),
+        );
+        self.button("time_toggle")
+            .set_tooltip_text(Some(&self.tr(if state.show_remaining {
+                "Show elapsed time"
+            } else {
+                "Show remaining time"
+            })));
+        let speed: gtk::MenuButton = object(&self.ui, "playback_speed");
+        speed.set_label(&format!("{}×", audio.rate()));
+        speed.set_sensitive(audio.can_change_rate());
+        speed.set_tooltip_text(Some(&self.tr(if audio.can_change_rate() {
+            "Playback speed"
+        } else {
+            "Playback speed is unavailable for this source."
+        })));
+    }
+
     pub(super) fn playback_settings(self: &Rc<Self>, ui: &gtk::Builder) {
         let gapless: gtk::Switch = object(ui, "gapless");
         let fade: gtk::SpinButton = object(ui, "crossfade_seconds");
@@ -70,7 +168,7 @@ impl App {
         let Some((track, fade)) = self.transition_candidate() else {
             return (None, 0.0);
         };
-        let mut next = if services::youtube_url(&track.uri) {
+        let mut next = if services::youtube_url(&track.uri) && track.download_path.is_none() {
             let prep = self.preparation.borrow();
             if prep.key.as_ref() == Some(&(self.play_generation.get(), track.id.clone())) {
                 prep.resolved.clone()
@@ -106,7 +204,7 @@ impl App {
                     *prep = Preparation::default();
                 }
             }
-            if services::youtube_url(&track.uri) {
+            if services::youtube_url(&track.uri) && track.download_path.is_none() {
                 let audio = self.audio.borrow();
                 let remaining = audio.duration() - audio.position();
                 if audio.playing && audio.duration() > 0.0 && remaining <= (fade + 15.0).max(30.0) {
@@ -172,11 +270,28 @@ impl App {
     }
 }
 
+fn time_label(position: f64, duration: f64, remaining: bool) -> String {
+    if remaining {
+        if duration > 0.0 {
+            format!("−{}", model::duration((duration - position).max(0.0)))
+        } else {
+            "—:—".into()
+        }
+    } else {
+        model::duration(position)
+    }
+}
+
 fn candidate(state: &State) -> Option<(Track, f64)> {
     candidate_after(state, state.current_track()?).map(|(track, fade)| (track.clone(), fade))
 }
 
 fn candidate_after<'a>(state: &'a State, current: &Track) -> Option<(&'a Track, f64)> {
+    // URI handoffs reset GStreamer's segment rate; preserve the selected speed
+    // with ordinary track transitions until normal speed is restored.
+    if state.playback_rate != 1.0 {
+        return None;
+    }
     let settings = state.playback;
     if !settings.gapless && settings.crossfade_seconds == 0 {
         return None;
@@ -202,7 +317,11 @@ fn candidate_after<'a>(state: &'a State, current: &Track) -> Option<(&'a Track, 
 fn source(track: &Track) -> NextTrack {
     NextTrack {
         id: track.id.clone(),
-        uri: track.uri.clone(),
+        uri: track
+            .download_path
+            .as_ref()
+            .map(|p| gio::File::for_path(p).uri().to_string())
+            .unwrap_or_else(|| track.uri.clone()),
         headers: HashMap::new(),
         duration: track.duration,
         following: Vec::new(),
@@ -230,6 +349,13 @@ fn continuations(state: &State, first: &Track) -> Vec<NextTrack> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn elapsed_and_remaining_time_handle_live_and_finished_audio() {
+        assert_eq!(time_label(62.0, 200.0, false), "1:02");
+        assert_eq!(time_label(62.0, 200.0, true), "−2:18");
+        assert_eq!(time_label(201.0, 200.0, true), "−0:00");
+        assert_eq!(time_label(2.0, 0.0, true), "—:—");
+    }
 
     #[test]
     fn transitions_follow_queue_repeat_and_source_capabilities() {

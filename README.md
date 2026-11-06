@@ -19,7 +19,7 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 | --- | --- |
 | Local library | Recursive folder discovery and watching, file/folder drag and drop, Open location, metadata, search, track and album views, configurable automatic refresh, duplicate detection |
 | Collections | Multi-selection and bulk actions, drag/keyboard reordering, favorites, playlist artwork grid, hover/focus Play all, create/rename/delete playlists, M3U/M3U8/PLS/XSPF import, queue, shuffle, repeat one/all |
-| Playback | GStreamer audio, play/pause, previous/next, seeking, volume, mute, automatic next track, gapless, optional crossfade and ReplayGain |
+| Playback | GStreamer audio, play/pause, previous/next, seeking, 0.5–2× playback speed, elapsed/remaining time, volume, mute, automatic next track, gapless, optional crossfade and ReplayGain |
 | Podcasts | Apple Podcasts/iTunes and gPodder search/discovery, subscribe/unsubscribe toggles, RSS/Atom subscriptions, feed refresh, per-episode resume positions |
 | Internet radio | Search and discovery through Radio Browser, station artwork, favorites, playback |
 | Streaming | One view for YouTube Music, Spotify and direct HTTP(S) audio |
@@ -31,7 +31,7 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 | Persistence | Library, sources, playlists, queue, track, position, volume, repeat, shuffle, and preferences |
 | Languages | English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean; new service copy falls back to English where untranslated |
 
-**Service boundaries:** Spotify uses [librespot](https://github.com/librespot-org/librespot) and requires Premium. Search and playlist operations use Spotify’s Web API, whose account/app restrictions still apply. YouTube Music uses the unofficial `ytmusicapi` and `yt-dlp` libraries, with no API key or Premium subscription requirement in Open Audio Player. Availability depends on your account, region and YouTube; sessions can expire and provider changes can require dependency updates. Podcast downloads and synchronized lyric highlighting are not included. This is an initial implementation, not a published stable release.
+**Service boundaries:** Spotify uses [librespot](https://github.com/librespot-org/librespot) and requires Premium. Search and playlist operations use Spotify’s Web API, whose account/app restrictions still apply. YouTube Music uses the unofficial `ytmusicapi` and `yt-dlp` libraries, with no API key or Premium subscription requirement in Open Audio Player. Availability depends on your account, region and YouTube; sessions can expire and provider changes can require dependency updates. Synchronized lyric highlighting is not included. This is an initial implementation, not a published stable release.
 
 
 ### Provider access
@@ -105,7 +105,7 @@ Connection uses the first signed-in account in the selected browser profile; use
 
 Sync runs when requested. Order and repeated tracks are preserved. Unavailable entries are reported, and incomplete playlists are left unchanged; the current safety limits are 250 playlists and 5,000 entries per playlist. Uploads add replacement entries before removing old ones, but network failures can leave a partial online update: check the online copy and refresh before retrying. Removing a linked playlist locally stops syncing it without deleting it online. **Account → Disconnect** clears the saved session and removes the local YouTube Music tracks and linked playlists; your online library is unchanged. Reconnect and sync to restore a removed local copy.
 
-The embedded Python helper uses argument vectors and JSON pipes, never a shell. It resolves audio only when playback starts and does not download music files. `OPEN_AUDIO_PYTHON` can select an existing interpreter containing both libraries instead of the managed environment.
+The embedded Python helper uses argument vectors and JSON pipes, never a shell. It resolves audio when playback or a download starts; Open Audio Player transfers the resolved audio stream. `OPEN_AUDIO_PYTHON` can select an existing interpreter containing both libraries instead of the managed environment.
 
 ### Connect Spotify
 
@@ -154,6 +154,19 @@ Scroll over the volume control to adjust volume by **5 percentage points** per w
 **Settings → Automatic refresh (minutes)** accepts **0–1440** minutes; **0** (the default) disables scheduled refresh, independently of local folder watching. A positive interval refreshes all saved music folders, podcast subscriptions, connected YouTube Music/Spotify playlists, and the open podcast/radio/streaming search view. Linked streaming playlists use their existing **two-way synchronization**, including eligible local edits and conflict handling. In-progress work is not duplicated; missing or expired streaming sign-ins never open an unattended login dialog. Changing the interval restarts the timer. Generic Internet stream URLs have no directory to refresh.
 
 The session is restored without automatically starting audio. Press Play to continue. Podcast episodes also retain individual positions.
+
+### Downloads and recordings
+
+Open an online track’s **options menu**, or use the **save button to the right of the playback controls**, to save audio. The player button adapts to the current source: download finite audio, record radio/live streams or Spotify, cancel a transfer, stop and save a recording, resume a cancelled download, or show its saved copy. Local files keep this button disabled. The **Downloads** sidebar shows progress, size, completed files and errors; completed entries offer **Play saved audio** and **Open location**.
+
+- **Podcasts and YouTube Music:** **Download audio** saves a complete file, preserving the source format where available. Playback of that track then prefers the downloaded copy; if the file is moved or deleted, ordinary playback falls back to the online source.
+- **Radio:** **Record stream** records independently of the player, so listening, pausing or changing tracks does not interrupt it. **Stop and save** finalizes a FLAC file. FLAC preserves the captured audio without adding another lossy encoding step; it cannot improve the source quality.
+- **Direct streams:** choose **Download audio** for a finite file or **Record stream** for a live broadcast. HLS/DASH audio downloads are decoded to FLAC; a live manifest runs until cancelled.
+- **Spotify:** **Play and record** captures decoded playback into FLAC using the connected Premium account. This is a playback recording, not Spotify’s offline-download feature. Pausing pauses capture; manual track changes stop it, while natural gapless transitions can continue the same recording. Speed and volume controls do not alter the captured source PCM.
+
+**Settings → Download folder** chooses where new jobs save files; by default this is `Downloads/Open Audio Player` under your user directory. Existing files stay in place. Up to three network jobs run at once, with playback recording handled separately. Unknown-length sources show indeterminate progress. **Cancel download** keeps a partial file for **Resume** during this session. Resume continues from the saved bytes when the server supports byte ranges with a matching strong ETag; otherwise it safely starts again. HLS/DASH downloads restart. **Delete download** cancels and discards unfinished transfers, or moves a completed file to the system Trash and removes its entry and offline playback link. Trash failures leave the item intact. **Cancel and discard** deletes an unfinished recording; **Stop and save** keeps it. Live recordings cannot resume missed audio. Quitting discards unfinished transfers. Transfers do not resume across restarts; completed history and file locations persist. Existing filenames are never overwritten. A recording stays separate from the original station or track.
+
+Use the **speed button to the left of the playback controls** for 0.5–2× playback, with pitch preserved. Seekable GStreamer sources use `scaletempo`; Spotify uses the optional GStreamer SoundTouch `pitch` plugin. Unsupported/live streams play at normal speed. Non-default speeds use ordinary track transitions instead of gapless/crossfade. Click the **time to the left of the seek bar** to switch elapsed/remaining time; unknown remaining duration displays `—:—`. Both preferences persist and speed is also exposed through MPRIS.
 
 ### Playback settings
 

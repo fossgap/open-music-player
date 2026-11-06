@@ -9,6 +9,7 @@ use crate::{
 
 mod artwork;
 mod browse;
+mod downloads;
 mod files;
 mod interactions;
 mod metadata;
@@ -95,6 +96,7 @@ pub struct App {
     preparation: RefCell<playback::Preparation>,
     scanning: Cell<bool>,
     files: files::Controls,
+    downloads: downloads::Controls,
     tx: mpsc::Sender<Message>,
     rx: RefCell<mpsc::Receiver<Message>>,
     save_tx: RefCell<Option<mpsc::Sender<State>>>,
@@ -214,6 +216,7 @@ impl App {
             preparation: Default::default(),
             scanning: Cell::new(false),
             files: files::Controls::default(),
+            downloads: downloads::Controls::default(),
             tx,
             rx: RefCell::new(rx),
             save_tx: RefCell::new(Some(save_tx)),
@@ -237,6 +240,8 @@ impl App {
         this.setup_selection();
         this.setup_files();
         this.setup_controls();
+        this.setup_timing();
+        this.setup_downloads();
         this.setup_metadata();
         this.setup_wheel_controls();
         this.setup_drawing();
@@ -652,6 +657,7 @@ impl App {
             "youtube",
             "spotify",
             "queue",
+            "downloads",
         ]
         .contains(&page)
         {
@@ -675,6 +681,7 @@ impl App {
             "radio",
             "streams",
             "queue",
+            "downloads",
         ] {
             let b = self.button(&format!("nav_{name}"));
             if name == nav {
@@ -925,16 +932,36 @@ impl App {
         }
         if track.kind == Kind::Spotify {
             self.play_spotify(&track, position, generation);
-        } else if services::youtube_url(&track.uri) {
+        } else if services::youtube_url(&track.uri) || track.download_path.is_some() {
             self.audio.borrow_mut().stop();
             self.resolving.set(true);
-            self.notice(&self.tr("Opening YouTube Music…"), false, true);
+            self.notice(
+                &self.tr(if track.download_path.is_some() {
+                    "Opening saved audio…"
+                } else {
+                    "Opening YouTube Music…"
+                }),
+                false,
+                true,
+            );
             let account = self.state.borrow().youtube_account.clone();
             let tx = self.tx.clone();
             std::thread::spawn(move || {
                 let _ = tx.send(Message::Youtube(
                     generation,
-                    youtube_music::resolve(account.as_ref(), &track.uri),
+                    if let Some(path) = track.download_path.filter(|p| p.is_file()) {
+                        Ok(youtube_music::Resolved {
+                            uri: gio::File::for_path(path).uri().to_string(),
+                            headers: HashMap::new(),
+                        })
+                    } else if services::youtube_url(&track.uri) {
+                        youtube_music::resolve(account.as_ref(), &track.uri)
+                    } else {
+                        Ok(youtube_music::Resolved {
+                            uri: track.uri,
+                            headers: HashMap::new(),
+                        })
+                    },
                 ));
             });
         } else {
@@ -1160,8 +1187,10 @@ impl App {
     pub fn shutdown(&self) {
         self.files.watcher.stop();
         self.metadata.borrow().stop();
-        self.persist();
         self.audio.borrow_mut().stop();
+        self.downloads.manager.borrow_mut().shutdown();
+        self.collect_downloads();
+        self.persist();
         self.audio.borrow_mut().detach_spotify();
         self.spotify.service.send(crate::spotify::Command::Shutdown);
         self.save_tx.borrow_mut().take();
@@ -1237,6 +1266,7 @@ impl App {
         drop(state);
         self.schedule_metadata();
         self.update_metadata();
+        self.update_save_control();
         crate::desktop::changed(self);
     }
 
@@ -1298,6 +1328,7 @@ impl App {
         }
         let compact = self.window.width() < 1000 || self.window.height() < 700;
         if self.compact_browse.replace(compact) != compact {
+            self.layout_player(compact);
             self.refresh();
             self.update_metadata();
         }
@@ -1487,6 +1518,7 @@ impl App {
         self.poll_metadata();
         self.poll_source_refresh();
         self.poll_files();
+        self.poll_downloads();
         let events = self.audio.borrow_mut().poll();
         for event in events {
             match event {
@@ -1576,7 +1608,7 @@ impl App {
         seek.set_range(0.0, duration.max(1.0));
         seek.set_value(position);
         seek.set_sensitive(audio.loaded && duration > 0.0);
-        self.label("elapsed", &model::duration(position));
+        self.update_timing();
         self.label("duration", &model::duration(duration));
         if audio.playing && self.last_saved.get().elapsed() > Duration::from_secs(10) {
             drop(audio);
@@ -1628,6 +1660,7 @@ impl App {
         self.refresh_settings(&ui);
         self.playback_settings(&ui);
         self.file_settings(&ui);
+        self.download_settings(&ui);
         object::<gtk::Label>(&ui, "tray_note").set_visible(!self.tray_available.get());
         for folder in self.state.borrow().folders.clone() {
             let builder = gtk::Builder::from_string(include_str!("../resources/setting-row.ui"));

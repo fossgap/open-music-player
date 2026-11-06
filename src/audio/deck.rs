@@ -31,6 +31,7 @@ pub(super) struct Deck {
     pub ready: bool,
     pub buffering: bool,
     pub ended: bool,
+    rate: f64,
     gain: Gain,
     fade: gst::Element,
     envelope: gst_controller::InterpolationControlSource,
@@ -76,7 +77,7 @@ impl Deck {
         });
         // Bound both queues so visualization and decoding cannot run far ahead of audio.
         let filter = gst::parse_bin_from_description(
-            "audioconvert ! volume name=normalization ! tee name=t \
+            "audioconvert ! scaletempo ! volume name=normalization ! tee name=t \
              t. ! queue max-size-time=100000000 ! identity name=out \
              t. ! queue leaky=downstream max-size-buffers=2 ! audioconvert ! \
              audio/x-raw,format=F32LE,channels=1 ! appsink name=wave \
@@ -169,6 +170,7 @@ impl Deck {
             ready: false,
             buffering: false,
             ended: false,
+            rate: 1.0,
             gain,
             fade,
             envelope,
@@ -185,7 +187,7 @@ impl Deck {
     ) -> Result<(), String> {
         self.stop();
         *self.headers.lock().unwrap() = track.headers.clone();
-        if position > 0.0 {
+        if position > 0.0 || self.rate != 1.0 {
             self.deferred_next = next;
         } else {
             self.queue.lock().unwrap().next =
@@ -193,12 +195,28 @@ impl Deck {
         }
         self.pipeline.set_property("uri", &track.uri);
         self.current = Some(track);
-        self.pending_seek = (position > 0.0).then_some(position);
-        self.initial_seek = position > 0.0;
+        self.pending_seek = (position > 0.0 || self.rate != 1.0).then_some(position);
+        self.initial_seek = self.pending_seek.is_some();
         if muted {
             self.fade(0.0, 1.0, 0.0, 0.0);
         }
-        self.set_playing(playing)
+        let result = self
+            .pipeline
+            .set_state(if playing && !self.initial_seek {
+                gst::State::Playing
+            } else {
+                gst::State::Paused
+            })
+            .map_err(|e| e.to_string())?;
+        if result == gst::StateChangeSuccess::NoPreroll {
+            // Truly live inputs cannot preroll or accept the saved rate seek.
+            self.pending_seek = None;
+            self.initial_seek = false;
+            self.rate = 1.0;
+            self.ready = true;
+            self.set_playing(playing)?;
+        }
+        Ok(())
     }
 
     pub fn set_next(&mut self, next: Option<NextTrack>, playing: bool) -> Result<(), String> {
@@ -248,6 +266,49 @@ impl Deck {
     pub fn gain(&self, mode: ReplayGain) {
         self.gain.mode(mode);
     }
+    pub fn rate(&self) -> f64 {
+        self.rate
+    }
+
+    pub fn can_change_rate(&self) -> bool {
+        let mut query = gst::query::Seeking::new(gst::Format::Time);
+        self.pipeline.query(&mut query) && query.result().0
+    }
+
+    pub fn set_rate(&mut self, rate: f64, playing: bool) -> Result<(), String> {
+        if self.rate == rate {
+            return Ok(());
+        }
+        if self.current.is_none() || !self.ready {
+            self.rate = rate;
+            if self.current.is_some() {
+                self.pending_seek = Some(self.position());
+                self.initial_seek = true;
+            }
+            return Ok(());
+        }
+        if !self.can_change_rate() {
+            return Err("Playback speed is unavailable for this source.".into());
+        }
+        let old = self.rate;
+        self.rate = rate;
+        if let Err(error) = self.seek(self.position(), playing) {
+            self.rate = old;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn rate_seek(&self, seconds: f64) -> Result<(), gst::glib::BoolError> {
+        self.pipeline.seek(
+            self.rate,
+            gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,
+            gst::SeekType::Set,
+            clock_time(seconds),
+            gst::SeekType::None,
+            gst::ClockTime::NONE,
+        )
+    }
     pub fn volume(&self, value: f64) {
         self.pipeline.set_property("volume", value.clamp(0.0, 1.0));
     }
@@ -282,11 +343,7 @@ impl Deck {
                 return self.load(current, seconds, playing, None, false);
             }
         }
-        self.pipeline
-            .seek_simple(
-                gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                clock_time(seconds),
-            )
+        self.rate_seek(seconds)
             .map_err(|_| "This stream cannot seek".to_string())?;
         self.seek_target = Some(seconds);
         Ok(())
@@ -341,17 +398,12 @@ impl Deck {
                             .take()
                             .as_ref()
                             .map_or_else(VecDeque::new, NextTrack::chain);
-                        if self
-                            .pipeline
-                            .seek_simple(
-                                gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                                clock_time(position),
-                            )
-                            .is_ok()
-                        {
+                        if self.can_change_rate() && self.rate_seek(position).is_ok() {
                             self.seek_target = Some(position);
                             continue;
                         }
+                        // Live/unseekable sources continue at their natural speed.
+                        self.rate = 1.0;
                     }
                     self.ready = true;
                     if self.initial_seek {

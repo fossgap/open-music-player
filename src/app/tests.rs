@@ -76,6 +76,16 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     application.register(None::<&gio::Cancellable>).unwrap();
     let app = App::new(&application, state).unwrap();
     settle();
+    // Keep a focused path for iterating on media-transfer UI without replaying
+    // the unrelated pointer, provider and library scenarios. The full suite below
+    // always exercises the same transfer checks too.
+    if std::env::var_os("OPEN_AUDIO_TEST_DOWNLOADS_ONLY").is_some() {
+        exercise_downloads_and_timing(&app, &audio);
+        app.shutdown();
+        app.window.destroy();
+        object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+        return;
+    }
     let initial_state = app.state.borrow().clone();
     exercise_pointer_reordering(&app);
     *app.state.borrow_mut() = initial_state;
@@ -1184,10 +1194,324 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     screenshot(&settings, "playback-settings.png");
     settings.close();
     exercise_library_controls(&app, directory.path(), &audio);
+    exercise_downloads_and_timing(&app, &audio);
     app.shutdown();
     drop(spotify_runtime);
     app.window.destroy();
     object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+}
+
+fn exercise_downloads_and_timing(app: &Rc<App>, local: &std::path::Path) {
+    use crate::downloads::{
+        Status,
+        tests::{Server, wav},
+    };
+    let directory = tempfile::tempdir().unwrap();
+    object::<gtk::ScrolledWindow>(&app.ui, "sidebar_scroller").set_visible(true);
+    app.state.borrow_mut().download_directory = Some(directory.path().into());
+    let music = Track::new(
+        &gio::File::for_path(local).uri(),
+        "Speed fixture",
+        Kind::Music,
+    );
+    let id = music.id.clone();
+    app.state.borrow_mut().merge(vec![music]);
+    app.play_track(&id, None);
+    until(|| app.audio.borrow().position() > 0.2);
+    assert!(
+        !app.button("playback_download").is_sensitive(),
+        "Local files have no download action"
+    );
+    assert!(!app.state.borrow().show_remaining);
+    app.button("time_toggle").emit_clicked();
+    assert!(app.state.borrow().show_remaining);
+    assert!(
+        object::<gtk::Label>(&app.ui, "elapsed")
+            .text()
+            .starts_with('−')
+    );
+    app.application
+        .activate_action("speed", Some(&2.0f64.to_variant()));
+    until(|| app.audio.borrow().rate() == 2.0);
+    assert_eq!(app.state.borrow().playback_rate, 2.0);
+    assert_eq!(
+        object::<gtk::MenuButton>(&app.ui, "playback_speed")
+            .label()
+            .as_deref(),
+        Some("2×")
+    );
+    app.button("time_toggle").emit_clicked();
+    assert!(
+        !object::<gtk::Label>(&app.ui, "elapsed")
+            .text()
+            .starts_with('−')
+    );
+    app.set_speed(1.0);
+    app.stop_playback();
+    app.update_player();
+
+    let server = Server::new(wav(5), "audio/wav", true, Duration::from_millis(40));
+    let episode = Track::new(&server.uri, "Stories after sunset", Kind::Podcast);
+    let episode_id = episode.id.clone();
+    app.state.borrow_mut().merge(vec![episode]);
+    app.state.borrow_mut().current = Some(episode_id.clone());
+    app.update_player();
+    assert_eq!(
+        app.button("playback_download").tooltip_text().as_deref(),
+        Some("Download audio")
+    );
+    app.button("playback_download").emit_clicked();
+    until(|| {
+        app.downloads
+            .manager
+            .borrow()
+            .jobs
+            .last()
+            .is_some_and(|j| j.bytes > 0)
+    });
+    assert_eq!(*app.page.borrow(), "downloads");
+    assert_eq!(
+        object::<gtk::Stack>(&app.ui, "content_stack")
+            .visible_child_name()
+            .as_deref(),
+        Some("downloads")
+    );
+    screenshot(app.window.upcast_ref(), "downloads-progress.png");
+    assert_eq!(
+        app.button("playback_download").tooltip_text().as_deref(),
+        Some("Cancel download")
+    );
+    app.button("playback_download").emit_clicked();
+    until(|| app.downloads.manager.borrow().jobs[0].can_resume());
+    assert_eq!(
+        app.button("playback_download").tooltip_text().as_deref(),
+        Some("Resume download")
+    );
+    let list: gtk::ListBox = object(&app.ui, "downloads_list");
+    let resume = descendant(list.upcast_ref(), "resume")
+        .unwrap()
+        .downcast::<gtk::Button>()
+        .unwrap();
+    assert!(resume.is_visible() && resume.is_sensitive());
+    screenshot(app.window.upcast_ref(), "downloads-cancelled.png");
+    resume.emit_clicked();
+    until(|| !app.state.borrow().saved_audio.is_empty());
+    let saved = app.state.borrow().saved_audio.last().unwrap().clone();
+    assert_eq!(app.downloads.manager.borrow().jobs.len(), 1);
+    assert_eq!(
+        app.button("playback_download").tooltip_text().as_deref(),
+        Some("Show saved download")
+    );
+    assert!(saved.path.starts_with(directory.path()));
+    assert_eq!(
+        app.state
+            .borrow()
+            .track(&episode_id)
+            .unwrap()
+            .download_path
+            .as_ref(),
+        Some(&saved.path)
+    );
+    // Remove the server; normal episode playback must now use the completed copy.
+    drop(server);
+    app.play_track(&episode_id, None);
+    until(|| app.audio.borrow().position() > 0.2);
+    assert!(!app.resolving.get());
+    app.stop_playback();
+    app.update_player();
+
+    // A failed Trash operation must preserve the item and its offline playback link.
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+    app.application
+        .activate_action("download-delete", Some(&saved.id.to_variant()));
+    until(|| {
+        object::<gtk::Label>(&app.ui, "notice_text")
+            .text()
+            .starts_with("Could not move the download to Trash.")
+    });
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(saved.path.is_file());
+    assert_eq!(app.state.borrow().saved_audio.len(), 1);
+    let result = gio::File::for_path(&saved.path).trash(None::<&gio::Cancellable>);
+    let result = match result {
+        Err(error) if error.matches(gio::IOErrorEnum::NotSupported) => {
+            // Container mounts can forbid native Trash. Exercise the same completion
+            // handler against an isolated recoverable file move, never permanent deletion.
+            assert!(glib::user_data_dir().starts_with(storage::data_dir()));
+            let trash = glib::user_data_dir().join("Trash");
+            std::fs::create_dir_all(trash.join("files")).unwrap();
+            std::fs::create_dir_all(trash.join("info")).unwrap();
+            let name = saved.path.file_name().unwrap().to_str().unwrap();
+            let uri = gio::File::for_path(&saved.path).uri();
+            let date = glib::DateTime::now_local()
+                .unwrap()
+                .format("%Y-%m-%dT%H:%M:%S")
+                .unwrap();
+            std::fs::write(
+                trash.join("info").join(format!("{name}.trashinfo")),
+                format!(
+                    "[Trash Info]\nPath={}\nDeletionDate={date}\n",
+                    uri.strip_prefix("file://").unwrap()
+                ),
+            )
+            .unwrap();
+            std::fs::rename(&saved.path, trash.join("files").join(name)).unwrap();
+            Ok(())
+        }
+        result => result,
+    };
+    app.finish_download_delete(saved.clone(), result);
+    assert!(app.state.borrow().saved_audio.is_empty());
+    assert!(!saved.path.exists());
+    assert!(
+        app.state
+            .borrow()
+            .track(&episode_id)
+            .unwrap()
+            .download_path
+            .is_none()
+    );
+    assert!(
+        glib::user_data_dir().starts_with(storage::data_dir()),
+        "Trash tests must use an isolated XDG_DATA_HOME"
+    );
+    assert!(
+        std::fs::read_dir(glib::user_data_dir().join("Trash/files"))
+            .unwrap()
+            .any(|entry| std::fs::read(entry.unwrap().path()).unwrap() == wav(5))
+    );
+    object::<gtk::Box>(&app.ui, "notice").set_visible(false);
+
+    let server = Server::new(wav(30), "audio/wav", true, Duration::from_millis(75));
+    let station = Track::new(&server.uri, "Evening radio", Kind::Radio);
+    let id = station.id.clone();
+    app.state.borrow_mut().merge(vec![station]);
+    app.state.borrow_mut().current = Some(id.clone());
+    app.update_player();
+    assert_eq!(
+        app.button("playback_download").tooltip_text().as_deref(),
+        Some("Record stream")
+    );
+    app.button("playback_download").emit_clicked();
+    until(|| app.downloads.manager.borrow().jobs.last().unwrap().seconds > 0.5);
+    screenshot(app.window.upcast_ref(), "downloads-recording.png");
+    assert_eq!(
+        app.button("playback_download").tooltip_text().as_deref(),
+        Some("Stop and save recording")
+    );
+    app.button("playback_download").emit_clicked();
+    until(|| app.state.borrow().saved_audio.len() == 1);
+    assert!(
+        app.state
+            .borrow()
+            .track(&id)
+            .unwrap()
+            .download_path
+            .is_none()
+    );
+    app.application
+        .activate_action("record", Some(&id.to_variant()));
+    until(|| app.downloads.manager.borrow().jobs.last().unwrap().seconds > 0.1);
+    let job = app
+        .downloads
+        .manager
+        .borrow()
+        .jobs
+        .last()
+        .unwrap()
+        .id
+        .to_string();
+    app.application
+        .activate_action("download-cancel", Some(&job.to_variant()));
+    until(|| app.downloads.manager.borrow().jobs.last().unwrap().status == Status::Cancelled);
+    assert_eq!(app.state.borrow().saved_audio.len(), 1);
+    app.application
+        .activate_action("download-delete", Some(&job.to_variant()));
+    assert_eq!(app.downloads.manager.borrow().jobs.len(), 1);
+    app.set_speed(1.75);
+    settle();
+    let actions: gtk::Box = object(&app.ui, "playback_actions");
+    let speed: gtk::MenuButton = object(&app.ui, "playback_speed");
+    let download = app.button("playback_download");
+    assert_eq!(speed.parent().as_ref(), Some(actions.upcast_ref()));
+    assert_eq!(download.parent().as_ref(), Some(actions.upcast_ref()));
+    let left = speed.compute_bounds(&actions).unwrap();
+    let right = download.compute_bounds(&actions).unwrap();
+    let play = app.button("play").compute_bounds(&actions).unwrap();
+    assert!((left.width() - right.width()).abs() < 1.0);
+    assert!(
+        ((left.center().x() + right.center().x()) / 2.0 - play.center().x()).abs() < 1.0,
+        "Play must remain centered between the side actions"
+    );
+    screenshot(app.window.upcast_ref(), "downloads-completed.png");
+    app.window.set_default_size(820, 650);
+    settle();
+    // Continue the resize after the compact player has been remeasured.
+    app.window.set_default_size(800, 650);
+    settle();
+    screenshot(app.window.upcast_ref(), "downloads-compact.png");
+    assert!(
+        app.window.width() <= 820,
+        "Compact window at 1.75×: {}; player minimum {:?}",
+        app.window.width(),
+        object::<gtk::Widget>(&app.ui, "player_bar").measure(gtk::Orientation::Horizontal, -1)
+    );
+    for (kind, uri, label, duration) in [
+        (
+            Kind::YoutubeMusic,
+            "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
+            "Download audio",
+            180.0,
+        ),
+        (
+            Kind::Spotify,
+            "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
+            "Play and record",
+            180.0,
+        ),
+        (
+            Kind::Stream,
+            "https://example.test/live",
+            "Record stream",
+            0.0,
+        ),
+        (
+            Kind::Stream,
+            "https://example.test/finite",
+            "Download audio",
+            180.0,
+        ),
+    ] {
+        let mut track = Track::new(uri, "Source-aware save", kind);
+        track.duration = duration;
+        let id = track.id.clone();
+        app.state.borrow_mut().merge(vec![track]);
+        app.state.borrow_mut().current = Some(id);
+        app.update_player();
+        assert!(app.button("playback_download").is_sensitive());
+        assert_eq!(
+            app.button("playback_download").tooltip_text().as_deref(),
+            Some(label)
+        );
+    }
+    app.settings();
+    settle();
+    let settings = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|w| w.downcast::<gtk::Window>().ok())
+        .find(|w| w.is_visible() && w.title().as_deref() == Some("Settings"))
+        .unwrap();
+    let label = descendant(settings.upcast_ref(), "download_directory")
+        .unwrap()
+        .downcast::<gtk::Label>()
+        .unwrap();
+    assert_eq!(
+        label.text().as_str(),
+        directory.path().to_string_lossy().as_ref()
+    );
+    screenshot(&settings, "download-settings.png");
+    settings.close();
 }
 
 fn controller<T: IsA<gtk::EventController> + IsA<glib::Object>>(
@@ -1199,6 +1523,7 @@ fn controller<T: IsA<gtk::EventController> + IsA<glib::Object>>(
         .unwrap()
 }
 
+#[track_caller]
 fn until(condition: impl Fn() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(12);
     while !condition() && Instant::now() < deadline {

@@ -165,7 +165,8 @@ impl App {
             ),
         );
         menu.append_item(&remove);
-        if crate::library::local_path(&track.uri).is_some() {
+        self.download_menu(&menu, track);
+        if track.download_path.is_some() || crate::library::local_path(&track.uri).is_some() {
             let entry = gio::MenuItem::new(Some(&self.tr("Open location")), None);
             entry.set_action_and_target_value(
                 Some("app.open-location"),
@@ -502,6 +503,7 @@ impl App {
 
     pub(super) fn refresh(&self) {
         let page = self.page.borrow().clone();
+        object::<gtk::Box>(&self.ui, "toolbar").set_visible(page != "downloads");
         let state = self.state.borrow();
         let query = object::<gtk::SearchEntry>(&self.ui, "search")
             .text()
@@ -660,6 +662,7 @@ impl App {
         object::<gtk::Label>(&self.ui, "page_title").set_tooltip_text(Some(&heading));
         self.button("page_action").set_label(&self.tr(action));
         let ordered = match page.as_str() {
+            "downloads" => Some(Vec::new()),
             "queue" => Some(state.queue.clone()),
             "playlists" => Some(playlist.map(|p| p.tracks.clone()).unwrap_or_default()),
             "youtube" => Some(if youtube_search {
@@ -1047,6 +1050,18 @@ impl App {
             });
         }
         drop(state);
+        if page == "downloads" {
+            self.label("page_title", &self.tr("Downloads"));
+            self.label("page_subtitle", &self.tr("Saved audio and recordings"));
+            self.label(
+                "footer_status",
+                &self.tr("Save audio from the player or a track’s options menu."),
+            );
+            self.button("page_action").set_visible(false);
+            self.button("refresh").set_visible(false);
+            stack.set_visible_child_name("downloads");
+            self.render_downloads();
+        }
         for (item, ui) in bound(&self.track_rows) {
             self.bind_track(&item, &ui);
         }

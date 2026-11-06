@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <object class="GtkBox" id="download_row"><property name="spacing">14</property><style><class name="track-row"/></style>
+    <child><object class="GtkImage" id="icon"><property name="pixel-size">24</property><property name="valign">start</property><property name="margin-top">4</property><style><class name="muted"/></style></object></child>
+    <child><object class="GtkBox"><property name="orientation">vertical</property><property name="hexpand">true</property><property name="spacing">8</property>
+      <child><object class="GtkLabel" id="title"><property name="xalign">0</property><property name="ellipsize">end</property><property name="width-chars">12</property><style><class name="track-title"/></style></object></child>
+      <child><object class="GtkLabel" id="status"><property name="xalign">0</property><property name="ellipsize">middle</property><style><class name="muted"/><class name="small"/></style></object></child>
+      <child><object class="GtkProgressBar" id="progress"/></child>
+    </object></child>
+    <child><object class="GtkButton" id="stop"><property name="label">Stop and save</property><property name="valign">center</property></object></child>
+    <child><object class="GtkButton" id="cancel"><property name="icon-name">process-stop-symbolic</property><property name="tooltip-text">Cancel and discard</property><property name="valign">center</property><style><class name="flat"/></style></object></child>
+    <child><object class="GtkButton" id="resume"><property name="label">Resume</property><property name="tooltip-text">Resume download</property><property name="valign">center</property></object></child>
+    <child><object class="GtkButton" id="play"><property name="icon-name">media-playback-start-symbolic</property><property name="tooltip-text">Play saved audio</property><property name="valign">center</property><style><class name="flat"/></style></object></child>
+    <child><object class="GtkButton" id="location"><property name="icon-name">folder-open-symbolic</property><property name="tooltip-text">Open location</property><property name="valign">center</property><style><class name="flat"/></style></object></child>
+    <child><object class="GtkButton" id="delete"><property name="icon-name">user-trash-symbolic</property><property name="tooltip-text">Delete download</property><property name="valign">center</property><style><class name="flat"/></style></object></child>
+  </object>
+</interface>

@@ -156,8 +156,17 @@ pub fn linked_playlists(state: &State) -> Vec<LocalPlaylist> {
 
 fn request<T: DeserializeOwned>(
     account: Option<&YoutubeAccount>,
+    input: Value,
+    timeout: u64,
+) -> Result<T, String> {
+    request_cancellable(account, input, timeout, || false)
+}
+
+fn request_cancellable<T: DeserializeOwned>(
+    account: Option<&YoutubeAccount>,
     mut input: Value,
     timeout: u64,
+    cancelled: impl Fn() -> bool,
 ) -> Result<T, String> {
     let data_dir = storage::data_dir();
     input["namespace"] = json!(stable_id(&data_dir.to_string_lossy()));
@@ -172,11 +181,12 @@ fn request<T: DeserializeOwned>(
                 "python3".into()
             }
         });
-    let output = process::output_with_input(
+    let output = process::output_with_input_cancellable(
         Command::new(python).args(["-c", include_str!("../resources/youtube_music.py")]),
         &serde_json::to_vec(&input).map_err(|e| e.to_string())?,
         Duration::from_secs(timeout),
         32 * 1024 * 1024,
+        cancelled,
     )?;
     let response: Value = serde_json::from_slice(&output)
         .map_err(|_| "Invalid response from YouTube Music support.")?;
@@ -210,9 +220,21 @@ pub fn search(account: Option<&YoutubeAccount>, query: &str) -> Result<Vec<Track
     songs.into_iter().map(Song::into_track).collect()
 }
 pub fn resolve(account: Option<&YoutubeAccount>, uri: &str) -> Result<Resolved, String> {
+    resolve_cancellable(account, uri, || false)
+}
+pub fn resolve_cancellable(
+    account: Option<&YoutubeAccount>,
+    uri: &str,
+    cancelled: impl Fn() -> bool,
+) -> Result<Resolved, String> {
     let id =
         video_id(uri).ok_or("Choose a YouTube Music track or a music.youtube.com/watch link.")?;
-    let mut resolved: Resolved = request(account, json!({"op":"resolve","video_id":id}), 100)?;
+    let mut resolved: Resolved = request_cancellable(
+        account,
+        json!({"op":"resolve","video_id":id}),
+        100,
+        cancelled,
+    )?;
     crate::services::http_url(&resolved.uri)?;
     resolved.headers.retain(|k, v| {
         ["user-agent", "referer", "origin"].contains(&k.to_ascii_lowercase().as_str())
