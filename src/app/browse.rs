@@ -822,18 +822,15 @@ impl App {
                 }
             },
         );
-        self.label(
-            "library_status",
-            &format!(
-                "{} {}",
-                state
-                    .tracks
-                    .iter()
-                    .filter(|t| t.kind == Kind::Music)
-                    .count(),
-                self.tr("local tracks")
-            ),
-        );
+        let local_count = state
+            .tracks
+            .iter()
+            .filter(|t| t.kind == Kind::Music)
+            .count();
+        let library_status: gtk::Label = object(&self.ui, "library_status");
+        library_status.set_label(&local_count.to_string());
+        library_status
+            .set_tooltip_text(Some(&format!("{local_count} {}", self.tr("local tracks"))));
         self.label(
             "footer_status",
             &match page.as_str() {

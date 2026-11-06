@@ -54,6 +54,7 @@
             <property name="vexpand">true</property>
             <child>
               <object class="GtkScrolledWindow" id="sidebar_scroller">
+                <property name="hexpand">false</property>
                 <property name="hscrollbar-policy">never</property>
                 <property name="vscrollbar-policy">automatic</property>
                 <property name="width-request">200</property>
@@ -111,6 +112,22 @@
                             <child>
                               <object class="GtkLabel">
                                 <property name="label">Your music</property>
+                                <property name="xalign">0</property>
+                                <property name="valign">baseline</property>
+                                <property name="hexpand">true</property>
+                                <property name="ellipsize">end</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkLabel" id="library_status">
+                                <property name="xalign">1</property>
+                                <property name="valign">baseline</property>
+                                <property name="ellipsize">end</property>
+                                <property name="max-width-chars">6</property>
+                                <style>
+                                  <class name="muted" />
+                                  <class name="small" />
+                                </style>
                               </object>
                             </child>
                           </object>
@@ -293,17 +310,6 @@
                             </child>
                           </object>
                         </property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLabel" id="library_status">
-                        <property name="label">Made for listening.</property>
-                        <property name="xalign">0</property>
-                        <property name="margin-top">20</property>
-                        <style>
-                          <class name="muted" />
-                          <class name="small" />
-                        </style>
                       </object>
                     </child>
                   </object>
