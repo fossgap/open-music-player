@@ -15,6 +15,11 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 roxmltree = "0.20"
 url = "2"
 walkdir = "2"
+librespot-core = { version = "0.8.0", default-features = false, features = ["rustls-tls-webpki-roots"] }
+librespot-playback = { version = "0.8.0", default-features = false, features = ["rustls-tls-webpki-roots"] }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "net"] }
+oauth2 = { version = "5", default-features = false, features = ["reqwest-blocking", "rustls-tls"] }
+keyring = { version = "3.6.3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
 
 [dev-dependencies]
 tempfile = "3"

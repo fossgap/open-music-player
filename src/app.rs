@@ -7,6 +7,7 @@ use crate::{
 };
 
 mod browse;
+mod spotify;
 #[cfg(test)]
 mod tests;
 mod youtube;
@@ -54,6 +55,8 @@ pub struct App {
     playlist_cards: BoundItems,
     podcast_cards: BoundItems,
     youtube: youtube::Controls,
+    spotify: spotify::Controls,
+    streaming_service: RefCell<String>,
     radio_results: RefCell<Vec<String>>,
     playlist: RefCell<Option<String>>,
     album: RefCell<Option<(String, String)>>,
@@ -155,6 +158,8 @@ impl App {
             playlist_cards: Default::default(),
             podcast_cards: Default::default(),
             youtube: youtube::Controls::default(),
+            spotify: spotify::Controls::default(),
+            streaming_service: RefCell::new("youtube".into()),
             radio_results: RefCell::new(vec![]),
             playlist: RefCell::new(None),
             album: RefCell::new(None),
@@ -339,6 +344,7 @@ impl App {
     fn setup_controls(self: &Rc<Self>) {
         self.setup_browse_controls();
         self.setup_youtube_controls();
+        self.setup_spotify_controls();
         self.on("play", |a| a.toggle_play());
         self.on("next", |a| a.next(false));
         self.on("previous", |a| a.previous());
@@ -351,6 +357,8 @@ impl App {
                 } else {
                     a.search_youtube();
                 }
+            } else if *a.page.borrow() == "spotify" {
+                a.refresh_spotify();
             } else if *a.page.borrow() == "podcasts" {
                 a.discover_podcasts();
             } else if *a.page.borrow() == "playlists" && a.playlist.borrow().is_some() {
@@ -425,6 +433,8 @@ impl App {
             if let Some(a) = weak.upgrade() {
                 if *a.page.borrow() == "youtube" && !a.youtube.playlists.get() {
                     a.search_youtube();
+                } else if *a.page.borrow() == "spotify" && !a.spotify.playlists.get() {
+                    a.search_spotify();
                 } else if *a.page.borrow() == "radio" {
                     a.discover_radio();
                 } else if *a.page.borrow() == "podcasts" && a.podcast_discovery.get() {
@@ -611,6 +621,7 @@ impl App {
             "radio",
             "streams",
             "youtube",
+            "spotify",
             "queue",
         ]
         .contains(&page)
@@ -622,6 +633,11 @@ impl App {
         self.playlist.borrow_mut().take();
         object::<gtk::SearchEntry>(&self.ui, "search").set_text("");
         object::<gtk::Box>(&self.ui, "entry_bar").set_visible(false);
+        let nav = if ["youtube", "spotify"].contains(&page) {
+            "streams"
+        } else {
+            page
+        };
         for name in [
             "library",
             "favorites",
@@ -629,15 +645,20 @@ impl App {
             "podcasts",
             "radio",
             "streams",
-            "youtube",
             "queue",
         ] {
             let b = self.button(&format!("nav_{name}"));
-            if name == page {
+            if name == nav {
                 b.add_css_class("selected");
             } else {
                 b.remove_css_class("selected");
             }
+        }
+        if ["streams", "youtube", "spotify"].contains(&page) {
+            *self.streaming_service.borrow_mut() = page.into();
+            self.updating.set(true);
+            object::<gtk::ToggleButton>(&self.ui, &format!("service_{page}")).set_active(true);
+            self.updating.set(false);
         }
         self.refresh();
     }
@@ -646,6 +667,7 @@ impl App {
         let page = self.page.borrow().clone();
         match page.as_str() {
             "youtube" => self.youtube_primary(),
+            "spotify" => self.spotify_primary(),
             "radio" => self.discover_radio(),
             "podcasts" | "streams" => {
                 object::<gtk::Box>(&self.ui, "entry_bar").set_visible(true);
@@ -732,6 +754,7 @@ impl App {
         let page = self.page.borrow().clone();
         match page.as_str() {
             "youtube" => self.refresh_youtube(),
+            "spotify" => self.refresh_spotify(),
             "radio" => self.discover_radio(),
             "podcasts" if self.podcast_discovery.get() => self.discover_podcasts(),
             "playlists" => self.refresh(),
@@ -871,7 +894,9 @@ impl App {
                 state.queue.push(id.into());
             }
         }
-        if services::youtube_url(&track.uri) {
+        if track.kind == Kind::Spotify {
+            self.play_spotify(&track, position, generation);
+        } else if services::youtube_url(&track.uri) {
             self.audio.borrow_mut().stop();
             self.resolving.set(true);
             self.notice(&self.tr("Opening YouTube Music…"), false, true);
@@ -1041,7 +1066,9 @@ impl App {
         let page = self.page.borrow().clone();
         if page == "queue" {
             self.state.borrow_mut().queue.retain(|i| i != id);
-        } else if page == "playlists" || (page == "youtube" && self.playlist.borrow().is_some()) {
+        } else if page == "playlists"
+            || (["youtube", "spotify"].contains(&page.as_str()) && self.playlist.borrow().is_some())
+        {
             if let Some(p) = self
                 .state
                 .borrow_mut()
@@ -1094,6 +1121,8 @@ impl App {
     pub fn shutdown(&self) {
         self.persist();
         self.audio.borrow_mut().stop();
+        self.audio.borrow_mut().detach_spotify();
+        self.spotify.service.send(crate::spotify::Command::Shutdown);
         self.save_tx.borrow_mut().take();
         if let Some(worker) = self.save_worker.borrow_mut().take() {
             let _ = worker.join();
@@ -1443,6 +1472,9 @@ impl App {
                 Message::SaveError(e) => self.notice(&e, true, false),
                 _ => {}
             }
+        }
+        for reply in self.spotify.service.poll() {
+            self.handle_spotify(reply);
         }
         let events = self.audio.borrow_mut().poll();
         for event in events {

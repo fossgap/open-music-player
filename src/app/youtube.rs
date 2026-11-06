@@ -30,6 +30,9 @@ pub(super) enum Reply {
 
 impl App {
     pub(super) fn youtube_playlist_menu(&self, menu: &gio::Menu, playlist: &model::Playlist) {
+        if playlist.spotify.is_some() {
+            return;
+        }
         let item = gio::MenuItem::new(
             Some(&self.tr(if playlist.youtube.is_some() {
                 "Sync with YouTube Music"

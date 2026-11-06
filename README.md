@@ -22,15 +22,16 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 | Playback | GStreamer audio, play/pause, previous/next, seeking, volume, mute, automatic next track |
 | Podcasts | Apple Podcasts/iTunes and gPodder search and discovery, RSS/Atom subscriptions, feed refresh, per-episode resume positions |
 | Internet radio | Search and discovery through Radio Browser, station artwork, favorites, playback |
-| Streaming | Direct HTTP(S) audio and supported streaming playlists |
+| Streaming | One view for YouTube Music, Spotify and direct HTTP(S) audio |
 | YouTube Music | Song search, personal browser-session connection, native playback, two-way playlist sync and private playlist publishing |
+| Spotify | Browser sign-in, librespot playback (Premium), track search, two-way playlist sync and private playlist publishing |
 | Desktop | MPRIS controls and metadata, StatusNotifierItem tray menu, background playback, mini player |
 | Artwork and lyrics | Embedded covers, folder covers, feed/station images, softly blended artwork backdrop, embedded lyrics and `.lrc`/`.txt` sidecars |
 | Visualization | Live waveform from decoded PCM audio; no synthetic playback animation |
 | Persistence | Library, sources, playlists, queue, track, position, volume, repeat, shuffle, and preferences |
 | Languages | English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean; new service copy falls back to English where untranslated |
 
-**Service boundaries:** YouTube Music uses the unofficial `ytmusicapi` and `yt-dlp` libraries, with no API key or Premium subscription requirement in Open Audio Player. Availability depends on your account, region and YouTube; sessions can expire and provider changes can require dependency updates. Podcast downloads, synchronized lyric highlighting, and automatic filesystem watching are not included. This is an initial implementation, not a published stable release.
+**Service boundaries:** Spotify uses [librespot](https://github.com/librespot-org/librespot) and requires Premium. Search and playlist operations use Spotify’s Web API, whose account/app restrictions still apply. YouTube Music uses the unofficial `ytmusicapi` and `yt-dlp` libraries, with no API key or Premium subscription requirement in Open Audio Player. Availability depends on your account, region and YouTube; sessions can expire and provider changes can require dependency updates. Podcast downloads, synchronized lyric highlighting, and automatic filesystem watching are not included. This is an initial implementation, not a published stable release.
 
 ## Get started
 
@@ -39,7 +40,7 @@ Requires Linux, **Rust 1.85+**, **GTK 4.8+**, GStreamer with its base/good plugi
 On Debian 12 / Ubuntu 24.04 or newer:
 
 ```sh
-sudo apt install build-essential pkg-config libgtk-4-dev \
+sudo apt install build-essential pkg-config libdbus-1-dev libgtk-4-dev \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
   gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
@@ -76,7 +77,7 @@ sudo apt install python3-venv libsecret-tools
 
 Packaged installations include `open-audio-setup-youtube`. Run it again to update the optional dependencies. It installs `ytmusicapi` and `yt-dlp[default]` into a private virtual environment beside your library; it does not change system Python. Playback also needs **Deno 2.3+** (preferred) or **Node.js 22+** on `PATH`, as described in [yt-dlp’s runtime setup](https://github.com/yt-dlp/yt-dlp/wiki/EJS). The helper enables whichever is available.
 
-1. Open **YouTube Music**, search for a song or artist and press Enter. Double-click a result to play it through GStreamer; queue, favorites, pause, seek and next/previous work as usual. Public search does not need an account.
+1. Open **Streaming → YouTube Music**, search for a song or artist and press Enter. Double-click a result to play it through GStreamer; queue, favorites, pause, seek and next/previous work as usual. Public search does not need an account.
 2. Select **Connect account**, open YouTube Music in your browser and sign in there. Choose that browser in Open Audio Player and connect. An optional profile path selects a nondefault profile. A Netscape-format cookie file is an alternative when the browser profile cannot be read. Close the browser before importing if its cookie database is locked.
 3. Open **Your playlists → Sync playlists**. Online playlists appear in an artwork grid. Open one to browse or play its tracks. The global **Playlists** view also includes these linked collections.
 4. Edit a linked playlist locally, then sync to upload its name and track changes. Online-only changes download on the next sync. Editing a read-only playlist or changing the same playlist on both sides produces a conflict and preserves both versions. Use **Replace local copy from YouTube Music** in its menu to explicitly accept the online version.
@@ -88,6 +89,21 @@ Sync runs when requested. Order and repeated tracks are preserved. Unavailable e
 
 The embedded Python helper uses argument vectors and JSON pipes, never a shell. It resolves audio only when playback starts and does not download music files. `OPEN_AUDIO_PYTHON` can select an existing interpreter containing both libraries instead of the managed environment.
 
+### Connect Spotify
+
+1. Open **Streaming → Spotify → Connect account → Connect with Spotify**. A **Spotify Premium** account and an unlocked desktop Secret Service keyring (such as GNOME Keyring) are required. Spotify support is compiled into the application; no separate librespot executable, Python package or setup script is needed.
+2. Sign in and approve access in your browser. The app uses authorization-code **PKCE**, a random state check, a loopback-only callback on `http://127.0.0.1:5588/login`, a three-minute deadline and a cancel button. No Spotify password is entered or stored in Open Audio Player. The refresh token stays in the desktop keyring; only account labels, catalog metadata and playlist links go in `library.json`.
+3. Search for a song or artist and press Enter. Double-click a track to play. librespot decodes the audio and sends PCM to GStreamer, keeping volume, waveform, queue, shuffle/repeat, mini player and MPRIS controls shared with other sources. Search currently displays up to ten results. Track and linked-playlist menus include **Open in Spotify**.
+4. Select **Your playlists → Sync playlists** to import accessible playlists. Edit a linked playlist locally and sync to upload track order and name changes. Online-only changes download; conflicting changes and local edits made during a sync are preserved. **Replace local copy from Spotify** explicitly discards local edits. Use **Publish privately to Spotify** on a local playlist containing only Spotify tracks to create an online copy.
+
+Uploads are restricted to owned playlists containing only available Spotify tracks. Local files and podcast episodes cannot be uploaded; skipped entries are reported and make the imported playlist read-only for uploading. Sync fetches complete paginated collections, up to 500 playlists and 5,000 entries per playlist, preserving order and repeats. Large uploads use Spotify’s 100-item batches; an interrupted upload can leave a partial online update while keeping the local copy. Inspect the online copy before retrying. Removing a linked playlist locally stops its synchronization without deleting it online; disconnect and reconnect to import it again.
+
+**Account → Disconnect** removes saved sign-in, Spotify tracks and linked playlists from this computer. Existing sign-in is restored in the background at startup, without starting playback. Search and sync show connection, permission and rate-limit failures instead of treating failed requests as empty collections.
+
+By default, sign-in uses librespot’s public OAuth client. If Spotify denies catalog or playlist access, **Advanced connection options** accepts a Spotify developer Client ID (`OPEN_AUDIO_SPOTIFY_CLIENT_ID` can prefill it). Register the exact callback above; no client secret is needed. Spotify’s [current development-mode rules](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide) limit apps/users and may restrict playlist contents to owned or collaborative playlists. A custom Client ID does not bypass those limits. Spotify can also change unofficial-client access.
+
+Offline tests cover authentication callback validation, playlist conflicts, stale responses, PCM output and the GTK flows. A real Premium account is still needed to verify end-to-end browser sign-in, live Spotify playback and online playlist writes; these have not been validated with a live account in this implementation session.
+
 ## Listening
 
 1. Select **Add music** and choose a folder. Scanning runs in the background; additional folders are managed in **Settings**.
@@ -95,7 +111,7 @@ The embedded Python helper uses argument vectors and JSON pipes, never a shell. 
 3. Use the star to save a favorite. The track menu adds to the queue or a playlist. Removing a local track only removes its index entry; refreshing its folder can discover it again.
 4. Select **Podcasts → Discover podcasts**. Choose **Apple Podcasts** (the iTunes directory) or **gPodder**, search by title, topic, or creator, then select **Subscribe**. **Your episodes** lists subscribed episodes. You can also add any RSS or Atom feed URL. Use **Refresh** to fetch new episodes. Removing a subscription stops refreshes and retains previously indexed episodes.
 5. Select **Live radio → Discover radio**, or type a station name and press Enter. Radio results are provided by the community-maintained [Radio Browser directory](https://www.radio-browser.info/).
-6. Select **Streaming → Add stream** and paste an HTTP(S) audio address. A station URL can also be opened here. Use the dedicated **YouTube Music** page to search and play music from that service.
+6. Select **Streaming** for YouTube Music and Spotify. **Streaming → Internet streams → Add stream** accepts an HTTP(S) audio address or station URL. The sidebar remembers the last streaming service you used.
 
 Click the current cover to open the artwork, waveform, and lyrics panel. Put `cover.jpg`, `cover.png`, `folder.jpg`, or `folder.png` beside an album, or use embedded artwork. A lyrics sidecar must share the audio filename: `Song.flac` and `Song.lrc`. Refresh after adding a sidecar. LRC text is displayed as supplied.
 
@@ -131,7 +147,7 @@ Closing the main window keeps audio playing **only while playback is active and 
 
 The library is stored in `$XDG_DATA_HOME/open-audio-player/library.json`, defaulting to `~/.local/share/open-audio-player/library.json`. Cached artwork lives beside it. Saves use a temporary file, synchronization, and atomic replacement. A corrupt or unsupported library is reported and left untouched.
 
-`OPEN_AUDIO_DATA_DIR=/some/directory` selects an isolated library, useful for testing. The app makes no directory or feed requests on first launch. Network requests begin when you explicitly discover/search podcasts or radio, subscribe/refresh a feed, or play an online source. Searches go to the selected directory; result artwork may be fetched from its image hosts. There is no analytics collection. Existing playlists receive persistent identifiers automatically when an older library is loaded.
+`OPEN_AUDIO_DATA_DIR=/some/directory` selects an isolated library, useful for testing. The app makes no directory or feed requests on first launch. Network requests begin when you explicitly discover/search podcasts or radio, subscribe/refresh a feed, or play an online source. Searches go to the selected directory; result artwork may be fetched from its image hosts. Saved Spotify accounts also reconnect in the background at startup. There is no analytics collection. Existing playlists receive persistent identifiers automatically when an older library is loaded.
 
 ## Development
 
@@ -156,7 +172,7 @@ make ui-test
 
 The integration test generates original audio, starts local feed and podcast-directory fixtures, and drives the real application over D-Bus and keyboard input. It checks library and playlist import, metadata, artwork, playback, seek, pause, favorites, queue, playlist creation/renaming, both podcast directories, subscriptions, empty/error states, MPRIS, mini mode, dialogs, compact layouts, and session restoration. The GTK regression test scrolls long lists and checks that activation preserves scroll and selection, album browsing does not start playback, filtered queue playback retains its members, and playlist deletion respects cancellation. All library and audio data are temporary. External services and real audio hardware are not required.
 
-The unit suite contains 19 tests; the display-dependent GTK regression runs separately through `make ui-test`. Validation uses native Linux and the Rust 1.85/GTK 4.8 Debian development container, with strict Clippy checks. The same integration suite can exercise native, release, and AppImage builds. The Arch recipe has not been built on Arch.
+The unit suite includes offline Spotify authentication, catalog, sync and PCM-output checks; the display-dependent GTK regression runs separately through `make ui-test`. CI targets the Rust 1.85/GTK 4.8 Debian development container; native Linux checks include strict Clippy validation. The same integration suite can exercise native, release, and AppImage builds. The Arch recipe has not been built on Arch.
 
 For review screenshots:
 
@@ -227,7 +243,9 @@ A project distribution license has not yet been selected; package metadata inten
 src/
   app.rs         GTK controllers, playback, background work
   app/browse.rs  Track/album views, playlist management, podcast browser
-  app/tests.rs   GTK scroll, selection, and collection regressions
+  app/tests.rs   GTK scroll, selection, collection and streaming regressions
+  app/spotify.rs Spotify account and playlist interface
+  app/youtube.rs YouTube Music account and playlist interface
   audio.rs       GStreamer playback and decoded-audio waveform
   desktop.rs     MPRIS, StatusNotifierItem, and tray menu
   i18n.rs        Embedded translation catalogues
@@ -235,7 +253,10 @@ src/
   model.rs       Tracks, collections, queue, persisted session
   playlists.rs   M3U/M3U8, PLS, and XSPF parsing and import
   process.rs     Bounded subprocess execution without a shell
-  services.rs    Podcast directories/feeds, Radio Browser, artwork, YouTube
+  services.rs    Podcast directories/feeds, Radio Browser and artwork
+  spotify.rs     Background Spotify account/catalog service
+  spotify/       PKCE, Web API catalog/sync and librespot PCM playback
+  youtube_music.rs YouTube Music helper bridge and sync merge
   storage.rs     XDG data location and atomic state storage
 resources/       GtkBuilder layouts, D-Bus interfaces, CSS, icon
 locales/         Ten translation catalogues

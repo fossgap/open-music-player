@@ -4,6 +4,7 @@ Release: 1%{?dist}
 Summary: A native home for music, podcasts, and radio
 License: Unspecified
 Requires: gtk4 >= 4.8
+Requires: dbus-libs
 Requires: gstreamer1-plugins-base, gstreamer1-plugins-good, ffmpeg, ca-certificates
 Recommends: gstreamer1-plugin-libav, python3, python3-pip, libsecret
 

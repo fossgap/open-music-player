@@ -143,6 +143,14 @@ impl App {
             entry.set_action_and_target_value(Some(action), Some(&track.id.to_variant()));
             menu.append_item(&entry);
         }
+        if track.kind == Kind::Spotify {
+            let item = gio::MenuItem::new(Some(&self.tr("Open in Spotify")), None);
+            item.set_action_and_target_value(
+                Some("app.spotify-open"),
+                Some(&track.id.to_variant()),
+            );
+            menu.append_item(&item);
+        }
         object::<gtk::MenuButton>(ui, "menu").set_menu_model(Some(&menu));
     }
 
@@ -278,7 +286,8 @@ impl App {
             return;
         }
         if matches!(kind, Grid::Playlists) {
-            let compact = self.compact_browse.get() && *self.page.borrow() == "youtube";
+            let compact = self.compact_browse.get()
+                && ["youtube", "spotify"].contains(&self.page.borrow().as_str());
             let card: gtk::Box = object(ui, "album_card");
             card.set_orientation(if compact {
                 gtk::Orientation::Horizontal
@@ -321,6 +330,7 @@ impl App {
                 menu.append_item(&entry);
             }
             self.youtube_playlist_menu(&menu, playlist);
+            self.spotify_playlist_menu(&menu, playlist);
             let options: gtk::MenuButton = object(ui, "menu");
             options.set_visible(true);
             options.set_menu_model(Some(&menu));
@@ -407,7 +417,24 @@ impl App {
         let playlist = playlist_id.as_deref().and_then(|id| state.playlist(id));
         let youtube = page == "youtube";
         let youtube_search = youtube && !self.youtube.playlists.get();
-        let playlist_overview = (page == "playlists" || (youtube && self.youtube.playlists.get()))
+        let spotify = page == "spotify";
+        let spotify_search = spotify && !self.spotify.playlists.get();
+        let service = youtube || spotify;
+        let compact_service = (service || page == "streams") && self.compact_browse.get();
+        let content: gtk::Box = object(&self.ui, "content");
+        content.set_spacing(if compact_service { 10 } else { 20 });
+        content.set_margin_top(if compact_service { 16 } else { 26 });
+        content.set_margin_bottom(if compact_service { 12 } else { 20 });
+        let illustration: gtk::DrawingArea = object(&self.ui, "empty_art");
+        illustration.set_visible(!compact_service);
+        if let Some(empty) = illustration.parent().and_downcast::<gtk::Box>() {
+            empty.set_spacing(if compact_service { 10 } else { 16 });
+        }
+        object::<gtk::Label>(&self.ui, "footer_status").set_visible(!compact_service);
+
+        let playlist_overview = (page == "playlists"
+            || (youtube && self.youtube.playlists.get())
+            || (spotify && self.spotify.playlists.get()))
             && playlist.is_none();
         let podcast_browser = page == "podcasts" && self.podcast_discovery.get();
         let (title, action, empty_title, empty_description, empty_action) = match page.as_str() {
@@ -429,6 +456,31 @@ impl App {
                     "Search for a song or artist, then double-click a track to play."
                 },
                 if self.youtube.playlists.get() {
+                    "Sync playlists"
+                } else {
+                    "Search music"
+                },
+            ),
+            "spotify" => (
+                "Spotify",
+                if state.spotify_account.is_some() {
+                    "Account"
+                } else {
+                    "Connect account"
+                },
+                if self.spotify.playlists.get() {
+                    "Your Spotify playlists"
+                } else {
+                    "Music from your Spotify account"
+                },
+                if self.spotify.playlists.get() {
+                    "Connect your account and sync your playlists."
+                } else {
+                    "Connect a Spotify Premium account to search and play music."
+                },
+                if state.spotify_account.is_none() {
+                    "Connect account"
+                } else if self.spotify.playlists.get() {
                     "Sync playlists"
                 } else {
                     "Search music"
@@ -507,7 +559,11 @@ impl App {
                 album.clone()
             }
         } else {
-            self.tr(title)
+            self.tr(if service || page == "streams" {
+                "Streaming"
+            } else {
+                title
+            })
         };
         self.label("page_title", &heading);
         object::<gtk::Label>(&self.ui, "page_title").set_tooltip_text(Some(&heading));
@@ -517,6 +573,11 @@ impl App {
             "playlists" => Some(playlist.map(|p| p.tracks.clone()).unwrap_or_default()),
             "youtube" => Some(if youtube_search {
                 self.youtube.results.borrow().clone()
+            } else {
+                playlist.map(|p| p.tracks.clone()).unwrap_or_default()
+            }),
+            "spotify" => Some(if spotify_search {
+                self.spotify.results.borrow().clone()
             } else {
                 playlist.map(|p| p.tracks.clone()).unwrap_or_default()
             }),
@@ -530,7 +591,7 @@ impl App {
         } else if let Some(ids) = ordered {
             ids.iter()
                 .filter_map(|id| state.track(id))
-                .filter(|t| youtube_search || t.matches(&query))
+                .filter(|t| youtube_search || spotify_search || t.matches(&query))
                 .collect()
         } else {
             state
@@ -595,6 +656,15 @@ impl App {
                     })
             })
             .filter(|p| {
+                !spotify
+                    || p.spotify.as_ref().is_some_and(|l| {
+                        state
+                            .spotify_account
+                            .as_ref()
+                            .is_some_and(|a| l.account_id == a.id)
+                    })
+            })
+            .filter(|p| {
                 !playlist_overview
                     || query
                         .split_whitespace()
@@ -621,9 +691,12 @@ impl App {
         };
         self.label(
             "page_subtitle",
-            &if youtube_search && self.youtube.searching.get() {
+            &if spotify_search && self.spotify.searching.get() {
+                self.tr("Searching Spotify…")
+            } else if youtube_search && self.youtube.searching.get() {
                 self.tr("Searching YouTube Music…")
             } else if (youtube_search && self.youtube.failed.get())
+                || (spotify_search && self.spotify.failed.get())
                 || (podcast_browser && self.podcast_failed.get())
             {
                 self.tr("Search unavailable")
@@ -689,7 +762,7 @@ impl App {
                 ),
                 "podcasts" => format!("{} {}", state.subscriptions.len(), self.tr("subscriptions")),
                 "streams" => self.tr("Internet audio streams"),
-                "youtube" => self.tr(if playlist_overview {
+                "youtube" | "spotify" => self.tr(if playlist_overview {
                     "Sync downloads online changes and uploads edits to linked playlists."
                 } else {
                     "Double-click a track to play."
@@ -700,10 +773,38 @@ impl App {
         );
         object::<gtk::Box>(&self.ui, "view_switch")
             .set_visible(page == "library" && album.is_none());
+        object::<gtk::Box>(&self.ui, "streaming_services")
+            .set_visible(service || page == "streams");
         object::<gtk::Box>(&self.ui, "youtube_tabs").set_visible(youtube);
+        for id in ["youtube_status", "spotify_status"] {
+            if let Some(row) = object::<gtk::Label>(&self.ui, id).parent() {
+                row.set_visible(!self.compact_browse.get());
+            }
+        }
+
+        object::<gtk::Box>(&self.ui, "spotify_tabs").set_visible(spotify);
+        object::<gtk::Label>(&self.ui, "spotify_status").set_visible(!self.compact_browse.get());
+        self.button("spotify_search").set_visible(spotify_search);
+        self.button("spotify_search")
+            .set_sensitive(!self.spotify.searching.get() && !self.spotify.busy.get());
+        self.button("spotify_sync")
+            .set_sensitive(!self.spotify.searching.get() && !self.spotify.busy.get());
+        self.label(
+            "spotify_status",
+            &if self.spotify.busy.get() {
+                self.tr("Working with Spotify…")
+            } else {
+                state
+                    .spotify_account
+                    .as_ref()
+                    .filter(|_| self.audio.borrow().spotify_ready())
+                    .map(|a| a.name.clone())
+                    .unwrap_or_else(|| self.tr("Spotify Premium required · Connect your account"))
+            },
+        );
         object::<gtk::Label>(&self.ui, "youtube_status").set_visible(!self.compact_browse.get());
         let grid: gtk::GridView = object(&self.ui, "playlist_grid");
-        if youtube && self.compact_browse.get() {
+        if service && self.compact_browse.get() {
             grid.set_min_columns(1);
             grid.set_max_columns(1);
         } else {
@@ -723,17 +824,19 @@ impl App {
                 .map(|a| a.name.clone())
                 .unwrap_or_else(|| self.tr("Connect to access your playlists")),
         );
-        self.button("page_action")
-            .set_sensitive(!youtube || !self.youtube.busy.get());
+        self.button("page_action").set_sensitive(
+            (!youtube || !self.youtube.busy.get()) && (!spotify || !self.spotify.busy.get()),
+        );
         self.button("refresh").set_sensitive(
             !self.scanning.get()
-                && (!youtube || (!self.youtube.busy.get() && !self.youtube.searching.get())),
+                && (!youtube || (!self.youtube.busy.get() && !self.youtube.searching.get()))
+                && (!spotify || (!self.spotify.busy.get() && !self.spotify.searching.get())),
         );
         object::<gtk::Box>(&self.ui, "podcast_tabs").set_visible(page == "podcasts");
         object::<gtk::DropDown>(&self.ui, "podcast_provider").set_visible(podcast_browser);
         self.button("podcast_search").set_visible(podcast_browser);
         let compact_playlist =
-            (page == "playlists" || youtube) && playlist.is_some() && self.compact_browse.get();
+            (page == "playlists" || service) && playlist.is_some() && self.compact_browse.get();
         let options: gtk::MenuButton = object(&self.ui, "playlist_options");
         options.set_visible(compact_playlist);
         if let Some(playlist) = playlist {
@@ -751,6 +854,7 @@ impl App {
                 Some("app.playlist-import"),
             );
             self.youtube_playlist_menu(&menu, playlist);
+            self.spotify_playlist_menu(&menu, playlist);
             options.set_menu_model(Some(&menu));
         }
         self.button("page_action").set_visible(!compact_playlist);
@@ -773,7 +877,9 @@ impl App {
             .set_visible(!playlist_overview && !podcast_browser);
         self.button("play_all").set_sensitive(!tracks.is_empty());
         object::<gtk::SearchEntry>(&self.ui, "search").set_placeholder_text(Some(&self.tr(
-            if youtube_search {
+            if spotify_search {
+                "Search Spotify, then press Enter"
+            } else if youtube_search {
                 "Search YouTube Music, then press Enter"
             } else if podcast_browser {
                 "Search podcasts, then press Enter"
@@ -789,12 +895,18 @@ impl App {
         if count == 0 {
             stack.set_visible_child_name("empty");
             let loading = (podcast_browser && !self.button("podcast_search").is_sensitive())
-                || (youtube_search && self.youtube.searching.get());
+                || (youtube_search && self.youtube.searching.get())
+                || (spotify_search && self.spotify.searching.get());
             let failed = (podcast_browser && self.podcast_failed.get())
-                || (youtube_search && self.youtube.failed.get());
+                || (youtube_search && self.youtube.failed.get())
+                || (spotify_search && self.spotify.failed.get());
             self.label(
                 "empty_title",
-                &self.tr(if loading && youtube_search {
+                &self.tr(if loading && spotify_search {
+                    "Searching Spotify…"
+                } else if failed && spotify_search {
+                    "Spotify unavailable"
+                } else if loading && youtube_search {
                     "Searching YouTube Music…"
                 } else if loading {
                     "Finding podcasts…"
@@ -812,7 +924,7 @@ impl App {
                 "empty_description",
                 &self.tr(if loading {
                     ""
-                } else if failed && youtube_search {
+                } else if failed && (youtube_search || spotify_search) {
                     "Check the message above, then try again."
                 } else if failed {
                     "Could not search podcasts. Check your connection or try another directory."
@@ -828,7 +940,7 @@ impl App {
                 empty_action
             }));
             self.button("empty_action").set_visible(
-                !loading && (query.is_empty() || page == "radio" || podcast_browser || youtube),
+                !loading && (query.is_empty() || page == "radio" || podcast_browser || service),
             );
         } else {
             stack.set_visible_child_name(if playlist_overview {
@@ -877,7 +989,7 @@ impl App {
         if self.state.borrow().playlist(id).is_none() {
             return;
         }
-        if !["playlists", "youtube"].contains(&self.page.borrow().as_str()) {
+        if !["playlists", "youtube", "spotify"].contains(&self.page.borrow().as_str()) {
             self.navigate("playlists");
         }
         if self.playlist.borrow().is_none() {
@@ -1115,7 +1227,7 @@ impl App {
             .modal(true)
             .title(self.tr("Delete playlist"))
             .text(format!("{} “{name}”?", self.tr("Delete playlist")))
-            .secondary_text(self.tr(if playlist.youtube.is_some() { "Removes this local copy and stops syncing it. The online playlist and your tracks stay unchanged." } else { "Tracks remain in your library and play queue." }))
+            .secondary_text(self.tr(if playlist.youtube.is_some() || playlist.spotify.is_some() { "Removes this local copy and stops syncing it. The online playlist and your tracks stay unchanged." } else { "Tracks remain in your library and play queue." }))
             .build();
         dialog.add_button(&self.tr("Cancel"), gtk::ResponseType::Cancel);
         dialog.add_button(&self.tr("Delete"), gtk::ResponseType::Accept);
@@ -1129,6 +1241,11 @@ impl App {
                     if let Some(link) = state.playlist(&id).and_then(|p| p.youtube.clone()) {
                         if !state.youtube_ignored_playlists.contains(&link.id) {
                             state.youtube_ignored_playlists.push(link.id);
+                        }
+                    }
+                    if let Some(link) = state.playlist(&id).and_then(|p| p.spotify.clone()) {
+                        if !state.spotify_ignored_playlists.contains(&link.id) {
+                            state.spotify_ignored_playlists.push(link.id);
                         }
                     }
                     state.playlists.retain(|p| p.id != id);

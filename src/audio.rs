@@ -22,6 +22,8 @@ pub struct Audio {
     waveform: Option<gst_app::AppSink>,
     seek_target: std::cell::Cell<Option<f64>>,
     headers: Arc<Mutex<HashMap<String, String>>>,
+    spotify: Option<crate::spotify::playback::Playback>,
+    spotify_active: bool,
 }
 
 impl Audio {
@@ -89,7 +91,42 @@ impl Audio {
             waveform,
             seek_target: std::cell::Cell::new(None),
             headers,
+            spotify: None,
+            spotify_active: false,
         })
+    }
+
+    pub fn spotify_ready(&self) -> bool {
+        self.spotify.is_some()
+    }
+    pub fn attach_spotify(&mut self, playback: crate::spotify::playback::Playback) {
+        if self.spotify_active {
+            self.stop();
+        }
+        self.spotify = Some(playback);
+    }
+    pub fn detach_spotify(&mut self) {
+        if self.spotify_active {
+            self.stop();
+        }
+        self.spotify.take();
+    }
+    pub fn load_spotify(
+        &mut self,
+        uri: &str,
+        position: f64,
+        duration: f64,
+        autoplay: bool,
+    ) -> Result<(), String> {
+        self.stop();
+        self.spotify
+            .as_mut()
+            .ok_or("Connect your Spotify account first.")?
+            .load(uri, position, duration, autoplay)?;
+        self.spotify_active = true;
+        self.loaded = true;
+        self.playing = autoplay;
+        Ok(())
     }
 
     pub fn load(&mut self, uri: &str, position: f64, autoplay: bool) -> Result<(), String> {
@@ -131,6 +168,11 @@ impl Audio {
         if !self.loaded {
             return Ok(());
         }
+        if self.spotify_active {
+            self.spotify.as_mut().unwrap().set_playing(playing);
+            self.playing = playing;
+            return Ok(());
+        }
         self.pipeline
             .set_state(if playing && !self.buffering {
                 gst::State::Playing
@@ -143,6 +185,12 @@ impl Audio {
     }
 
     pub fn stop(&mut self) {
+        if self.spotify_active {
+            if let Some(spotify) = self.spotify.as_mut() {
+                spotify.stop();
+            }
+        }
+        self.spotify_active = false;
         let _ = self.pipeline.set_state(gst::State::Null);
         self.playing = false;
         self.loaded = false;
@@ -151,9 +199,15 @@ impl Audio {
         self.seek_target.set(None);
     }
     pub fn volume(&self, volume: f64) {
+        if let Some(spotify) = self.spotify.as_ref() {
+            spotify.volume(volume);
+        }
         self.pipeline.set_property("volume", volume.clamp(0.0, 1.0));
     }
     pub fn position(&self) -> f64 {
+        if self.spotify_active {
+            return self.spotify.as_ref().unwrap().position();
+        }
         if let Some(target) = self.pending_seek.or(self.seek_target.get()) {
             return target;
         }
@@ -163,6 +217,9 @@ impl Audio {
             .unwrap_or(0.0)
     }
     pub fn duration(&self) -> f64 {
+        if self.spotify_active {
+            return self.spotify.as_ref().unwrap().duration();
+        }
         self.pipeline
             .query_duration::<gst::ClockTime>()
             .map(|t| t.nseconds() as f64 / 1e9)
@@ -171,6 +228,10 @@ impl Audio {
     pub fn seek(&self, seconds: f64) -> Result<(), String> {
         if !seconds.is_finite() || seconds < 0.0 {
             return Err("Invalid seek position".into());
+        }
+        if self.spotify_active {
+            self.spotify.as_ref().unwrap().seek(seconds);
+            return Ok(());
         }
         self.pipeline
             .seek_simple(
@@ -183,6 +244,15 @@ impl Audio {
     }
 
     pub fn poll(&mut self) -> Vec<Event> {
+        if self.spotify_active {
+            let spotify = self.spotify.as_mut().unwrap();
+            let events = spotify.poll();
+            self.playing = spotify.playing;
+            if events.iter().any(|e| matches!(e, Event::Error(_))) {
+                self.loaded = false;
+            }
+            return events;
+        }
         let mut events = Vec::new();
         for message in self.bus.iter().take(100) {
             match message.view() {

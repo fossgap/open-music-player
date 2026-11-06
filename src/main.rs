@@ -7,6 +7,7 @@ mod model;
 mod playlists;
 mod process;
 mod services;
+mod spotify;
 mod storage;
 mod youtube_music;
 

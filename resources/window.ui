@@ -220,21 +220,8 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkButton" id="nav_youtube">
-                        <property name="action-name">app.page</property>
-                        <property name="action-target">'youtube'</property>
-                        <style><class name="nav" /></style>
-                        <property name="child"><object class="GtkBox">
-                          <property name="spacing">12</property>
-                          <child><object class="GtkImage"><property name="icon-name">audio-x-generic-symbolic</property></object></child>
-                          <child><object class="GtkLabel"><property name="label">YouTube Music</property></object></child>
-                        </object></property>
-                      </object>
-                    </child>
-                    <child>
                       <object class="GtkButton" id="nav_streams">
-                        <property name="action-name">app.page</property>
-                        <property name="action-target">'streams'</property>
+                        <property name="action-name">app.streaming</property>
                         <style>
                           <class name="nav" />
                         </style>
@@ -483,6 +470,12 @@
                     </child>
                   </object>
                 </child>
+                <child><object class="GtkBox" id="streaming_services">
+                  <property name="visible">false</property><property name="spacing">8</property>
+                  <child><object class="GtkToggleButton" id="service_youtube"><property name="label">YouTube Music</property><property name="active">true</property></object></child>
+                  <child><object class="GtkToggleButton" id="service_spotify"><property name="label">Spotify</property><property name="group">service_youtube</property></object></child>
+                  <child><object class="GtkToggleButton" id="service_streams"><property name="label">Internet streams</property><property name="group">service_youtube</property></object></child>
+                </object></child>
                 <child>
                   <object class="GtkBox" id="youtube_tabs">
                     <property name="visible">false</property>
@@ -498,6 +491,24 @@
                     <child><object class="GtkBox">
                       <property name="spacing">12</property>
                       <child><object class="GtkLabel" id="youtube_status"><property name="hexpand">true</property><property name="xalign">0</property><property name="ellipsize">end</property><property name="width-chars">12</property><style><class name="muted" /></style></object></child>
+                    </object></child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkBox" id="spotify_tabs">
+                    <property name="visible">false</property>
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">12</property>
+                    <child><object class="GtkBox">
+                      <property name="spacing">8</property>
+                      <child><object class="GtkToggleButton" id="spotify_songs"><property name="label">Search music</property><property name="active">true</property></object></child>
+                      <child><object class="GtkToggleButton" id="spotify_playlists"><property name="label">Your playlists</property><property name="group">spotify_songs</property></object></child>
+                      <child><object class="GtkBox"><property name="hexpand">true</property></object></child>
+                      <child><object class="GtkButton" id="spotify_sync"><property name="label">Sync playlists</property><property name="tooltip-text">Download online changes and upload local edits to linked playlists</property></object></child>
+                    </object></child>
+                    <child><object class="GtkBox">
+                      <property name="spacing">12</property>
+                      <child><object class="GtkLabel" id="spotify_status"><property name="hexpand">true</property><property name="xalign">0</property><property name="ellipsize">end</property><property name="width-chars">12</property><style><class name="muted" /></style></object></child>
                     </object></child>
                   </object>
                 </child>
@@ -543,6 +554,7 @@
                       </object>
                     </child>
                     <child><object class="GtkButton" id="youtube_search"><property name="visible">false</property><property name="icon-name">system-search-symbolic</property><property name="tooltip-text">Search YouTube Music</property></object></child>
+                    <child><object class="GtkButton" id="spotify_search"><property name="visible">false</property><property name="icon-name">system-search-symbolic</property><property name="tooltip-text">Search Spotify</property></object></child>
                     <child>
                       <object class="GtkBox" id="view_switch">
                         <style>

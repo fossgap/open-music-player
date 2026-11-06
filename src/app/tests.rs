@@ -415,7 +415,175 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     assert!(app.state.borrow().youtube_account.is_none());
     assert!(app.state.borrow().track(&song_id).is_none());
     assert!(app.state.borrow().track("test000").is_some());
+    // One sidebar entry serves all streaming providers, preserving provider selection.
+    assert!(app.ui.object::<gtk::Button>("nav_youtube").is_none());
+    assert!(app.ui.object::<gtk::Button>("nav_spotify").is_none());
+    app.navigate("spotify");
+    assert!(app.button("nav_streams").has_css_class("selected"));
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "page_title").text(),
+        "Streaming"
+    );
+    assert!(object::<gtk::Box>(&app.ui, "spotify_tabs").is_visible());
+    assert!(!object::<gtk::Box>(&app.ui, "youtube_tabs").is_visible());
+    settle();
+    screenshot(app.window.upcast_ref(), "spotify-disconnected-compact.png");
+    let stack: gtk::Stack = object(&app.ui, "content_stack");
+    for id in ["empty_title", "empty_description", "empty_action"] {
+        let bounds = object::<gtk::Widget>(&app.ui, id)
+            .compute_bounds(&stack)
+            .unwrap();
+        assert!(
+            bounds.y() >= 0.0 && bounds.y() + bounds.height() <= stack.height() as f32 + 1.0,
+            "{id} must be visible without scrolling: {bounds:?}, height {}",
+            stack.height()
+        );
+    }
+
+    app.navigate("library");
+    application.activate_action("streaming", None);
+    assert_eq!(app.page.borrow().as_str(), "spotify");
+    object::<gtk::ToggleButton>(&app.ui, "service_streams").set_active(true);
+    assert_eq!(app.page.borrow().as_str(), "streams");
+    assert!(!object::<gtk::Box>(&app.ui, "spotify_tabs").is_visible());
+    app.navigate("spotify");
+    // An offline player/session fixture tests GTK integration without contacting Spotify.
+    let spotify_runtime = tokio::runtime::Runtime::new().unwrap();
+    let playback = {
+        let _entered = spotify_runtime.enter();
+        crate::spotify::playback::Playback::new(librespot_core::session::Session::new(
+            Default::default(),
+            None,
+        ))
+        .unwrap()
+    };
+    app.handle_spotify(crate::spotify::Reply::Connected(Ok(Box::new((
+        model::SpotifyAccount {
+            id: "spotify-fixture".into(),
+            name: "Fixture listener".into(),
+        },
+        playback,
+    )))));
+    let mut song = Track::new(
+        "spotify:track:4uLU6hMCjMI75M1A2tKUQC",
+        "Spotify fixture song",
+        Kind::Spotify,
+    );
+    song.artist = "Fixture artist".into();
+    song.album = "Fixture album".into();
+    song.duration = 45.0;
+    let spotify_id = song.id.clone();
+    app.spotify.generation.set(3);
+    app.handle_spotify(crate::spotify::Reply::Search(2, Ok(vec![song.clone()])));
+    assert!(app.spotify.results.borrow().is_empty());
+    app.handle_spotify(crate::spotify::Reply::Search(3, Ok(vec![song.clone()])));
+    object::<gtk::SearchEntry>(&app.ui, "search")
+        .set_text("a provider query need not appear in the result");
+    app.refresh();
+    assert_eq!(&*app.visible.borrow(), std::slice::from_ref(&spotify_id));
+    settle();
+    screenshot(app.window.upcast_ref(), "spotify-search-compact.png");
+    app.window.set_default_size(1280, 820);
+    settle();
+    screenshot(app.window.upcast_ref(), "streaming-spotify-desktop.png");
+    let remote = crate::spotify::catalog::RemotePlaylist {
+        id: "37i9dQZF1DXcBWIGoYBM5M".into(),
+        name: "Spotify collection".into(),
+        snapshot: youtube_music::snapshot("Spotify collection", std::slice::from_ref(&song.uri)),
+        tracks: vec![song],
+        editable: true,
+        unavailable: 0,
+        local_id: None,
+        revision: "fixture-revision".into(),
+    };
+    app.handle_spotify(crate::spotify::Reply::Synced(
+        "spotify-fixture".into(),
+        vec![],
+        Ok(crate::spotify::catalog::SyncResult {
+            playlists: vec![remote],
+            ..Default::default()
+        }),
+    ));
+    object::<gtk::ToggleButton>(&app.ui, "spotify_playlists").set_active(true);
+    assert_eq!(app.playlists_model.n_items(), 1);
+    settle();
+    screenshot(app.window.upcast_ref(), "spotify-playlists-desktop.png");
+    app.window.set_default_size(820, 620);
+    settle();
+    screenshot(app.window.upcast_ref(), "spotify-playlists-compact.png");
+    let playlist_scroller = object::<gtk::GridView>(&app.ui, "playlist_grid")
+        .parent()
+        .unwrap();
+    for (_, ui) in app.playlist_cards.borrow().values() {
+        for id in ["title", "artist", "menu"] {
+            let bounds = object::<gtk::Widget>(ui, id)
+                .compute_bounds(&playlist_scroller)
+                .unwrap();
+            assert!(
+                bounds.y() >= 0.0
+                    && bounds.y() + bounds.height() <= playlist_scroller.height() as f32 + 1.0,
+                "Spotify card {id} should fit in the compact viewport"
+            );
+        }
+    }
+
+    let playlist_id = app.playlists_model.string(0).unwrap();
+    app.open_playlist(&playlist_id);
+    assert_eq!(app.page.borrow().as_str(), "spotify");
+    app.remove(&spotify_id);
+    assert!(
+        app.state
+            .borrow()
+            .playlist(&playlist_id)
+            .unwrap()
+            .tracks
+            .is_empty()
+    );
+    assert!(app.state.borrow().track(&spotify_id).is_some());
+    app.browse_back();
+    object::<gtk::ToggleButton>(&app.ui, "spotify_songs").set_active(true);
+    app.handle_spotify(crate::spotify::Reply::Search(
+        3,
+        Err("Offline Spotify fixture".into()),
+    ));
+    app.spotify.results.borrow_mut().clear();
+    app.refresh();
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "empty_title").text(),
+        "Spotify unavailable"
+    );
+    app.spotify_primary();
+    settle();
+    let account = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|w| w.downcast::<gtk::Window>().ok())
+        .find(|w| w.title().as_deref() == Some("Spotify account"))
+        .unwrap();
+    screenshot(&account, "spotify-account.png");
+    account.close();
+    // A failed Spotify reconnect must not cancel a newer YouTube resolution.
+    app.play_generation.set(200);
+    app.resolving.set(true);
+    app.spotify.pending_play.set(Some(199));
+    app.handle_spotify(crate::spotify::Reply::Connected(Err(
+        "Expired fixture sign-in".into(),
+    )));
+    assert!(app.resolving.get());
+    app.spotify.pending_play.set(Some(200));
+    app.handle_spotify(crate::spotify::Reply::Connected(Err(
+        "Expired fixture sign-in".into(),
+    )));
+    assert!(!app.resolving.get());
+    // Disconnect removes only Spotify material and leaves local playback usable.
+    app.audio.borrow_mut().detach_spotify();
+    app.handle_spotify(crate::spotify::Reply::Disconnected(Ok(())));
+    assert!(app.state.borrow().spotify_account.is_none());
+    assert!(app.state.borrow().track(&spotify_id).is_none());
+    app.play_track("test003", Some(0.0));
+    settle();
+    assert!(app.audio.borrow().playing);
     app.shutdown();
+    drop(spotify_runtime);
     app.window.destroy();
     object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
 }
