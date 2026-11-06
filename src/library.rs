@@ -13,7 +13,16 @@ use std::{
 pub struct Scan {
     pub tracks: Vec<Track>,
     pub skipped: usize,
-    pub seen: Vec<String>,
+    pub removed: Vec<String>,
+    pub unavailable: Vec<PathBuf>,
+}
+
+pub fn local_path(uri: &str) -> Option<PathBuf> {
+    let url = url::Url::parse(uri).ok()?;
+    if url.scheme() != "file" {
+        return None;
+    }
+    url.to_file_path().ok().filter(|p| p.is_absolute())
 }
 
 pub fn supported(path: &Path) -> bool {
@@ -52,12 +61,14 @@ pub fn scan(folders: &[PathBuf], existing: &[Track], cache: &Path) -> Result<Sca
     let mut result = Scan {
         tracks: vec![],
         skipped: 0,
-        seen: vec![],
+        removed: vec![],
+        unavailable: vec![],
     };
     let mut found = std::collections::HashSet::new();
     for folder in folders {
         if !folder.is_dir() {
-            return Err(format!("Folder unavailable: {}", folder.display()));
+            result.unavailable.push(folder.clone());
+            continue;
         }
         for entry in walkdir::WalkDir::new(folder).follow_links(false) {
             let entry = match entry {
@@ -83,7 +94,6 @@ pub fn scan(folders: &[PathBuf], existing: &[Track], cache: &Path) -> Result<Sca
             if !found.insert(uri.to_string()) {
                 continue;
             }
-            result.seen.push(uri.to_string());
             let Ok(meta) = path.metadata() else {
                 result.skipped += 1;
                 continue;
@@ -92,7 +102,7 @@ pub fn scan(folders: &[PathBuf], existing: &[Track], cache: &Path) -> Result<Sca
                 .modified()
                 .ok()
                 .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
-                .map(|m| m.as_secs())
+                .map(|m| m.as_nanos().min(u128::from(u64::MAX)) as u64)
                 .unwrap_or(0);
             if let Some(t) = old
                 .get(uri.as_str())
@@ -116,7 +126,67 @@ pub fn scan(folders: &[PathBuf], existing: &[Track], cache: &Path) -> Result<Sca
     result.tracks.sort_by(|a, b| {
         (&a.artist, &a.album, a.number, &a.title).cmp(&(&b.artist, &b.album, b.number, &b.title))
     });
+    // Check removals on the worker, only inside roots that remain available.
+    // A failed probe or permission error never means the file was deleted.
+    result.removed = existing
+        .iter()
+        .filter(|t| t.kind == Kind::Music && !found.contains(&t.uri))
+        .filter(|t| {
+            local_path(&t.uri).is_some_and(|p| {
+                folders
+                    .iter()
+                    .any(|f| !result.unavailable.contains(f) && f.is_dir() && p.starts_with(f))
+                    && fs::metadata(&p).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+            })
+        })
+        .map(|t| t.id.clone())
+        .collect();
     Ok(result)
+}
+
+pub struct Import {
+    pub tracks: Vec<Track>,
+    pub folders: Vec<PathBuf>,
+    pub skipped: usize,
+}
+
+pub fn import_paths(paths: &[PathBuf], existing: &[Track], cache: &Path) -> Result<Import, String> {
+    fs::create_dir_all(cache).map_err(|e| e.to_string())?;
+    let mut folders = Vec::new();
+    let mut files = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut skipped = 0;
+    for path in paths {
+        let Ok(path) = fs::canonicalize(path) else {
+            skipped += 1;
+            continue;
+        };
+        if !seen.insert(path.clone()) {
+            continue;
+        }
+        if path.is_dir() {
+            folders.push(path);
+        } else if path.is_file() && supported(&path) {
+            files.push(path);
+        } else {
+            skipped += 1;
+        }
+    }
+    let mut scan = scan(&folders, existing, cache)?;
+    for path in files {
+        if folders.iter().any(|f| path.starts_with(f)) {
+            continue;
+        }
+        match probe(&path, cache) {
+            Ok(track) => scan.tracks.push(track),
+            Err(_) => skipped += 1,
+        }
+    }
+    Ok(Import {
+        tracks: scan.tracks,
+        folders,
+        skipped: skipped + scan.skipped,
+    })
 }
 
 pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
@@ -253,6 +323,104 @@ fn refresh_sidecars(path: &Path, t: &mut Track) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn wav(path: &Path) {
+        let size = 8000u32;
+        let mut bytes = b"RIFF".to_vec();
+        bytes.extend((size + 36).to_le_bytes());
+        bytes.extend(b"WAVEfmt ");
+        bytes.extend(16u32.to_le_bytes());
+        bytes.extend(1u16.to_le_bytes());
+        bytes.extend(1u16.to_le_bytes());
+        bytes.extend(8000u32.to_le_bytes());
+        bytes.extend(16000u32.to_le_bytes());
+        bytes.extend(2u16.to_le_bytes());
+        bytes.extend(16u16.to_le_bytes());
+        bytes.extend(b"data");
+        bytes.extend(size.to_le_bytes());
+        bytes.resize(size as usize + 44, 0);
+        fs::write(path, bytes).unwrap();
+    }
+    #[test]
+    fn file_import_does_not_import_siblings_and_folder_import_is_recursive() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = dir.path().join("cache");
+        let picked = dir.path().join("picked song.wav");
+        wav(&picked);
+        wav(&dir.path().join("not selected.wav"));
+        let album = dir.path().join("album");
+        fs::create_dir_all(album.join("disc 2")).unwrap();
+        wav(&album.join("one.wav"));
+        wav(&album.join("disc 2/two.wav"));
+        fs::write(dir.path().join("notes.txt"), "not audio").unwrap();
+        let result = import_paths(
+            &[
+                picked.clone(),
+                picked.clone(),
+                album.clone(),
+                dir.path().join("notes.txt"),
+            ],
+            &[],
+            &cache,
+        )
+        .unwrap();
+        assert_eq!(result.tracks.len(), 3);
+        assert_eq!(result.folders, [album]);
+        assert_eq!(result.skipped, 1);
+        assert!(
+            result
+                .tracks
+                .iter()
+                .any(|t| local_path(&t.uri).as_ref() == Some(&picked))
+        );
+        assert!(
+            result
+                .tracks
+                .iter()
+                .all(|t| !t.uri.contains("selected.wav"))
+        );
+        assert!(local_path("https://example.test/song.wav").is_none());
+    }
+    #[test]
+    fn scans_detect_metadata_edits_and_only_prune_available_roots() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("music");
+        let offline = dir.path().join("offline");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&offline).unwrap();
+        let path = root.join("song.wav");
+        let away = offline.join("keep.wav");
+        wav(&path);
+        wav(&away);
+        let cache = dir.path().join("cache");
+        let folders = vec![root.clone(), offline.clone()];
+        let original = scan(&folders, &[], &cache).unwrap();
+        assert_eq!(original.tracks.len(), 2);
+        let edited = root.join("edited.wav");
+        assert!(
+            Command::new("ffmpeg")
+                .args(["-v", "error", "-i"])
+                .arg(&path)
+                .args(["-metadata", "title=Changed title"])
+                .arg(&edited)
+                .status()
+                .unwrap()
+                .success()
+        );
+        fs::rename(&edited, &path).unwrap();
+        fs::remove_dir_all(&offline).unwrap();
+        let updated = scan(&folders, &original.tracks, &cache).unwrap();
+        assert_eq!(updated.tracks.len(), 1);
+        assert_eq!(updated.tracks[0].title, "Changed title");
+        assert!(updated.removed.is_empty());
+        assert_eq!(updated.unavailable, [offline]);
+        fs::remove_file(&path).unwrap();
+        let removed = scan(&folders, &original.tracks, &cache).unwrap();
+        assert_eq!(removed.removed, [model_id(&path)]);
+        assert!(!removed.removed.contains(&model_id(&away)));
+    }
+    fn model_id(path: &Path) -> String {
+        crate::model::stable_id(url::Url::from_file_path(path).unwrap().as_str())
+    }
     #[test]
     fn new_sidecars_replace_downloaded_metadata_during_cached_scans() {
         let directory = tempfile::tempdir().unwrap();

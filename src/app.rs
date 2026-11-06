@@ -9,10 +9,12 @@ use crate::{
 
 mod artwork;
 mod browse;
+mod files;
 mod interactions;
 mod metadata;
 mod playback;
 mod podcasts;
+mod selection;
 mod spotify;
 #[cfg(test)]
 mod tests;
@@ -31,6 +33,7 @@ use std::{
 
 enum Message {
     Scan(Result<library::Scan, String>, Vec<PathBuf>),
+    LocalImport(Result<library::Import, String>),
     Radio(u64, Result<Vec<Track>, String>),
     PodcastSearch(u64, Result<Vec<services::PodcastShow>, String>),
     PlaylistImport(Result<playlists::Import, String>),
@@ -55,6 +58,8 @@ pub struct App {
     visible: RefCell<Vec<String>>,
     albums: RefCell<Vec<Vec<String>>>,
     tracks_model: gtk::StringList,
+    selection_syncing: Cell<bool>,
+    selection_context: RefCell<String>,
     albums_model: gtk::StringList,
     playlists_model: gtk::StringList,
     podcasts_model: gtk::StringList,
@@ -89,6 +94,7 @@ pub struct App {
     resolve_autoplay: Cell<bool>,
     preparation: RefCell<playback::Preparation>,
     scanning: Cell<bool>,
+    files: files::Controls,
     tx: mpsc::Sender<Message>,
     rx: RefCell<mpsc::Receiver<Message>>,
     save_tx: RefCell<Option<mpsc::Sender<State>>>,
@@ -171,6 +177,8 @@ impl App {
             visible: RefCell::new(vec![]),
             albums: RefCell::new(vec![]),
             tracks_model: gtk::StringList::new(&[]),
+            selection_syncing: Cell::new(false),
+            selection_context: RefCell::new(String::new()),
             albums_model: gtk::StringList::new(&[]),
             playlists_model: gtk::StringList::new(&[]),
             podcasts_model: gtk::StringList::new(&[]),
@@ -205,6 +213,7 @@ impl App {
             resolve_autoplay: Cell::new(true),
             preparation: Default::default(),
             scanning: Cell::new(false),
+            files: files::Controls::default(),
             tx,
             rx: RefCell::new(rx),
             save_tx: RefCell::new(Some(save_tx)),
@@ -225,6 +234,8 @@ impl App {
         });
         this.setup_actions();
         this.setup_lists();
+        this.setup_selection();
+        this.setup_files();
         this.setup_controls();
         this.setup_metadata();
         this.setup_wheel_controls();
@@ -754,14 +765,21 @@ impl App {
     }
 
     pub fn scan(self: &Rc<Self>, folders: Vec<PathBuf>) {
+        self.state.borrow_mut().folders = folders.clone();
+        self.sync_folder_watch();
+        self.persist();
         self.scan_folders(folders, false);
     }
 
     fn scan_folders(self: &Rc<Self>, folders: Vec<PathBuf>, background: bool) {
-        if self.scanning.replace(true) {
-            self.notice(&self.tr("A library scan is already running."), false, true);
+        if self.scanning.get() || self.files.importing.get() {
+            self.files.scan_pending.set(true);
+            if !background {
+                self.files.scan_manual.set(true);
+            }
             return;
         }
+        self.scanning.set(true);
         self.scan_background.set(background);
         if !background {
             self.notice(&self.tr("Finding your music…"), false, true);
@@ -1140,6 +1158,7 @@ impl App {
     }
 
     pub fn shutdown(&self) {
+        self.files.watcher.stop();
         self.metadata.borrow().stop();
         self.persist();
         self.audio.borrow_mut().stop();
@@ -1334,34 +1353,22 @@ impl App {
                         Err(error) => self.notice(&error, true, false),
                     }
                 }
+                Message::LocalImport(result) => self.imported_local(result),
                 Message::Scan(result, folders) => {
                     let background = self.scan_background.replace(false);
                     self.scanning.set(false);
                     self.button("refresh").set_sensitive(true);
+                    if folders != self.state.borrow().folders {
+                        self.files.scan_pending.set(true);
+                        continue;
+                    }
                     match result {
                         Ok(scan) => {
                             let count = scan.tracks.len();
-                            // Prune only missing files inside successfully scanned roots; never delete files on disk.
-                            let seen: HashSet<String> = scan.seen.into_iter().collect();
-                            let removed: Vec<String> = self
-                                .state
-                                .borrow()
-                                .tracks
-                                .iter()
-                                .filter(|t| t.kind == Kind::Music && !seen.contains(&t.uri))
-                                .filter(|t| {
-                                    url::Url::parse(&t.uri)
-                                        .ok()
-                                        .and_then(|u| u.to_file_path().ok())
-                                        .is_some_and(|p| {
-                                            folders.iter().any(|f| p.starts_with(f))
-                                                && std::fs::metadata(&p).is_err_and(|e| {
-                                                    e.kind() == std::io::ErrorKind::NotFound
-                                                })
-                                        })
-                                })
-                                .map(|t| t.id.clone())
-                                .collect();
+                            let removed = scan.removed;
+                            let newly_unavailable = !scan.unavailable.is_empty()
+                                && *self.files.unavailable.borrow() != scan.unavailable;
+                            *self.files.unavailable.borrow_mut() = scan.unavailable;
                             {
                                 let mut state = self.state.borrow_mut();
                                 if state
@@ -1371,12 +1378,7 @@ impl App {
                                 {
                                     self.audio.borrow_mut().stop();
                                 }
-                                for id in removed {
-                                    state.forget(&id);
-                                }
-                                if !background {
-                                    state.folders = folders;
-                                }
+                                state.forget_many(removed.iter().map(String::as_str));
                                 state.merge(scan.tracks);
                             }
                             if !background {
@@ -1391,6 +1393,14 @@ impl App {
                                     false,
                                     false,
                                 );
+                            }
+                            if newly_unavailable {
+                                self.notice(&self.tr("Some music folders are unavailable. Their library entries were kept."), true, false);
+                            } else if self.files.unavailable.borrow().is_empty()
+                                && object::<gtk::Label>(&self.ui, "notice_text").text()
+                                    == self.tr("Some music folders are unavailable. Their library entries were kept.")
+                            {
+                                object::<gtk::Box>(&self.ui, "notice").set_visible(false);
                             }
                             self.refresh();
                             self.update_player();
@@ -1476,6 +1486,7 @@ impl App {
         }
         self.poll_metadata();
         self.poll_source_refresh();
+        self.poll_files();
         let events = self.audio.borrow_mut().poll();
         for event in events {
             match event {
@@ -1616,6 +1627,7 @@ impl App {
         self.metadata_settings(&ui);
         self.refresh_settings(&ui);
         self.playback_settings(&ui);
+        self.file_settings(&ui);
         object::<gtk::Label>(&ui, "tray_note").set_visible(!self.tray_available.get());
         for folder in self.state.borrow().folders.clone() {
             let builder = gtk::Builder::from_string(include_str!("../resources/setting-row.ui"));
@@ -1629,6 +1641,7 @@ impl App {
             object::<gtk::Button>(&builder, "remove").connect_clicked(move |_| {
                 if let Some(a) = weak.upgrade() {
                     a.state.borrow_mut().folders.retain(|f| f != &folder);
+                    a.sync_folder_watch();
                     a.persist();
                     if let Some(row) = weak_row.upgrade() {
                         row.set_sensitive(false);
@@ -1684,14 +1697,17 @@ impl App {
             .modal(true)
             .text(self.tr("Keyboard shortcuts"))
             .secondary_text(format!(
-                "{}\n{}\n{}\n{}\n{}\n{}\n{}",
+                "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
                 self.tr("Ctrl + Space — Play / pause"),
                 self.tr("Alt + Left / Right — Previous / next"),
                 self.tr("Ctrl + O — Add music"),
                 self.tr("Ctrl + F — Search"),
                 self.tr("Ctrl + M — Mini player"),
                 self.tr("Ctrl + , — Settings"),
-                self.tr("Ctrl + Q — Quit")
+                self.tr("Ctrl + Q — Quit"),
+                self.tr("Ctrl / Shift + click — Select multiple tracks"),
+                self.tr("Ctrl + A / Escape — Select all / clear selection"),
+                self.tr("Ctrl + Shift + Up / Down — Reorder selected tracks")
             ))
             .buttons(gtk::ButtonsType::Close)
             .build();

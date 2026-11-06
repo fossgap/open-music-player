@@ -659,7 +659,7 @@
                                   <class name="table-header" />
                                 </style>
                                 <child>
-                                  <object class="GtkLabel">
+                                  <object class="GtkLabel" id="track_heading">
                                     <property name="label">Track</property>
                                     <property name="hexpand">true</property>
                                     <property name="xalign">0</property>
@@ -693,6 +693,7 @@
                                 <property name="child">
                                   <object class="GtkListView" id="track_list">
                                     <property name="single-click-activate">false</property>
+                                    <property name="enable-rubberband">true</property>
                                     <style>
                                       <class name="track-list" />
                                     </style>
@@ -700,6 +701,16 @@
                                 </property>
                               </object>
                             </child>
+                            <child><object class="GtkBox" id="selection_bar"><property name="visible">false</property><property name="spacing">8</property><style><class name="selection-bar"/></style>
+                              <child><object class="GtkLabel" id="selection_count"><property name="hexpand">true</property><property name="xalign">0</property><property name="ellipsize">end</property><property name="width-chars">1</property></object></child>
+                              <child><object class="GtkButton" id="selection_play"><property name="icon-name">media-playback-start-symbolic</property><property name="tooltip-text">Play selection</property><property name="action-name">app.selection-play</property></object></child>
+                              <child><object class="GtkMenuButton" id="selection_actions"><property name="label">Actions</property></object></child>
+                              <child><object class="GtkBox" id="selection_order"><property name="spacing">4</property>
+                                <child><object class="GtkButton"><property name="icon-name">go-up-symbolic</property><property name="tooltip-text">Move up</property><property name="action-name">app.selection-up</property></object></child>
+                                <child><object class="GtkButton"><property name="icon-name">go-down-symbolic</property><property name="tooltip-text">Move down</property><property name="action-name">app.selection-down</property></object></child>
+                              </object></child>
+                              <child><object class="GtkButton"><property name="icon-name">edit-clear-symbolic</property><property name="tooltip-text">Clear selection</property><property name="action-name">app.selection-clear</property><style><class name="flat"/></style></object></child>
+                            </object></child>
                           </object>
                         </property>
                       </object>

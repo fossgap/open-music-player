@@ -9,7 +9,7 @@ enum Grid {
 
 /// Preserve item identity, selection and scroll position when only playback or
 /// metadata changes. Structural changes touch only the changed middle range.
-fn sync_model(model: &gtk::StringList, ids: &[String]) {
+pub(super) fn sync_model(model: &gtk::StringList, ids: &[String]) {
     let old: Vec<String> = (0..model.n_items())
         .filter_map(|i| model.string(i).map(|s| s.to_string()))
         .collect();
@@ -63,7 +63,8 @@ impl App {
             });
             app.track_rows
                 .borrow_mut()
-                .insert(item.as_ptr() as usize, (item.downgrade(), ui));
+                .insert(item.as_ptr() as usize, (item.downgrade(), ui.clone()));
+            app.setup_track_drag(item, &ui);
         });
         let weak = Rc::downgrade(self);
         factory.connect_bind(move |_, item| {
@@ -88,10 +89,16 @@ impl App {
             }
         });
         let view: gtk::ListView = object(&self.ui, "track_list");
-        let selection = gtk::SingleSelection::new(Some(self.tracks_model.clone()));
-        selection.set_autoselect(false);
-        selection.set_can_unselect(true);
+        let selection = gtk::MultiSelection::new(Some(self.tracks_model.clone()));
         view.set_model(Some(&selection));
+        let weak = Rc::downgrade(self);
+        selection.connect_selection_changed(move |_, _, _| {
+            if let Some(app) = weak.upgrade() {
+                if !app.selection_syncing.get() {
+                    app.update_selection();
+                }
+            }
+        });
         view.set_factory(Some(&factory));
         let weak = Rc::downgrade(self);
         view.connect_activate(move |_, position| {
@@ -138,12 +145,35 @@ impl App {
             ("Play", "app.play-track"),
             ("Add to queue", "app.enqueue"),
             ("Add to playlist", "app.playlist-add"),
-            ("Remove", "app.remove"),
         ] {
             let entry = gio::MenuItem::new(Some(&self.tr(label)), None);
             entry.set_action_and_target_value(Some(action), Some(&track.id.to_variant()));
             menu.append_item(&entry);
         }
+        let remove = gio::MenuItem::new(Some(&self.tr("Remove")), None);
+        remove.set_action_and_target_value(
+            Some("app.row-remove"),
+            Some(
+                &serde_json::to_string(&(
+                    self.page.borrow().clone(),
+                    self.playlist.borrow().clone(),
+                    track.id.clone(),
+                    item.position() as usize,
+                ))
+                .unwrap()
+                .to_variant(),
+            ),
+        );
+        menu.append_item(&remove);
+        if crate::library::local_path(&track.uri).is_some() {
+            let entry = gio::MenuItem::new(Some(&self.tr("Open location")), None);
+            entry.set_action_and_target_value(
+                Some("app.open-location"),
+                Some(&track.id.to_variant()),
+            );
+            menu.append_item(&entry);
+        }
+        object::<gtk::Image>(ui, "drag_handle").set_visible(self.can_reorder());
         if track.kind == Kind::Spotify {
             let item = gio::MenuItem::new(Some(&self.tr("Open in Spotify")), None);
             item.set_action_and_target_value(
@@ -487,16 +517,11 @@ impl App {
         let compact_service =
             (service || page == "streams" || (page == "podcasts" && self.podcast_discovery.get()))
                 && self.compact_browse.get();
-        let content: gtk::Box = object(&self.ui, "content");
-        content.set_spacing(if compact_service { 10 } else { 20 });
-        content.set_margin_top(if compact_service { 16 } else { 26 });
-        content.set_margin_bottom(if compact_service { 12 } else { 20 });
         let illustration: gtk::DrawingArea = object(&self.ui, "empty_art");
         illustration.set_visible(!compact_service);
         if let Some(empty) = illustration.parent().and_downcast::<gtk::Box>() {
             empty.set_spacing(if compact_service { 10 } else { 16 });
         }
-        object::<gtk::Label>(&self.ui, "footer_status").set_visible(!compact_service);
 
         let playlist_overview = (page == "playlists"
             || (youtube && self.youtube.playlists.get())
@@ -690,7 +715,7 @@ impl App {
         }
         let ids: Vec<String> = tracks.iter().map(|t| t.id.clone()).collect();
         *self.visible.borrow_mut() = ids.clone();
-        sync_model(&self.tracks_model, &ids);
+        self.sync_track_selection(&ids);
         let mut album_count = 0;
         if page == "library" && album.is_none() {
             let mut groups: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
@@ -1031,6 +1056,12 @@ impl App {
             }
         }
         self.schedule_metadata();
+        self.update_selection();
+        object::<gtk::Label>(&self.ui, "track_heading").set_margin_start(if self.can_reorder() {
+            96
+        } else {
+            66
+        });
     }
 
     pub(super) fn open_album(self: &Rc<Self>, id: &str) {
@@ -1179,6 +1210,14 @@ impl App {
         track_id: Option<String>,
         rename: Option<String>,
     ) {
+        self.playlist_tracks_dialog(track_id.into_iter().collect(), rename);
+    }
+
+    pub(super) fn playlist_tracks_dialog(
+        self: &Rc<Self>,
+        track_ids: Vec<String>,
+        rename: Option<String>,
+    ) {
         let ui = gtk::Builder::from_string(include_str!("../../resources/playlist.ui"));
         self.i18n.builder(&ui);
         let window: gtk::Window = object(&ui, "dialog");
@@ -1187,7 +1226,7 @@ impl App {
         window.set_application(Some(&self.application));
         let title = self.tr(if rename.is_some() {
             "Rename playlist"
-        } else if track_id.is_some() {
+        } else if !track_ids.is_empty() {
             "Add to playlist"
         } else {
             "New playlist"
@@ -1222,7 +1261,7 @@ impl App {
             picker.select_row(Some(&row));
         }
         object::<gtk::ScrolledWindow>(&ui, "existing_scroll")
-            .set_visible(track_id.is_some() && !lists.is_empty());
+            .set_visible(!track_ids.is_empty() && !lists.is_empty());
         let weak = window.downgrade();
         object::<gtk::Button>(&ui, "cancel").connect_clicked(move |_| {
             if let Some(w) = weak.upgrade() {
@@ -1239,7 +1278,7 @@ impl App {
             let name = entry.text().trim().to_string();
             let result = if let Some(id) = &rename {
                 state.rename_playlist(id, &name).map(|()| id.clone())
-            } else if name.is_empty() && track_id.is_some() {
+            } else if name.is_empty() && !track_ids.is_empty() {
                 picker
                     .selected_row()
                     .and_then(|r| lists.get(r.index() as usize))
@@ -1256,7 +1295,12 @@ impl App {
                     return;
                 }
             };
-            if let Some(track) = &track_id {
+            let valid: Vec<_> = track_ids
+                .iter()
+                .filter(|id| state.track(id).is_some())
+                .cloned()
+                .collect();
+            for track in &valid {
                 if let Some(list) = state.playlists.iter_mut().find(|p| p.id == id) {
                     if !list.tracks.contains(track) {
                         list.tracks.push(track.clone());

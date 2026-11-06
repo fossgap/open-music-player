@@ -1,5 +1,6 @@
 mod app;
 mod audio;
+mod collections;
 mod desktop;
 mod enrichment;
 mod i18n;
@@ -10,6 +11,7 @@ mod process;
 mod services;
 mod spotify;
 mod storage;
+mod watch;
 mod youtube_music;
 
 use gtk::{gio, glib, prelude::*};

@@ -76,6 +76,11 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     application.register(None::<&gio::Cancellable>).unwrap();
     let app = App::new(&application, state).unwrap();
     settle();
+    let initial_state = app.state.borrow().clone();
+    exercise_pointer_reordering(&app);
+    *app.state.borrow_mut() = initial_state;
+    app.navigate("library");
+    settle();
     // Large podcast libraries must not decode hundreds of covers inside navigation.
     let cover =
         gtk::gdk_pixbuf::Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 64, 64).unwrap();
@@ -180,9 +185,9 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
         let selection = view
             .model()
             .unwrap()
-            .downcast::<gtk::SingleSelection>()
+            .downcast::<gtk::MultiSelection>()
             .unwrap();
-        selection.set_selected(position);
+        selection.select_item(position, true);
         settle();
         let before = scroller.vadjustment().value();
         assert!(before > 500.0);
@@ -192,9 +197,8 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
         view.emit_by_name::<()>("activate", &[&position]);
         settle();
         assert_eq!(app.state.borrow().current.as_deref(), Some(id.as_str()));
-        assert_eq!(
-            selection.selected(),
-            position,
+        assert!(
+            selection.is_selected(position),
             "{page}: selection changed during playback"
         );
         assert_eq!(
@@ -1179,10 +1183,529 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     settle();
     screenshot(&settings, "playback-settings.png");
     settings.close();
+    exercise_library_controls(&app, directory.path(), &audio);
     app.shutdown();
     drop(spotify_runtime);
     app.window.destroy();
     object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+}
+
+fn controller<T: IsA<gtk::EventController> + IsA<glib::Object>>(
+    widget: &impl IsA<gtk::Widget>,
+) -> T {
+    let controllers = widget.observe_controllers();
+    (0..controllers.n_items())
+        .find_map(|i| controllers.item(i).and_downcast::<T>())
+        .unwrap()
+}
+
+fn until(condition: impl Fn() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(12);
+    while !condition() && Instant::now() < deadline {
+        settle();
+    }
+    assert!(condition(), "Library operation timed out");
+}
+
+// Drive actual mouse events: emitting prepare/drop directly bypasses GTK's
+// competition between the row click, rubberband and drag-source gestures.
+fn exercise_pointer_reordering(app: &Rc<App>) {
+    fn xdo(args: &[&str]) -> String {
+        let result = std::process::Command::new("xdotool")
+            .args(args)
+            .output()
+            .expect("Install xdotool to run the desktop tests");
+        assert!(
+            result.status.success(),
+            "xdotool: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        String::from_utf8(result.stdout).unwrap()
+    }
+    fn has_rubberband(widget: &gtk::Widget) -> bool {
+        if widget.css_name() == "rubberband" {
+            return true;
+        }
+        let mut child = widget.first_child();
+        while let Some(current) = child {
+            if has_rubberband(&current) {
+                return true;
+            }
+            child = current.next_sibling();
+        }
+        false
+    }
+    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Audio Player$"]);
+    let window = windows.lines().last().unwrap();
+    xdo(&["windowfocus", "--sync", window]);
+    let pointer = |x: f32, y: f32| {
+        let (dx, dy) = app.window.surface_transform();
+        xdo(&[
+            "mousemove",
+            "--window",
+            window,
+            &((f64::from(x) + dx).round() as i32).to_string(),
+            &((f64::from(y) + dy).round() as i32).to_string(),
+        ]);
+        settle();
+    };
+    let original: Vec<_> = app
+        .state
+        .borrow()
+        .tracks
+        .iter()
+        .take(4)
+        .map(|t| t.id.clone())
+        .collect();
+    let playlist = app
+        .state
+        .borrow_mut()
+        .create_playlist("Drag regression", original.clone())
+        .unwrap();
+    let view: gtk::ListView = object(&app.ui, "track_list");
+    let selection = view.model().unwrap();
+    let row_ui = |position| {
+        app.track_rows
+            .borrow()
+            .values()
+            .find_map(|(item, ui)| {
+                item.upgrade()
+                    .filter(|i| i.position() == position)
+                    .map(|_| ui.clone())
+            })
+            .unwrap()
+    };
+    let current = app.state.borrow().current.clone();
+    for page in ["playlists", "queue"] {
+        if page == "playlists" {
+            app.open_playlist(&playlist);
+        } else {
+            app.navigate(page);
+        }
+        let order = || {
+            let state = app.state.borrow();
+            if page == "queue" {
+                state.queue.clone()
+            } else {
+                state.playlist(&playlist).unwrap().tracks.clone()
+            }
+        };
+        // Unselected row, selected group, cancellation, then another drag.
+        for (selected, from, cancel, edge) in [
+            (vec![], 1, false, false),
+            (vec![0, 2], 2, false, false),
+            (vec![1], 1, true, false),
+            (vec![1], 1, false, true),
+        ] {
+            {
+                let mut state = app.state.borrow_mut();
+                if page == "queue" {
+                    state.queue = original.clone();
+                } else {
+                    state
+                        .playlists
+                        .iter_mut()
+                        .find(|p| p.id == playlist)
+                        .unwrap()
+                        .tracks = original.clone();
+                }
+            }
+            app.refresh();
+            selection.unselect_all();
+            for &position in &selected {
+                selection.select_item(position, false);
+            }
+            object::<gtk::ScrolledWindow>(&app.ui, "track_scroller")
+                .vadjustment()
+                .set_value(0.0);
+            settle();
+            let handle: gtk::Image = object(&row_ui(from), "drag_handle");
+            let source = controller::<gtk::DragSource>(&handle);
+            let bounds = handle.compute_bounds(&app.window).unwrap();
+            let x = bounds.x() + if edge { 1.0 } else { bounds.width() / 2.0 };
+            let y = bounds.y() + bounds.height() / 2.0;
+            pointer(x, y);
+            xdo(&["mousedown", "1"]);
+            settle();
+            for dy in [3.0, 12.0, 30.0] {
+                pointer(x, y + dy);
+            }
+            let dragging = source.drag().is_some();
+            let rubberband = has_rubberband(view.upcast_ref());
+            if !dragging || rubberband {
+                xdo(&["key", "Escape", "mouseup", "1"]);
+                panic!(
+                    "Handle drag in {page}: dragging={dragging}, rubberband={rubberband}, selected={selected:?}, cancel={cancel}, edge={edge}"
+                );
+            }
+            if cancel {
+                xdo(&["key", "Escape"]);
+            } else {
+                let row: gtk::Box = object(&row_ui(3), "row");
+                let end = row.compute_bounds(&app.window).unwrap();
+                pointer(end.x() + 100.0, end.y() + end.height() - 3.0);
+            }
+            xdo(&["mouseup", "1"]);
+            until(|| source.drag().is_none());
+            let expected = if cancel {
+                original.clone()
+            } else if selected.len() == 2 {
+                vec![
+                    original[1].clone(),
+                    original[3].clone(),
+                    original[0].clone(),
+                    original[2].clone(),
+                ]
+            } else {
+                vec![
+                    original[0].clone(),
+                    original[2].clone(),
+                    original[3].clone(),
+                    original[1].clone(),
+                ]
+            };
+            assert_eq!(
+                order(),
+                expected,
+                "Pointer drag must move the intended entries in {page}"
+            );
+            assert_eq!(
+                app.state.borrow().current,
+                current,
+                "A handle drag must not start playback"
+            );
+        }
+        // Dragging the row body still selects an area after handle drags/cancel.
+        selection.unselect_all();
+        settle();
+        let first: gtk::Box = object(&row_ui(0), "row");
+        let last: gtk::Box = object(&row_ui(3), "row");
+        let first = first.compute_bounds(&app.window).unwrap();
+        let last = last.compute_bounds(&app.window).unwrap();
+        pointer(
+            first.x() + first.width() / 2.0,
+            first.y() + first.height() / 2.0,
+        );
+        xdo(&["mousedown", "1"]);
+        settle();
+        pointer(
+            last.x() + last.width() / 2.0 + 20.0,
+            last.y() + last.height() / 2.0,
+        );
+        let rubberband = has_rubberband(view.upcast_ref());
+        xdo(&["mouseup", "1"]);
+        settle();
+        assert!(
+            rubberband,
+            "Row-body area selection must remain available in {page}"
+        );
+        assert_eq!(app.selected_rows(), [0, 1, 2, 3]);
+    }
+}
+
+fn exercise_library_controls(app: &Rc<App>, directory: &std::path::Path, tone: &std::path::Path) {
+    app.show();
+    app.stop_playback();
+    app.state.borrow_mut().watch_music = false;
+    app.state.borrow_mut().refresh_minutes = 0;
+    app.sync_folder_watch();
+    app.window.set_default_size(1240, 800);
+    if object::<gtk::Revealer>(&app.ui, "detail_revealer").is_visible() {
+        app.toggle_details();
+    }
+    object::<gtk::ScrolledWindow>(&app.ui, "sidebar_scroller").set_visible(true);
+    object::<gtk::Box>(&app.ui, "notice").set_visible(false);
+    app.navigate("library");
+    object::<gtk::ToggleButton>(&app.ui, "tracks_view").set_active(true);
+    settle();
+    let selection = object::<gtk::ListView>(&app.ui, "track_list")
+        .model()
+        .unwrap();
+    selection.select_item(0, true);
+    selection.select_item(2, false);
+    assert_eq!(app.selected_rows(), [0, 2]);
+    selection.select_range(0, 3, true);
+    let ids: Vec<_> = (0..3)
+        .map(|i| app.tracks_model.string(i).unwrap().to_string())
+        .collect();
+    app.application.activate_action("selection-favorite", None);
+    assert!(
+        ids.iter()
+            .all(|id| app.state.borrow().track(id).unwrap().favorite)
+    );
+    app.application
+        .activate_action("selection-unfavorite", None);
+    assert!(
+        ids.iter()
+            .all(|id| !app.state.borrow().track(id).unwrap().favorite)
+    );
+    app.state.borrow_mut().shuffle = false;
+    app.application.activate_action("selection-play", None);
+    assert_eq!(app.state.borrow().queue, ids);
+    let current = app.state.borrow().current.clone();
+    app.application.activate_action("selection-playlist", None);
+    settle();
+    let dialog = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|w| w.downcast::<gtk::Window>().ok())
+        .find(|w| w.is_visible() && w.title().as_deref() == Some("Add to playlist"))
+        .unwrap();
+    descendant(dialog.upcast_ref(), "name")
+        .unwrap()
+        .downcast::<gtk::Entry>()
+        .unwrap()
+        .set_text("Batch collection");
+    descendant(dialog.upcast_ref(), "save")
+        .unwrap()
+        .downcast::<gtk::Button>()
+        .unwrap()
+        .emit_clicked();
+    settle();
+    let list_id = app.playlist.borrow().clone().unwrap();
+    assert_eq!(app.state.borrow().playlist(&list_id).unwrap().tracks, ids);
+    assert!(
+        app.selected_rows().is_empty(),
+        "Selection must not leak into another collection"
+    );
+    selection.select_item(0, true);
+    let row_ui = |position| {
+        app.track_rows
+            .borrow()
+            .values()
+            .find_map(|(item, ui)| {
+                item.upgrade()
+                    .filter(|i| i.position() == position)
+                    .map(|_| ui.clone())
+            })
+            .unwrap()
+    };
+    let source = controller::<gtk::DragSource>(&object::<gtk::Image>(&row_ui(0), "drag_handle"));
+    let provider = source
+        .emit_by_name::<Option<gdk::ContentProvider>>("prepare", &[&0f64, &0f64])
+        .unwrap();
+    let value = glib::BoxedValue(provider.value(selection::TrackDrag::static_type()).unwrap());
+    let row: gtk::Box = object(&row_ui(2), "row");
+    let target = controller::<gtk::DropTarget>(&row);
+    assert!(target.emit_by_name::<bool>("drop", &[&value, &0f64, &f64::from(row.height())]));
+    assert_eq!(
+        app.state.borrow().playlist(&list_id).unwrap().tracks,
+        [ids[1].clone(), ids[2].clone(), ids[0].clone()]
+    );
+    assert_eq!(
+        app.state.borrow().current,
+        current,
+        "Reordering must not restart playback"
+    );
+    assert!(
+        !target.emit_by_name::<bool>("drop", &[&value, &0f64, &0f64]),
+        "An old drag cannot change a newer order"
+    );
+    app.application.activate_action("selection-up", None);
+    assert_eq!(
+        app.state.borrow().playlist(&list_id).unwrap().tracks,
+        [ids[1].clone(), ids[0].clone(), ids[2].clone()]
+    );
+    selection.select_range(0, 2, true);
+    settle();
+    screenshot(app.window.upcast_ref(), "library-multiselect.png");
+    let actions: gtk::MenuButton = object(&app.ui, "selection_actions");
+    actions.popup();
+    settle();
+    screenshot(app.window.upcast_ref(), "library-selection-actions.png");
+    actions.popdown();
+    object::<gtk::ScrolledWindow>(&app.ui, "sidebar_scroller").set_visible(false);
+    app.window.set_default_size(820, 620);
+    settle();
+    screenshot(app.window.upcast_ref(), "library-selection-compact.png");
+    let bar: gtk::Box = object(&app.ui, "selection_bar");
+    let bounds = bar.compute_bounds(&app.window).unwrap();
+    assert!(bounds.x() + bounds.width() <= app.window.width() as f32);
+    assert!(
+        object::<gtk::ScrolledWindow>(&app.ui, "track_scroller").height() >= 150,
+        "Compact multi-selection must leave room for multiple tracks"
+    );
+    app.window.set_default_size(1240, 800);
+    app.state
+        .borrow_mut()
+        .playlists
+        .iter_mut()
+        .find(|p| p.id == list_id)
+        .unwrap()
+        .tracks = vec![
+        ids[0].clone(),
+        ids[1].clone(),
+        ids[0].clone(),
+        ids[2].clone(),
+    ];
+    app.refresh();
+    let query = app.state.borrow().track(&ids[0]).unwrap().title.clone();
+    object::<gtk::SearchEntry>(&app.ui, "search").set_text(&query);
+    settle();
+    assert!(!app.can_reorder());
+    assert_eq!(app.tracks_model.n_items(), 2);
+    selection.select_item(1, true);
+    app.application.activate_action("selection-remove", None);
+    assert_eq!(
+        app.state.borrow().playlist(&list_id).unwrap().tracks,
+        ids,
+        "Remove only the selected duplicate occurrence"
+    );
+    assert!(tone.exists());
+    app.navigate("queue");
+    settle();
+    selection.select_item(0, true);
+    selection.select_item(2, false);
+    app.application.activate_action("selection-down", None);
+    assert_eq!(
+        app.state.borrow().queue,
+        [ids[1].clone(), ids[0].clone(), ids[2].clone()]
+    );
+    assert_eq!(app.state.borrow().current, current);
+    app.stop_playback();
+
+    // Real FileList drops, including a second drop while the first worker is busy.
+    let standalone_dir = directory.join("individual files");
+    let watched = directory.join("dropped album");
+    std::fs::create_dir_all(&standalone_dir).unwrap();
+    std::fs::create_dir_all(watched.join("disc 2")).unwrap();
+    let picked = standalone_dir.join("picked song.wav");
+    let second = standalone_dir.join("second song.wav");
+    std::fs::copy(tone, &picked).unwrap();
+    std::fs::copy(tone, &second).unwrap();
+    std::fs::copy(tone, standalone_dir.join("unselected.wav")).unwrap();
+    let song = watched.join("disc 2/watched.wav");
+    std::fs::copy(tone, &song).unwrap();
+    let drop = controller::<gtk::DropTarget>(&app.window);
+    let files =
+        gdk::FileList::from_array(&[gio::File::for_path(&picked), gio::File::for_path(&watched)]);
+    assert!(drop.emit_by_name::<bool>(
+        "drop",
+        &[&glib::BoxedValue(files.to_value()), &10f64, &10f64]
+    ));
+    let files = gdk::FileList::from_array(&[gio::File::for_path(&second)]);
+    assert!(drop.emit_by_name::<bool>(
+        "drop",
+        &[&glib::BoxedValue(files.to_value()), &10f64, &10f64]
+    ));
+    let id =
+        |path: &std::path::Path| model::stable_id(url::Url::from_file_path(path).unwrap().as_str());
+    until(|| {
+        app.state.borrow().track(&id(&picked)).is_some()
+            && app.state.borrow().track(&id(&second)).is_some()
+            && app.state.borrow().track(&id(&song)).is_some()
+    });
+    assert!(app.state.borrow().folders.contains(&watched));
+    assert!(!app.state.borrow().folders.contains(&standalone_dir));
+    assert!(
+        app.state
+            .borrow()
+            .track(&id(&standalone_dir.join("unselected.wav")))
+            .is_none()
+    );
+    let remote = gdk::FileList::from_array(&[gio::File::for_uri("https://example.test/song.wav")]);
+    assert!(!drop.emit_by_name::<bool>(
+        "drop",
+        &[&glib::BoxedValue(remote.to_value()), &10f64, &10f64]
+    ));
+    exercise_file_manager(app, &id(&picked), &picked);
+
+    app.state.borrow_mut().watch_music = true;
+    app.sync_folder_watch();
+    until(|| !app.scanning.get() && !app.files.importing.get());
+    // Let monitor registration and its initial scan finish before changing files.
+    settle();
+    settle();
+    let added = watched.join("new song.wav");
+    std::fs::copy(tone, &added).unwrap();
+    until(|| app.state.borrow().track(&id(&added)).is_some());
+    std::fs::write(
+        song.with_extension("lrc"),
+        "[00:00]Changed by the folder watcher",
+    )
+    .unwrap();
+    until(|| {
+        app.state
+            .borrow()
+            .track(&id(&song))
+            .and_then(|t| t.lyrics.as_deref())
+            .is_some_and(|s| s.contains("folder watcher"))
+    });
+    std::fs::remove_file(&added).unwrap();
+    until(|| app.state.borrow().track(&id(&added)).is_none());
+    assert!(
+        app.state.borrow().track(&id(&picked)).is_some(),
+        "Watching a folder must not prune an individually imported file"
+    );
+    app.settings();
+    settle();
+    let settings = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|w| w.downcast::<gtk::Window>().ok())
+        .find(|w| w.is_visible() && w.title().as_deref() == Some("Settings"))
+        .unwrap();
+    let watch = descendant(settings.upcast_ref(), "watch_music")
+        .unwrap()
+        .downcast::<gtk::Switch>()
+        .unwrap();
+    assert!(watch.is_active());
+    watch.set_active(false);
+    assert!(!app.state.borrow().watch_music);
+    settings.close();
+    app.navigate("library");
+    let removal: Vec<_> = (0..app.tracks_model.n_items())
+        .filter(|&i| {
+            app.tracks_model
+                .string(i)
+                .is_some_and(|t| t == id(&picked) || t == id(&second))
+        })
+        .collect();
+    assert_eq!(removal.len(), 2);
+    selection.unselect_all();
+    for row in removal {
+        selection.select_item(row, false);
+    }
+    app.application.activate_action("selection-remove", None);
+    assert!(app.state.borrow().track(&id(&picked)).is_none());
+    assert!(app.state.borrow().track(&id(&second)).is_none());
+    assert!(
+        picked.exists() && second.exists(),
+        "Bulk removal must leave files on disk"
+    );
+}
+
+fn exercise_file_manager(app: &Rc<App>, track: &str, path: &std::path::Path) {
+    let connection = gio::bus_get_sync(gio::BusType::Session, None::<&gio::Cancellable>).unwrap();
+    let requested = Rc::new(RefCell::new(Vec::<String>::new()));
+    let captured = requested.clone();
+    let xml = gio::DBusNodeInfo::for_xml("<node><interface name='org.freedesktop.FileManager1'><method name='ShowItems'><arg type='as' direction='in'/><arg type='s' direction='in'/></method></interface></node>").unwrap();
+    let registration = connection
+        .register_object("/org/freedesktop/FileManager1", &xml.interfaces()[0])
+        .method_call(move |_, _, _, _, _, params, invocation| {
+            let (uris, _) = params.get::<(Vec<String>, String)>().unwrap();
+            *captured.borrow_mut() = uris;
+            invocation.return_value(Some(&().to_variant()));
+        })
+        .build()
+        .unwrap();
+    let ready = Rc::new(Cell::new(false));
+    let acquired = ready.clone();
+    let owner = gio::bus_own_name_on_connection(
+        &connection,
+        "org.freedesktop.FileManager1",
+        gio::BusNameOwnerFlags::NONE,
+        move |_, _| acquired.set(true),
+        |_, _| {},
+    );
+    until(|| ready.get());
+    app.application
+        .activate_action("open-location", Some(&track.to_variant()));
+    until(|| !requested.borrow().is_empty());
+    assert_eq!(
+        *requested.borrow(),
+        [gio::File::for_path(path).uri().to_string()]
+    );
+    gio::bus_unown_name(owner);
+    connection.unregister_object(registration).unwrap();
 }
 
 fn screenshot(window: &gtk::Window, name: &str) {
@@ -1191,9 +1714,18 @@ fn screenshot(window: &gtk::Window, name: &str) {
     };
     std::fs::create_dir_all(&directory).unwrap();
     let paintable = gtk::WidgetPaintable::new(Some(window));
+    settle();
     let snapshot = gtk::Snapshot::new();
     paintable.snapshot(&snapshot, window.width() as f64, window.height() as f64);
-    let node = snapshot.to_node().unwrap();
+    let node = snapshot.to_node().unwrap_or_else(|| {
+        panic!(
+            "No rendered content for {name}: visible={}, mapped={}, size={}x{}",
+            window.is_visible(),
+            window.is_mapped(),
+            window.width(),
+            window.height()
+        )
+    });
     window
         .renderer()
         .unwrap()

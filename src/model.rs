@@ -156,6 +156,7 @@ pub struct State {
     pub fetch_covers: bool,
     pub fetch_lyrics: bool,
     pub refresh_minutes: u32,
+    pub watch_music: bool,
     pub playback: PlaybackSettings,
     #[serde(skip)]
     pub(crate) track_index: std::collections::HashMap<String, usize>,
@@ -185,6 +186,7 @@ impl Default for State {
             fetch_covers: true,
             fetch_lyrics: true,
             refresh_minutes: 0,
+            watch_music: true,
             playback: PlaybackSettings::default(),
             track_index: Default::default(),
         }
@@ -355,13 +357,19 @@ impl State {
     }
 
     pub fn forget(&mut self, id: &str) {
-        self.tracks.retain(|t| t.id != id);
-        self.queue.retain(|t| t != id);
+        self.forget_many([id]);
+    }
+
+    pub fn forget_many<'a>(&mut self, ids: impl IntoIterator<Item = &'a str>) {
+        let ids: HashSet<&str> = ids.into_iter().collect();
+        self.tracks.retain(|t| !ids.contains(t.id.as_str()));
+        self.queue.retain(|t| !ids.contains(t.as_str()));
         for list in &mut self.playlists {
-            list.tracks.retain(|t| t != id);
+            list.tracks.retain(|t| !ids.contains(t.as_str()));
         }
-        self.podcast_positions.remove(id);
-        if self.current.as_deref() == Some(id) {
+        self.podcast_positions
+            .retain(|id, _| !ids.contains(id.as_str()));
+        if self.current.as_deref().is_some_and(|id| ids.contains(id)) {
             self.current = None;
             self.position = 0.0;
         }
@@ -416,10 +424,13 @@ mod tests {
     fn refresh_preferences_default_to_manual_and_survive_storage() {
         let mut state: State = serde_json::from_str("{}").unwrap();
         assert_eq!(state.refresh_minutes, 0);
+        assert!(state.watch_music);
         state.refresh_minutes = 45;
+        state.watch_music = false;
         let restored: State =
             serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
         assert_eq!(restored.refresh_minutes, 45);
+        assert!(!restored.watch_music);
         state.refresh_minutes = u32::MAX;
         state.sanitize();
         assert_eq!(state.refresh_minutes, 1440);

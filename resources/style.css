@@ -88,3 +88,7 @@ button.card-play { opacity: 0; transition: opacity 150ms ease-out; }
 spinbutton { background: #252d28; color: #f1f3eb; border: 1px solid #3c4941; border-radius: 8px; }
 spinbutton text { background: transparent; color: #f1f3eb; padding: 7px 10px; }
 spinbutton:focus-within { outline: 2px solid #c2dfa3; outline-offset: 2px; }
+.selection-bar { padding: 8px; background: #29312d; border-radius: 8px; }
+.track-row.drop-before { box-shadow: inset 0 1px #c2dfa3; }
+.track-row.drop-after { box-shadow: inset 0 -1px #c2dfa3; }
+.drop-library { outline: 1px solid #c2dfa3; outline-offset: -2px; }
