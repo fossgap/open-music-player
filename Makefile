@@ -2,7 +2,7 @@ PREFIX ?= /usr
 DESTDIR ?=
 APP_ID = io.github.openaudio.Player
 
-.PHONY: build run test check smoke install uninstall deb rpm arch appimage
+.PHONY: build run test check smoke ui-test install uninstall deb rpm arch appimage
 build:
 	cargo build --release --locked
 run:
@@ -16,6 +16,8 @@ check:
 smoke:
 	cargo build --locked
 	xvfb-run -a dbus-run-session -- env GDK_BACKEND=x11 GSK_RENDERER=cairo python3 scripts/smoke-test.py
+ui-test:
+	bash scripts/ui-test.sh
 install:
 	install -Dm755 target/release/open-audio-player $(DESTDIR)$(PREFIX)/bin/open-audio-player
 	install -Dm644 packaging/$(APP_ID).desktop $(DESTDIR)$(PREFIX)/share/applications/$(APP_ID).desktop

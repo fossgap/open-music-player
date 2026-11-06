@@ -49,6 +49,129 @@ fn fetch(url: &str, limit: u64) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PodcastDirectory {
+    Apple,
+    Gpodder,
+}
+
+#[derive(Clone, Debug)]
+pub struct PodcastShow {
+    pub id: String,
+    pub title: String,
+    pub author: String,
+    pub feed_url: String,
+    pub artwork: Option<String>,
+    pub website: Option<String>,
+}
+
+pub fn podcast_search(
+    directory: PodcastDirectory,
+    query: &str,
+) -> Result<Vec<PodcastShow>, String> {
+    let (variable, default) = match directory {
+        PodcastDirectory::Apple => ("OPEN_AUDIO_ITUNES_API", "https://itunes.apple.com/"),
+        PodcastDirectory::Gpodder => ("OPEN_AUDIO_GPODDER_API", "https://gpodder.net/"),
+    };
+    // Overrides support private mirrors and deterministic offline integration tests.
+    let base = std::env::var(variable).unwrap_or_else(|_| default.into());
+    let mut base = http_url(&base)?;
+    if !base.path().ends_with('/') {
+        base.set_path(&format!("{}/", base.path()));
+    }
+    let query = query.trim();
+    let mut url = base
+        .join(match directory {
+            PodcastDirectory::Apple => "search",
+            PodcastDirectory::Gpodder if query.is_empty() => "toplist/50.json",
+            PodcastDirectory::Gpodder => "search.json",
+        })
+        .map_err(|e| e.to_string())?;
+    match directory {
+        PodcastDirectory::Apple => {
+            url.query_pairs_mut()
+                .append_pair("media", "podcast")
+                .append_pair("entity", "podcast")
+                .append_pair("limit", "50")
+                .append_pair("country", "US")
+                .append_pair("term", if query.is_empty() { "podcast" } else { query });
+        }
+        PodcastDirectory::Gpodder if !query.is_empty() => {
+            url.query_pairs_mut()
+                .append_pair("q", query)
+                .append_pair("scale_logo", "256");
+        }
+        _ => {}
+    }
+    parse_podcast_search(directory, &fetch(url.as_str(), 4_000_000)?)
+}
+
+pub fn parse_podcast_search(
+    directory: PodcastDirectory,
+    bytes: &[u8],
+) -> Result<Vec<PodcastShow>, String> {
+    let json: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    let results = match directory {
+        PodcastDirectory::Apple => json["results"].as_array(),
+        PodcastDirectory::Gpodder => json.as_array(),
+    }
+    .ok_or("The podcast directory returned an invalid response")?;
+    let mut seen = std::collections::HashSet::new();
+    let mut shows = Vec::new();
+    for item in results.iter().take(200) {
+        let string = |key: &str| item[key].as_str().unwrap_or("").trim();
+        let (feed, title, author, artwork, website) = match directory {
+            PodcastDirectory::Apple => (
+                string("feedUrl"),
+                string("collectionName"),
+                string("artistName"),
+                item["artworkUrl600"]
+                    .as_str()
+                    .unwrap_or(string("artworkUrl100")),
+                string("collectionViewUrl"),
+            ),
+            PodcastDirectory::Gpodder => (
+                string("url"),
+                string("title"),
+                string("author"),
+                item["scaled_logo_url"]
+                    .as_str()
+                    .unwrap_or(string("logo_url")),
+                string("website"),
+            ),
+        };
+        let Ok(mut feed) = http_url(feed) else {
+            continue;
+        };
+        feed.set_fragment(None);
+        let feed = feed.to_string();
+        if !seen.insert(feed.clone()) {
+            continue;
+        }
+        let title = if title.is_empty() {
+            string("trackName")
+        } else {
+            title
+        };
+        shows.push(PodcastShow {
+            id: stable_id(&feed),
+            title: if title.is_empty() {
+                "Podcast".into()
+            } else {
+                title.into()
+            },
+            author: author.into(),
+            feed_url: feed,
+            artwork: http_url(artwork).ok().map(|u| u.to_string()),
+            website: http_url(website).ok().map(|u| u.to_string()),
+        });
+        if shows.len() == 50 {
+            break;
+        }
+    }
+    Ok(shows)
+}
+
 pub fn radio(query: &str, cache: &Path) -> Result<Vec<Track>, String> {
     let mut last_error = String::new();
     for server in [
@@ -286,6 +409,18 @@ pub fn resolve_youtube(uri: &str) -> Result<(Track, String), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn podcast_directories_filter_invalid_feeds_and_deduplicate() {
+        let apple = br#"{"results":[{"collectionName":"Science","artistName":"Lab","feedUrl":"https://example.org/feed","artworkUrl600":"https://example.org/art.png"},{"collectionName":"Duplicate","feedUrl":"https://example.org/feed"},{"collectionName":"Invalid","feedUrl":"file:///tmp/feed"}]}"#;
+        let results = parse_podcast_search(PodcastDirectory::Apple, apple).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].author, "Lab");
+        let gpodder = br#"[{"title":"Other source","url":"https://example.org/rss","logo_url":"javascript:bad()","website":"https://example.org"}]"#;
+        let results = parse_podcast_search(PodcastDirectory::Gpodder, gpodder).unwrap();
+        assert_eq!(results[0].title, "Other source");
+        assert!(results[0].artwork.is_none());
+        assert!(parse_podcast_search(PodcastDirectory::Apple, b"{}").is_err());
+    }
     #[test]
     fn rejects_non_network_and_credential_urls() {
         for s in [

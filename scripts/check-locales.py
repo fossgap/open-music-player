@@ -12,7 +12,7 @@ for source in (root / "resources").glob("*.ui"):
     for prop in ET.parse(source).iter("property"):
         if prop.attrib.get("name") in {"label", "tooltip-text", "placeholder-text"} and prop.text:
             required.add(prop.text)
-for source in (root / "src").glob("*.rs"):
+for source in (root / "src").rglob("*.rs"):
     required.update(re.findall(r'\.tr\("([^"]+)"\)', source.read_text()))
 assert required <= english.keys(), f"Missing English keys: {required - english.keys()}"
 for locale in (root / "locales").glob("*.json"):

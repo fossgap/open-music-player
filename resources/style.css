@@ -53,6 +53,9 @@ listview > row:hover { background: #29332c; }
 listview > row:selected { background: #34412f; }
 gridview > child { border-radius: 12px; }
 gridview > child:hover { background: #29332c; }
+gridview > child:selected { background: #34412f; color: #f1f3eb; }
+/* Older GTK themes add margins to every nested box in a grid cell. */
+.podcast-card, .podcast-card box { margin: 0; }
 .track-row { padding: 9px 8px; }
 .track-title { color: #f1f3eb; font-weight: 650; font-size: 14px; }
 .track-row.playing .track-title { color: #c2dfa3; }

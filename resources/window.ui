@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version='1.0' encoding='UTF-8'?>
 <interface>
   <requires lib="gtk" version="4.8" />
   <object class="GtkAdjustment" id="seek_adjustment">
@@ -323,6 +323,17 @@
                   <object class="GtkBox">
                     <property name="spacing">16</property>
                     <child>
+                      <object class="GtkButton" id="browse_back">
+                        <property name="visible">false</property>
+                        <property name="icon-name">go-previous-symbolic</property>
+                        <property name="tooltip-text">Back</property>
+                        <property name="valign">center</property>
+                        <style>
+                          <class name="flat" />
+                        </style>
+                      </object>
+                    </child>
+                    <child>
                       <object class="GtkBox">
                         <property name="orientation">vertical</property>
                         <property name="hexpand">true</property>
@@ -334,6 +345,8 @@
                             <style>
                               <class name="page-title" />
                             </style>
+                            <property name="ellipsize">end</property>
+                            <property name="max-width-chars">32</property>
                           </object>
                         </child>
                         <child>
@@ -359,12 +372,43 @@
                       </object>
                     </child>
                     <child>
+                      <object class="GtkButton" id="playlist_import">
+                        <property name="visible">false</property>
+                        <property name="icon-name">document-open-symbolic</property>
+                        <property name="tooltip-text">Import playlist</property>
+                        <property name="valign">center</property>
+                        <style>
+                          <class name="flat" />
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="playlist_delete">
+                        <property name="visible">false</property>
+                        <property name="icon-name">user-trash-symbolic</property>
+                        <property name="tooltip-text">Delete playlist</property>
+                        <property name="valign">center</property>
+                        <style>
+                          <class name="flat" />
+                        </style>
+                      </object>
+                    </child>
+                    <child>
                       <object class="GtkButton" id="page_action">
                         <property name="label">Add music</property>
                         <property name="valign">center</property>
                         <style>
                           <class name="suggested-action" />
                         </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuButton" id="playlist_options">
+                        <property name="visible">false</property>
+                        <property name="icon-name">view-more-symbolic</property>
+                        <property name="tooltip-text">Playlist options</property>
+                        <property name="valign">center</property>
+                        <style><class name="flat" /></style>
                       </object>
                     </child>
                   </object>
@@ -449,6 +493,24 @@
                   </object>
                 </child>
                 <child>
+                  <object class="GtkBox" id="podcast_tabs">
+                    <property name="visible">false</property>
+                    <property name="spacing">8</property>
+                    <child>
+                      <object class="GtkToggleButton" id="podcast_library">
+                        <property name="label">Your episodes</property>
+                        <property name="active">true</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkToggleButton" id="podcast_discover">
+                        <property name="label">Discover podcasts</property>
+                        <property name="group">podcast_library</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
                   <object class="GtkBox" id="toolbar">
                     <property name="spacing">12</property>
                     <child>
@@ -459,9 +521,16 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkDropDown" id="playlist_picker">
+                      <object class="GtkDropDown" id="podcast_provider">
                         <property name="visible">false</property>
-                        <property name="tooltip-text">Choose playlist</property>
+                        <property name="tooltip-text">Podcast directory</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="podcast_search">
+                        <property name="visible">false</property>
+                        <property name="icon-name">system-search-symbolic</property>
+                        <property name="tooltip-text">Search podcasts</property>
                       </object>
                     </child>
                     <child>
@@ -596,7 +665,7 @@
                               </object>
                             </child>
                             <child>
-                              <object class="GtkScrolledWindow">
+                              <object class="GtkScrolledWindow" id="track_scroller">
                                 <property name="vexpand">true</property>
                                 <property name="hscrollbar-policy">never</property>
                                 <property name="child">
@@ -617,10 +686,29 @@
                       <object class="GtkStackPage">
                         <property name="name">albums</property>
                         <property name="child">
-                          <object class="GtkScrolledWindow">
+                          <object class="GtkScrolledWindow" id="album_scroller">
                             <property name="hscrollbar-policy">never</property>
                             <property name="child">
                               <object class="GtkGridView" id="album_grid">
+                                <property name="min-columns">2</property>
+                                <property name="max-columns">5</property>
+                                <property name="single-click-activate">false</property>
+                              </object>
+                            </property>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                    <property name="vhomogeneous">false</property>
+                    <property name="hhomogeneous">false</property>
+                    <child>
+                      <object class="GtkStackPage">
+                        <property name="name">playlists</property>
+                        <property name="child">
+                          <object class="GtkScrolledWindow" id="playlist_scroller">
+                            <property name="hscrollbar-policy">never</property>
+                            <property name="child">
+                              <object class="GtkGridView" id="playlist_grid">
                                 <property name="min-columns">2</property>
                                 <property name="max-columns">5</property>
                                 <property name="single-click-activate">true</property>
@@ -630,8 +718,23 @@
                         </property>
                       </object>
                     </child>
-                    <property name="vhomogeneous">false</property>
-                    <property name="hhomogeneous">false</property>
+                    <child>
+                      <object class="GtkStackPage">
+                        <property name="name">podcasts</property>
+                        <property name="child">
+                          <object class="GtkScrolledWindow" id="podcast_scroller">
+                            <property name="hscrollbar-policy">never</property>
+                            <property name="child">
+                              <object class="GtkGridView" id="podcast_grid">
+                                <property name="min-columns">2</property>
+                                <property name="max-columns">5</property>
+                                <property name="single-click-activate">false</property>
+                              </object>
+                            </property>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
                   </object>
                 </child>
                 <child>

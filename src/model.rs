@@ -57,6 +57,8 @@ pub struct Subscription {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Playlist {
+    #[serde(default)]
+    pub id: String,
     pub name: String,
     pub tracks: Vec<String>,
 }
@@ -148,7 +150,14 @@ impl State {
         self.tracks
             .retain(|t| !t.id.is_empty() && !t.uri.is_empty() && ids.insert(t.id.clone()));
         self.queue.retain(|id| ids.contains(id));
-        for list in &mut self.playlists {
+        let mut playlist_ids = HashSet::new();
+        for (index, list) in self.playlists.iter_mut().enumerate() {
+            if list.id.is_empty() || !playlist_ids.insert(list.id.clone()) {
+                list.id = stable_id(&format!("playlist:{index}:{}", list.name));
+                while !playlist_ids.insert(list.id.clone()) {
+                    list.id.push('p');
+                }
+            }
             list.tracks.retain(|id| ids.contains(id));
         }
         if self.current.as_ref().is_some_and(|id| !ids.contains(id)) {
@@ -166,6 +175,73 @@ impl State {
             0.0
         };
         self.reindex();
+    }
+
+    pub fn playlist(&self, id: &str) -> Option<&Playlist> {
+        self.playlists.iter().find(|p| p.id == id)
+    }
+
+    pub fn playlist_name(&self, name: &str, except: Option<&str>) -> Result<String, &'static str> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("Enter a playlist name.");
+        }
+        if name.chars().count() > 100 {
+            return Err("Use a name with 100 characters or fewer.");
+        }
+        if self
+            .playlists
+            .iter()
+            .any(|p| Some(p.id.as_str()) != except && p.name.to_lowercase() == name.to_lowercase())
+        {
+            return Err("A playlist with this name already exists.");
+        }
+        Ok(name.into())
+    }
+
+    pub fn create_playlist(
+        &mut self,
+        name: &str,
+        tracks: Vec<String>,
+    ) -> Result<String, &'static str> {
+        let name = self.playlist_name(name, None)?;
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let mut id = stable_id(&format!("playlist:{name}:{nonce}"));
+        while self.playlist(&id).is_some() {
+            id.push('p');
+        }
+        self.playlists.push(Playlist {
+            id: id.clone(),
+            name,
+            tracks,
+        });
+        Ok(id)
+    }
+
+    pub fn rename_playlist(&mut self, id: &str, name: &str) -> Result<(), &'static str> {
+        let name = self.playlist_name(name, Some(id))?;
+        let playlist = self
+            .playlists
+            .iter_mut()
+            .find(|p| p.id == id)
+            .ok_or("Playlist not found.")?;
+        playlist.name = name;
+        Ok(())
+    }
+
+    pub fn unique_playlist_name(&self, name: &str) -> String {
+        let base: String = name.trim().chars().take(90).collect();
+        let base = if base.is_empty() { "Playlist" } else { &base };
+        let mut candidate = base.to_string();
+        let mut suffix = 2;
+        while self.playlist_name(&candidate, None).is_err() {
+            candidate = format!("{base} ({suffix})");
+            suffix += 1;
+        }
+        candidate
     }
 
     pub fn adjacent(&self, forward: bool, automatic: bool) -> Option<String> {
@@ -292,6 +368,7 @@ mod tests {
     fn removal_cleans_queue_playlists_and_resume() {
         let mut s = state();
         s.playlists.push(Playlist {
+            id: "playlist".into(),
             name: "Set".into(),
             tracks: s.queue.clone(),
         });
@@ -304,5 +381,29 @@ mod tests {
     fn formats_time() {
         assert_eq!(duration(3672.0), "1:01:12");
         assert_eq!(duration(65.0), "1:05");
+    }
+
+    #[test]
+    fn legacy_playlists_get_stable_ids_without_losing_membership() {
+        let mut state: State = serde_json::from_str(r#"{"tracks":[{"id":"track","uri":"file:///song.flac"}],"playlists":[{"name":"Old mix","tracks":["track"]},{"name":"Other","tracks":[]}]}"#).unwrap();
+        state.sanitize();
+        let id = state.playlists[0].id.clone();
+        assert!(!id.is_empty());
+        state.rename_playlist(&id, "New name").unwrap();
+        state.sanitize();
+        assert_eq!(state.playlist(&id).unwrap().tracks, vec!["track"]);
+        let copy: State = serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert_eq!(copy.playlists[0].id, id);
+    }
+
+    #[test]
+    fn playlist_names_are_validated_without_merging_existing_lists() {
+        let mut state = State::default();
+        let id = state.create_playlist("  Evening  ", vec![]).unwrap();
+        assert!(state.create_playlist("evening", vec![]).is_err());
+        assert!(state.rename_playlist(&id, " ").is_err());
+        state.rename_playlist(&id, "EVENING").unwrap();
+        assert_eq!(state.unique_playlist_name("Evening"), "Evening (2)");
+        assert_eq!(state.playlists.len(), 1);
     }
 }

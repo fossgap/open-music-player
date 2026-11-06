@@ -4,6 +4,7 @@ mod desktop;
 mod i18n;
 mod library;
 mod model;
+mod playlists;
 mod process;
 mod services;
 mod storage;

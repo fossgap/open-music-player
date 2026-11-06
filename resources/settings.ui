@@ -13,7 +13,6 @@
       <child><object class="GtkButton" id="add_folder"><property name="label">Add music</property><property name="halign">start</property></object></child>
       <child><object class="GtkLabel"><property name="label">Subscriptions</property><property name="xalign">0</property><style><class name="section-title"/></style></object></child>
       <child><object class="GtkListBox" id="subscriptions"><property name="selection-mode">none</property></object></child>
-      <child><object class="GtkButton" id="delete_playlist"><property name="label">Delete selected playlist</property><property name="halign">start</property></object></child>
       <child><object class="GtkSeparator"/></child>
       <child><object class="GtkLabel"><property name="label">Open Audio Player · 0.1.0</property><property name="xalign">0</property><style><class name="muted"/><class name="small"/></style></object></child>
       <child><object class="GtkButton" id="close"><property name="label">Done</property><property name="halign">end</property><style><class name="suggested-action"/></style></object></child>

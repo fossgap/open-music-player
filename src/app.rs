@@ -2,9 +2,14 @@ use crate::{
     audio::{Audio, Event},
     i18n::I18n,
     library,
-    model::{self, Kind, Playlist, Repeat, State, Subscription, Track},
-    services, storage,
+    model::{self, Kind, Repeat, State, Subscription, Track},
+    playlists, services, storage,
 };
+
+mod browse;
+#[cfg(test)]
+mod tests;
+type BoundItems = RefCell<HashMap<usize, (glib::WeakRef<gtk::ListItem>, gtk::Builder)>>;
 use gtk::{gdk, gio, glib, prelude::*};
 use std::{
     cell::{Cell, RefCell},
@@ -18,6 +23,8 @@ use std::{
 enum Message {
     Scan(Result<library::Scan, String>, Vec<PathBuf>),
     Radio(u64, Result<Vec<Track>, String>),
+    PodcastSearch(u64, Result<Vec<services::PodcastShow>, String>),
+    PlaylistImport(Result<playlists::Import, String>),
     Feed(Result<(Subscription, Vec<Track>), String>),
     Youtube(u64, Result<(Track, String), String>),
     Artwork(String, Result<String, String>),
@@ -38,8 +45,22 @@ pub struct App {
     albums: RefCell<Vec<Vec<String>>>,
     tracks_model: gtk::StringList,
     albums_model: gtk::StringList,
+    playlists_model: gtk::StringList,
+    podcasts_model: gtk::StringList,
+    track_rows: BoundItems,
+    album_cards: BoundItems,
+    playlist_cards: BoundItems,
+    podcast_cards: BoundItems,
     radio_results: RefCell<Vec<String>>,
-    playlist: Cell<u32>,
+    playlist: RefCell<Option<String>>,
+    album: RefCell<Option<(String, String)>>,
+    parent_query: RefCell<String>,
+    podcast_discovery: Cell<bool>,
+    podcast_results: RefCell<Vec<services::PodcastShow>>,
+    podcast_generation: Cell<u64>,
+    podcast_failed: Cell<bool>,
+    compact_browse: Cell<bool>,
+    importing_playlist: Cell<bool>,
     source_generation: Cell<u64>,
     play_generation: Cell<u64>,
     scanning: Cell<bool>,
@@ -122,8 +143,22 @@ impl App {
             albums: RefCell::new(vec![]),
             tracks_model: gtk::StringList::new(&[]),
             albums_model: gtk::StringList::new(&[]),
+            playlists_model: gtk::StringList::new(&[]),
+            podcasts_model: gtk::StringList::new(&[]),
+            track_rows: Default::default(),
+            album_cards: Default::default(),
+            playlist_cards: Default::default(),
+            podcast_cards: Default::default(),
             radio_results: RefCell::new(vec![]),
-            playlist: Cell::new(0),
+            playlist: RefCell::new(None),
+            album: RefCell::new(None),
+            parent_query: RefCell::new(String::new()),
+            podcast_discovery: Cell::new(false),
+            podcast_results: RefCell::new(vec![]),
+            podcast_generation: Cell::new(0),
+            podcast_failed: Cell::new(false),
+            compact_browse: Cell::new(false),
+            importing_playlist: Cell::new(false),
             source_generation: Cell::new(0),
             play_generation: Cell::new(0),
             scanning: Cell::new(false),
@@ -153,7 +188,6 @@ impl App {
         };
         object::<gtk::Scale>(&this.ui, "volume").set_value(volume);
         object::<gtk::ToggleButton>(&this.ui, "shuffle").set_active(shuffle);
-        this.refresh_playlists();
         this.refresh();
         this.update_player();
         let weak = Rc::downgrade(&this);
@@ -220,6 +254,20 @@ impl App {
         self.action("shortcuts", |app| app.shortcuts());
         self.action("primary", |app| app.primary_action());
         self.action("refresh", |app| app.refresh_sources());
+        self.action("back", |app| app.browse_back());
+        self.action("playlist-import", |app| app.choose_playlist());
+        self.action("new-playlist", |app| app.playlist_dialog(None, None));
+        self.action("podcast-search", |app| app.discover_podcasts());
+        self.string_action("open-album", |app, id| app.open_album(id));
+        self.string_action("open-playlist", |app, id| app.open_playlist(id));
+        self.string_action("rename-playlist", |app, id| {
+            app.playlist_dialog(None, Some(id.into()))
+        });
+        self.string_action("delete-playlist", |app, id| app.delete_playlist(id));
+        self.string_action("import-playlist", |app, path| {
+            app.import_playlist(PathBuf::from(path))
+        });
+        self.string_action("subscribe-show", |app, id| app.subscribe_show(id));
         self.action("details", |app| app.toggle_details());
         self.action("albums", |app| {
             app.navigate("library");
@@ -244,7 +292,7 @@ impl App {
         });
         self.string_action("favorite", |app, id| app.favorite(id));
         self.string_action("playlist-add", |app, id| {
-            app.playlist_dialog(Some(id.into()))
+            app.playlist_dialog(Some(id.into()), None)
         });
         self.string_action("remove", |app, id| app.remove(id));
         self.application
@@ -265,6 +313,8 @@ impl App {
             .set_accels_for_action("app.details", &["<Primary>l"]);
         self.application
             .set_accels_for_action("app.refresh", &["<Primary>r"]);
+        self.application
+            .set_accels_for_action("app.back", &["<Alt>Up"]);
         let menu = gio::Menu::new();
         for (label, action) in [
             ("Add music", "app.import"),
@@ -278,175 +328,22 @@ impl App {
         object::<gtk::MenuButton>(&self.ui, "main_menu").set_menu_model(Some(&menu));
     }
 
-    fn setup_lists(self: &Rc<Self>) {
-        let rows: Rc<RefCell<HashMap<usize, gtk::Builder>>> = Rc::new(RefCell::new(HashMap::new()));
-        let factory = gtk::SignalListItemFactory::new();
-        let weak = Rc::downgrade(self);
-        let setup_rows = rows.clone();
-        factory.connect_setup(move |_, item| {
-            let Some(app) = weak.upgrade() else {
-                return;
-            };
-            let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-            let builder = gtk::Builder::from_string(include_str!("../resources/track.ui"));
-            app.i18n.builder(&builder);
-            item.set_child(Some(&object::<gtk::Box>(&builder, "row")));
-            let weak_item = item.downgrade();
-            let weak_app = Rc::downgrade(&app);
-            object::<gtk::Button>(&builder, "favorite").connect_clicked(move |_| {
-                if let (Some(app), Some(item)) = (weak_app.upgrade(), weak_item.upgrade()) {
-                    if let Some(value) = item.item().and_downcast::<gtk::StringObject>() {
-                        app.favorite(&value.string());
-                    }
-                }
-            });
-            setup_rows
-                .borrow_mut()
-                .insert(item.as_ptr() as usize, builder);
-        });
-        let weak = Rc::downgrade(self);
-        let bind_rows = rows.clone();
-        factory.connect_bind(move |_, item| {
-            let Some(app) = weak.upgrade() else {
-                return;
-            };
-            let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-            let Some(id) = item.item().and_downcast::<gtk::StringObject>() else {
-                return;
-            };
-            let Some(builder) = bind_rows.borrow().get(&(item.as_ptr() as usize)).cloned() else {
-                return;
-            };
-            let state = app.state.borrow();
-            let Some(track) = state.track(&id.string()) else {
-                return;
-            };
-            object::<gtk::Label>(&builder, "title").set_label(&track.title);
-            object::<gtk::Label>(&builder, "artist").set_label(&app.artist(track));
-            object::<gtk::Label>(&builder, "album").set_label(&track.album);
-            object::<gtk::Label>(&builder, "time").set_label(&if track.kind == Kind::Radio {
-                app.tr("Live")
-            } else {
-                model::duration(track.duration)
-            });
-            app.set_favorite_button(
-                &object::<gtk::ToggleButton>(&builder, "favorite"),
-                track.favorite,
-            );
-            let row: gtk::Box = object(&builder, "row");
-            if state.current.as_deref() == Some(&track.id) {
-                row.add_css_class("playing");
-            } else {
-                row.remove_css_class("playing");
-            }
-            row.set_tooltip_text(Some(&format!("{} — {}", track.title, app.artist(track))));
-            app.set_art(
-                &object::<gtk::Picture>(&builder, "art"),
-                track.artwork.as_deref(),
-            );
-            let menu = gio::Menu::new();
-            for (label, action) in [
-                ("Play", "app.play-track"),
-                ("Add to queue", "app.enqueue"),
-                ("Add to playlist", "app.playlist-add"),
-                ("Remove", "app.remove"),
-            ] {
-                let entry = gio::MenuItem::new(Some(&app.tr(label)), None);
-                entry.set_action_and_target_value(Some(action), Some(&track.id.to_variant()));
-                menu.append_item(&entry);
-            }
-            object::<gtk::MenuButton>(&builder, "menu").set_menu_model(Some(&menu));
-        });
-        factory.connect_teardown(move |_, item| {
-            let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-            rows.borrow_mut().remove(&(item.as_ptr() as usize));
-        });
-        let view: gtk::ListView = object(&self.ui, "track_list");
-        let selection = gtk::SingleSelection::new(Some(self.tracks_model.clone()));
-        selection.set_autoselect(false);
-        view.set_model(Some(&selection));
-        view.set_factory(Some(&factory));
-        let weak = Rc::downgrade(self);
-        view.connect_activate(move |_, position| {
-            if let Some(app) = weak.upgrade() {
-                let id = app.visible.borrow().get(position as usize).cloned();
-                if let Some(id) = id {
-                    app.start_visible(&id);
-                }
-            }
-        });
-
-        let cards: Rc<RefCell<HashMap<usize, gtk::Builder>>> =
-            Rc::new(RefCell::new(HashMap::new()));
-        let factory = gtk::SignalListItemFactory::new();
-        let setup = cards.clone();
-        factory.connect_setup(move |_, item| {
-            let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-            let builder = gtk::Builder::from_string(include_str!("../resources/album.ui"));
-            item.set_child(Some(&object::<gtk::Box>(&builder, "album_card")));
-            setup.borrow_mut().insert(item.as_ptr() as usize, builder);
-        });
-        let weak = Rc::downgrade(self);
-        let bind = cards.clone();
-        factory.connect_bind(move |_, item| {
-            let Some(app) = weak.upgrade() else {
-                return;
-            };
-            let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-            let Some(id) = item.item().and_downcast::<gtk::StringObject>() else {
-                return;
-            };
-            let Some(builder) = bind.borrow().get(&(item.as_ptr() as usize)).cloned() else {
-                return;
-            };
-            let state = app.state.borrow();
-            let Some(track) = state.track(&id.string()) else {
-                return;
-            };
-            object::<gtk::Label>(&builder, "title").set_label(&if track.album.is_empty() {
-                app.tr("Unknown album")
-            } else {
-                track.album.clone()
-            });
-            object::<gtk::Label>(&builder, "artist").set_label(&app.artist(track));
-            app.set_art(
-                &object::<gtk::Picture>(&builder, "art"),
-                track.artwork.as_deref(),
-            );
-        });
-        factory.connect_teardown(move |_, item| {
-            let item = item.downcast_ref::<gtk::ListItem>().unwrap();
-            cards.borrow_mut().remove(&(item.as_ptr() as usize));
-        });
-        let grid: gtk::GridView = object(&self.ui, "album_grid");
-        grid.set_factory(Some(&factory));
-        grid.set_model(Some(&gtk::NoSelection::new(Some(
-            self.albums_model.clone(),
-        ))));
-        let weak = Rc::downgrade(self);
-        grid.connect_activate(move |_, index| {
-            if let Some(app) = weak.upgrade() {
-                let ids = app
-                    .albums
-                    .borrow()
-                    .get(index as usize)
-                    .cloned()
-                    .unwrap_or_default();
-                if let Some(first) = ids.first() {
-                    app.state.borrow_mut().queue = ids.clone();
-                    app.play_track(first, None);
-                }
-            }
-        });
-    }
-
     fn setup_controls(self: &Rc<Self>) {
+        self.setup_browse_controls();
         self.on("play", |a| a.toggle_play());
         self.on("next", |a| a.next(false));
         self.on("previous", |a| a.previous());
         self.on("mini", |a| a.mini());
         self.on("page_action", |a| a.primary_action());
-        self.on("empty_action", |a| a.primary_action());
+        self.on("empty_action", |a| {
+            if *a.page.borrow() == "podcasts" {
+                a.discover_podcasts();
+            } else if *a.page.borrow() == "playlists" && a.playlist.borrow().is_some() {
+                a.navigate("library");
+            } else {
+                a.primary_action();
+            }
+        });
         self.on("refresh", |a| a.refresh_sources());
         self.on("play_all", |a| {
             let first = a.visible.borrow().first().cloned();
@@ -521,6 +418,8 @@ impl App {
             if let Some(a) = weak.upgrade() {
                 if *a.page.borrow() == "radio" {
                     a.discover_radio();
+                } else if *a.page.borrow() == "podcasts" && a.podcast_discovery.get() {
+                    a.discover_podcasts();
                 }
             }
         });
@@ -555,17 +454,6 @@ impl App {
             }
             glib::Propagation::Stop
         });
-        let weak = Rc::downgrade(self);
-        object::<gtk::DropDown>(&self.ui, "playlist_picker").connect_selected_notify(
-            move |picker| {
-                if let Some(a) = weak.upgrade() {
-                    if !a.updating.get() {
-                        a.playlist.set(picker.selected());
-                        a.refresh();
-                    }
-                }
-            },
-        );
         let weak = Rc::downgrade(self);
         self.window.connect_close_request(move |_| {
             if let Some(a) = weak.upgrade() {
@@ -720,6 +608,8 @@ impl App {
             return;
         }
         *self.page.borrow_mut() = page.into();
+        self.album.borrow_mut().take();
+        self.playlist.borrow_mut().take();
         object::<gtk::SearchEntry>(&self.ui, "search").set_text("");
         object::<gtk::Box>(&self.ui, "entry_bar").set_visible(false);
         for name in [
@@ -741,234 +631,6 @@ impl App {
         self.refresh();
     }
 
-    fn refresh(&self) {
-        let page = self.page.borrow().clone();
-        let state = self.state.borrow();
-        let query = object::<gtk::SearchEntry>(&self.ui, "search")
-            .text()
-            .to_string();
-        let (title, action, empty_title, empty_description, empty_action) = match page.as_str() {
-            "favorites" => (
-                "Favorites",
-                "Add music",
-                "Keep the good ones close.",
-                "Star a track to find it here.",
-                "Add music",
-            ),
-            "podcasts" => (
-                "Podcasts",
-                "Add podcast",
-                "A new story is a play away.",
-                "Subscribe with a podcast RSS feed.",
-                "Add podcast",
-            ),
-            "radio" => (
-                "Live radio",
-                "Discover radio",
-                "Find your frequency.",
-                "Search stations around the world.",
-                "Discover radio",
-            ),
-            "streams" => (
-                "Streaming",
-                "Add stream",
-                "The world is on air.",
-                "Play a YouTube video or an audio stream.",
-                "Add stream",
-            ),
-            "queue" => (
-                "Play queue",
-                "Clear queue",
-                "What’s next?",
-                "Add tracks from your library.",
-                "Your music",
-            ),
-            "playlists" => (
-                "Playlists",
-                "New playlist",
-                "A soundtrack of your own.",
-                "Collect tracks into a playlist.",
-                "New playlist",
-            ),
-            _ => (
-                "Your music",
-                "Add music",
-                "Your next favorite is already yours.",
-                "Bring your music in. We’ll take it from here.",
-                "Choose a music folder",
-            ),
-        };
-        self.label("page_title", &self.tr(title));
-        self.button("page_action").set_label(&self.tr(action));
-        let ordered: Option<Vec<String>> = match page.as_str() {
-            "queue" => Some(state.queue.clone()),
-            "playlists" => Some(
-                state
-                    .playlists
-                    .get(self.playlist.get() as usize)
-                    .map(|p| p.tracks.clone())
-                    .unwrap_or_default(),
-            ),
-            "radio" if !self.radio_results.borrow().is_empty() => {
-                Some(self.radio_results.borrow().clone())
-            }
-            _ => None,
-        };
-        let mut tracks: Vec<&Track> = if let Some(ids) = ordered {
-            ids.iter()
-                .filter_map(|id| state.track(id))
-                .filter(|t| t.matches(&query))
-                .collect()
-        } else {
-            state
-                .tracks
-                .iter()
-                .filter(|t| match page.as_str() {
-                    "favorites" => t.favorite,
-                    "podcasts" => t.kind == Kind::Podcast,
-                    "radio" => t.kind == Kind::Radio,
-                    "streams" => t.kind == Kind::Stream,
-                    _ => t.kind == Kind::Music,
-                })
-                .filter(|t| t.matches(&query))
-                .collect()
-        };
-        if page == "library" || page == "favorites" {
-            tracks.sort_by_key(|t| {
-                (
-                    t.artist.to_lowercase(),
-                    t.album.to_lowercase(),
-                    t.number,
-                    t.title.to_lowercase(),
-                )
-            });
-        }
-        let ids: Vec<String> = tracks.iter().map(|t| t.id.clone()).collect();
-        let mut groups: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
-        for t in &tracks {
-            groups
-                .entry((t.artist.clone(), t.album.clone()))
-                .or_default()
-                .push(t.id.clone());
-        }
-        let albums: Vec<Vec<String>> = groups.into_values().collect();
-        let representatives: Vec<&str> = albums
-            .iter()
-            .filter_map(|a| a.first().map(String::as_str))
-            .collect();
-        *self.visible.borrow_mut() = ids.clone();
-        self.tracks_model.splice(
-            0,
-            self.tracks_model.n_items(),
-            &ids.iter().map(String::as_str).collect::<Vec<_>>(),
-        );
-        self.albums_model
-            .splice(0, self.albums_model.n_items(), &representatives);
-        let album_count = albums.len();
-        *self.albums.borrow_mut() = albums;
-        let count = tracks.len();
-        self.label(
-            "page_subtitle",
-            &if count == 0 {
-                self.tr("A little closer to the music.")
-            } else {
-                format!(
-                    "{} {}  ·  {}",
-                    count,
-                    self.tr("tracks"),
-                    model::duration(tracks.iter().map(|t| t.duration).sum())
-                )
-            },
-        );
-        let all_music = state
-            .tracks
-            .iter()
-            .filter(|t| t.kind == Kind::Music)
-            .count();
-        self.label(
-            "library_status",
-            &format!("{} {}", all_music, self.tr("local tracks")),
-        );
-        self.label(
-            "footer_status",
-            &match page.as_str() {
-                "library" => format!(
-                    "{} {}  ·  {} {}",
-                    album_count,
-                    self.tr("albums"),
-                    state.folders.len(),
-                    self.tr("folders")
-                ),
-                "radio" => self.tr("Station directory by Radio Browser"),
-                "podcasts" => format!("{} {}", state.subscriptions.len(), self.tr("subscriptions")),
-                "streams" => self.tr("YouTube uses yt-dlp. Spotify opens in its own player."),
-                "queue" => self.tr("Double-click a track to play."),
-                _ => self.tr("Made for listening."),
-            },
-        );
-        object::<gtk::Box>(&self.ui, "view_switch").set_visible(page == "library");
-        object::<gtk::Box>(&self.ui, "stream_services").set_visible(page == "streams");
-        object::<gtk::DropDown>(&self.ui, "playlist_picker")
-            .set_visible(page == "playlists" && !state.playlists.is_empty());
-        self.button("play_all").set_sensitive(count > 0);
-        object::<gtk::SearchEntry>(&self.ui, "search").set_placeholder_text(Some(&self.tr(
-            if page == "radio" {
-                "Search stations, then press Enter"
-            } else {
-                "Search your music"
-            },
-        )));
-        let stack: gtk::Stack = object(&self.ui, "content_stack");
-        if count == 0 {
-            stack.set_visible_child_name("empty");
-            self.label(
-                "empty_title",
-                &self.tr(if query.is_empty() {
-                    empty_title
-                } else {
-                    "No matches yet."
-                }),
-            );
-            self.label(
-                "empty_description",
-                &self.tr(if query.is_empty() {
-                    empty_description
-                } else {
-                    "Try a different search."
-                }),
-            );
-            self.button("empty_action")
-                .set_label(&self.tr(empty_action));
-            self.button("empty_action")
-                .set_visible(query.is_empty() || page == "radio");
-        } else {
-            stack.set_visible_child_name(
-                if page == "library"
-                    && object::<gtk::ToggleButton>(&self.ui, "albums_view").is_active()
-                {
-                    "albums"
-                } else {
-                    "tracks"
-                },
-            );
-        }
-    }
-
-    fn refresh_playlists(&self) {
-        self.updating.set(true);
-        let state = self.state.borrow();
-        let names: Vec<&str> = state.playlists.iter().map(|p| p.name.as_str()).collect();
-        let picker: gtk::DropDown = object(&self.ui, "playlist_picker");
-        picker.set_model(Some(&gtk::StringList::new(&names)));
-        let selected = self
-            .playlist
-            .get()
-            .min(names.len().saturating_sub(1) as u32);
-        self.playlist.set(selected);
-        picker.set_selected(selected);
-        self.updating.set(false);
-    }
-
     fn primary_action(self: &Rc<Self>) {
         let page = self.page.borrow().clone();
         match page.as_str() {
@@ -983,7 +645,7 @@ impl App {
                 })));
                 entry.grab_focus();
             }
-            "playlists" => self.playlist_dialog(None),
+            "playlists" => self.playlist_dialog(None, self.playlist.borrow().clone()),
             "queue" => {
                 if self.visible.borrow().is_empty() {
                     self.navigate("library");
@@ -1058,6 +720,8 @@ impl App {
         let page = self.page.borrow().clone();
         match page.as_str() {
             "radio" => self.discover_radio(),
+            "podcasts" if self.podcast_discovery.get() => self.discover_podcasts(),
+            "playlists" => self.refresh(),
             "podcasts" => {
                 let subscriptions = self.state.borrow().subscriptions.clone();
                 if subscriptions.is_empty() {
@@ -1150,6 +814,10 @@ impl App {
     }
 
     fn start_visible(self: &Rc<Self>, id: &str) {
+        if *self.page.borrow() == "queue" {
+            self.play_track(id, None);
+            return;
+        }
         let mut queue = self.visible.borrow().clone();
         if self.state.borrow().shuffle {
             queue.retain(|i| i != id);
@@ -1339,7 +1007,8 @@ impl App {
                 .state
                 .borrow_mut()
                 .playlists
-                .get_mut(self.playlist.get() as usize)
+                .iter_mut()
+                .find(|p| Some(&p.id) == self.playlist.borrow().as_ref())
             {
                 p.tracks.retain(|i| i != id);
             }
@@ -1502,14 +1171,21 @@ impl App {
 
     fn ensure_artwork(&self) {
         let urls: Vec<String> = self
-            .state
+            .podcast_results
             .borrow()
-            .tracks
             .iter()
-            .filter_map(|t| t.artwork.as_ref())
+            .filter_map(|s| s.artwork.as_ref())
+            .cloned()
+            .chain(
+                self.state
+                    .borrow()
+                    .tracks
+                    .iter()
+                    .filter_map(|t| t.artwork.as_ref())
+                    .cloned(),
+            )
             .filter(|u| u.starts_with("http"))
             .take(60)
-            .cloned()
             .collect();
         let mut pending = self.artwork_pending.borrow_mut();
         let urls: Vec<String> = urls
@@ -1530,9 +1206,62 @@ impl App {
     }
 
     fn tick(self: &Rc<Self>) {
+        let compact = self.window.width() < 1000 || self.window.height() < 700;
+        if self.compact_browse.replace(compact) != compact {
+            self.refresh();
+        }
         let messages: Vec<Message> = self.rx.borrow().try_iter().take(30).collect();
         for message in messages {
             match message {
+                Message::PodcastSearch(generation, result)
+                    if generation == self.podcast_generation.get() =>
+                {
+                    self.button("podcast_search").set_sensitive(true);
+                    match result {
+                        Ok(shows) => {
+                            *self.podcast_results.borrow_mut() = shows;
+                            if *self.page.borrow() == "podcasts" && self.podcast_discovery.get() {
+                                object::<gtk::Box>(&self.ui, "notice").set_visible(false);
+                            }
+                            self.refresh();
+                            self.ensure_artwork();
+                        }
+                        Err(_) => {
+                            self.podcast_failed.set(true);
+                            object::<gtk::Box>(&self.ui, "notice").set_visible(false);
+                            self.refresh();
+                        }
+                    }
+                }
+                Message::PlaylistImport(result) => {
+                    self.importing_playlist.set(false);
+                    self.button("playlist_import").set_sensitive(true);
+                    match result {
+                        Ok(imported) => {
+                            let mut state = self.state.borrow_mut();
+                            let name = state.unique_playlist_name(&imported.name);
+                            let ids = imported.tracks.iter().map(|t| t.id.clone()).collect();
+                            state.merge(imported.tracks);
+                            let id = state
+                                .create_playlist(&name, ids)
+                                .expect("Unique playlist name");
+                            drop(state);
+                            self.open_playlist(&id);
+                            self.notice(
+                                &format!(
+                                    "{} · {} {}",
+                                    self.tr("Playlist imported"),
+                                    imported.skipped,
+                                    self.tr("entries skipped")
+                                ),
+                                false,
+                                false,
+                            );
+                            self.persist();
+                        }
+                        Err(error) => self.notice(&error, true, false),
+                    }
+                }
                 Message::Scan(result, folders) => {
                     self.scanning.set(false);
                     self.button("refresh").set_sensitive(true);
@@ -1650,7 +1379,14 @@ impl App {
                         }
                     }
                 }
-                Message::Artwork(uri, Ok(path)) => {
+                Message::Artwork(uri, result) => {
+                    self.artwork_pending.borrow_mut().remove(&uri);
+                    let Ok(path) = result else { continue };
+                    for show in self.podcast_results.borrow_mut().iter_mut() {
+                        if show.artwork.as_deref() == Some(&uri) {
+                            show.artwork = Some(path.clone());
+                        }
+                    }
                     for track in &mut self.state.borrow_mut().tracks {
                         if track.artwork.as_deref() == Some(&uri) {
                             track.artwork = Some(path.clone());
@@ -1753,95 +1489,6 @@ impl App {
         }
     }
 
-    fn playlist_dialog(self: &Rc<Self>, track_id: Option<String>) {
-        let ui = gtk::Builder::from_string(include_str!("../resources/playlist.ui"));
-        self.i18n.builder(&ui);
-        let window: gtk::Window = object(&ui, "dialog");
-        close_on_escape(&window);
-        window.set_transient_for(Some(&self.window));
-        window.set_application(Some(&self.application));
-        let picker: gtk::DropDown = object(&ui, "existing");
-        let entry: gtk::Entry = object(&ui, "name");
-        let names: Vec<String> = self
-            .state
-            .borrow()
-            .playlists
-            .iter()
-            .map(|p| p.name.clone())
-            .collect();
-        picker.set_model(Some(&gtk::StringList::new(
-            &names.iter().map(String::as_str).collect::<Vec<_>>(),
-        )));
-        picker.set_visible(track_id.is_some() && !names.is_empty());
-        object::<gtk::Label>(&ui, "title").set_label(&self.tr(if track_id.is_some() {
-            "Add to playlist"
-        } else {
-            "New playlist"
-        }));
-        let weak_window = window.downgrade();
-        object::<gtk::Button>(&ui, "cancel").connect_clicked(move |_| {
-            if let Some(w) = weak_window.upgrade() {
-                w.close();
-            }
-        });
-        let weak = Rc::downgrade(self);
-        let weak_window = window.downgrade();
-        let error: gtk::Label = object(&ui, "error");
-        let save: gtk::Button = object(&ui, "save");
-        save.connect_clicked(move |_| {
-            let Some(a) = weak.upgrade() else {
-                return;
-            };
-            let mut state = a.state.borrow_mut();
-            let name = entry.text().trim().to_string();
-            let index = if name.is_empty() && track_id.is_some() && !state.playlists.is_empty() {
-                Some(picker.selected() as usize)
-            } else if name.is_empty() {
-                None
-            } else if let Some(index) = state
-                .playlists
-                .iter()
-                .position(|p| p.name.to_lowercase() == name.to_lowercase())
-            {
-                Some(index)
-            } else {
-                state.playlists.push(Playlist {
-                    name,
-                    tracks: vec![],
-                });
-                Some(state.playlists.len() - 1)
-            };
-            let Some(index) = index else {
-                error.set_label(&a.tr("Enter a playlist name."));
-                error.set_visible(true);
-                return;
-            };
-            if let Some(id) = &track_id {
-                if let Some(list) = state.playlists.get_mut(index) {
-                    if !list.tracks.contains(id) {
-                        list.tracks.push(id.clone());
-                    }
-                }
-            }
-            drop(state);
-            a.playlist.set(index as u32);
-            a.refresh_playlists();
-            a.navigate("playlists");
-            a.persist();
-            if let Some(w) = weak_window.upgrade() {
-                w.close();
-            }
-        });
-        let save_weak = save.downgrade();
-        object::<gtk::Entry>(&ui, "name").connect_activate(move |_| {
-            if let Some(save) = save_weak.upgrade() {
-                save.emit_clicked();
-            }
-        });
-        window.present();
-        object::<gtk::Entry>(&ui, "name").grab_focus();
-    }
-
     fn settings(self: &Rc<Self>) {
         let ui = gtk::Builder::from_string(include_str!("../resources/settings.ui"));
         self.i18n.builder(&ui);
@@ -1923,6 +1570,7 @@ impl App {
                         .subscriptions
                         .retain(|s| s.url != sub.url);
                     a.persist();
+                    a.refresh();
                     if let Some(row) = weak_row.upgrade() {
                         row.set_sensitive(false);
                     }
@@ -1937,21 +1585,6 @@ impl App {
             }
             if let Some(a) = weak.upgrade() {
                 a.choose_folder();
-            }
-        });
-        let delete: gtk::Button = object(&ui, "delete_playlist");
-        delete.set_sensitive(!self.state.borrow().playlists.is_empty());
-        let weak = Rc::downgrade(self);
-        delete.connect_clicked(move |button| {
-            if let Some(a) = weak.upgrade() {
-                let index = a.playlist.get() as usize;
-                if index < a.state.borrow().playlists.len() {
-                    a.state.borrow_mut().playlists.remove(index);
-                }
-                a.refresh_playlists();
-                a.refresh();
-                a.persist();
-                button.set_sensitive(false);
             }
         });
         let weak_window = window.downgrade();
