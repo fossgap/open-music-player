@@ -1,11 +1,13 @@
 mod app;
 mod audio;
+mod audio_info;
 mod collections;
 mod desktop;
 mod downloads;
 mod enrichment;
 mod i18n;
 mod library;
+mod lyrics;
 mod model;
 mod playlists;
 mod process;

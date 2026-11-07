@@ -76,6 +76,13 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     application.register(None::<&gio::Cancellable>).unwrap();
     let app = App::new(&application, state).unwrap();
     settle();
+    if std::env::var_os("OPEN_AUDIO_TEST_LIBRARY_DETAILS_ONLY").is_some() {
+        exercise_library_details(&app, &audio);
+        app.shutdown();
+        app.window.destroy();
+        object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+        return;
+    }
     // Keep a focused path for iterating on media-transfer UI without replaying
     // the unrelated pointer, provider and library scenarios. The full suite below
     // always exercises the same transfer checks too.
@@ -794,13 +801,19 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
             "Only the current track needs lyrics"
         );
     }
+    let lyrics: gtk::TextView = object(&app.ui, "lyrics_timed");
+    let buffer = lyrics.buffer();
     assert_eq!(
-        object::<gtk::Label>(&app.ui, "lyrics_text").text(),
+        buffer
+            .text(&buffer.start_iter(), &buffer.end_iter(), false)
+            .trim(),
         enrichment::tests::lyric()["plainLyrics"].as_str().unwrap()
     );
+    assert!(!object::<gtk::Label>(&app.ui, "lyrics_text").is_visible());
     if !object::<gtk::Revealer>(&app.ui, "detail_revealer").is_visible() {
         app.toggle_details();
     }
+    assert!(object::<gtk::ScrolledWindow>(&app.ui, "lyrics_scroller").is_visible());
     assert!(object::<gtk::LinkButton>(&app.ui, "lyrics_source").is_visible());
     assert!(!app.button("lyrics_retry").is_visible());
     assert!(
@@ -834,7 +847,7 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
         .vadjustment()
         .set_value(details.vadjustment().upper());
     settle();
-    let bounds = object::<gtk::Label>(&app.ui, "lyrics_text")
+    let bounds = object::<gtk::ScrolledWindow>(&app.ui, "lyrics_scroller")
         .compute_bounds(&details)
         .unwrap();
     assert!(
@@ -878,8 +891,8 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     assert!(!app.state.borrow().fetch_covers && !app.state.borrow().fetch_lyrics);
     // Cached content remains available while lookups are switched off.
     assert!(
-        object::<gtk::Label>(&app.ui, "lyrics_text")
-            .text()
+        buffer
+            .text(&buffer.start_iter(), &buffer.end_iter(), false)
             .contains("A quiet window")
     );
     settings.close();
@@ -1194,11 +1207,274 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     screenshot(&settings, "playback-settings.png");
     settings.close();
     exercise_library_controls(&app, directory.path(), &audio);
+    exercise_library_details(&app, &audio);
     exercise_downloads_and_timing(&app, &audio);
     app.shutdown();
     drop(spotify_runtime);
     app.window.destroy();
     object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+}
+
+fn exercise_library_details(app: &Rc<App>, tone: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+    app.stop_playback();
+    {
+        let mut state = app.state.borrow_mut();
+        state.watch_music = false;
+        state.fetch_lyrics = false;
+        state.refresh_minutes = 0;
+    }
+    app.sync_folder_watch();
+    let dir = tempfile::tempdir().unwrap();
+    let timed = dir.path().join("timed.wav");
+    let keep = dir.path().join("keep.wav");
+    let delete = dir.path().join("delete.wav");
+    for path in [&timed, &keep, &delete] {
+        std::fs::copy(tone, path).unwrap();
+    }
+    app.import_local(vec![dir.path().into()]);
+    let id =
+        |path: &std::path::Path| model::stable_id(url::Url::from_file_path(path).unwrap().as_str());
+    until(|| !app.files.importing.get() && app.state.borrow().track(&id(&timed)).is_some());
+    {
+        let mut state = app.state.borrow_mut();
+        let track = state
+            .tracks
+            .iter_mut()
+            .find(|t| t.id == id(&timed))
+            .unwrap();
+        track.title = "A line at a time".into();
+        track.artist = "Open Audio test session".into();
+        track.synced_lyrics = Some(
+            (0..30)
+                .map(|n| format!("[00:{n:02}.00]Line {n:02} — an original timed lyric"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+        track.lyrics = Some("Plain fallback".into());
+    }
+    app.window.set_default_size(1280, 820);
+    app.play_track(&id(&timed), Some(0.0));
+    until(|| app.audio.borrow().position() > 0.2);
+    app.toggle_play();
+    if !object::<gtk::Revealer>(&app.ui, "detail_revealer").is_visible() {
+        app.toggle_details();
+    }
+    settle();
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "detail_codec").text(),
+        "PCM_S16LE"
+    );
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "detail_bitrate").text(),
+        "128 kbps"
+    );
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "detail_sample_rate").text(),
+        "8 kHz"
+    );
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "detail_bit_depth").text(),
+        "16 bit"
+    );
+    screenshot(app.window.upcast_ref(), "playback-details-wide.png");
+    let view: gtk::TextView = object(&app.ui, "lyrics_timed");
+    let current_line = || {
+        let buffer = view.buffer();
+        let tag = buffer.tag_table().lookup("current").unwrap();
+        let mut start = buffer.start_iter();
+        if !start.has_tag(&tag) && !start.forward_to_tag_toggle(Some(&tag)) {
+            return String::new();
+        }
+        let mut end = start;
+        end.forward_to_tag_toggle(Some(&tag));
+        buffer.text(&start, &end, false).to_string()
+    };
+    until(|| current_line().starts_with("Line 00"));
+    app.seek(19.25);
+    until(|| current_line().starts_with("Line 19"));
+    let scroller: gtk::ScrolledWindow = object(&app.ui, "lyrics_scroller");
+    until(|| scroller.vadjustment().value() > 100.0);
+    assert!(
+        !app.audio.borrow().playing,
+        "Seeking lyrics must preserve pause"
+    );
+    let follow: gtk::ToggleButton = object(&app.ui, "lyrics_follow");
+    scroll_controller(scroller.upcast_ref(), "lyrics-wheel")
+        .emit_by_name::<bool>("scroll", &[&0.0_f64, &1.0_f64]);
+    assert!(!follow.is_active());
+    let before = scroller.vadjustment().value();
+    app.seek(2.25);
+    until(|| current_line().starts_with("Line 02"));
+    app.update_metadata();
+    settle();
+    assert!(
+        (scroller.vadjustment().value() - before).abs() < 1.0,
+        "Manual lyric browsing must survive time and metadata updates"
+    );
+    follow.set_active(true);
+    until(|| scroller.vadjustment().value() < before);
+    assert!(app.set_speed(1.75));
+    app.seek(12.25);
+    until(|| current_line().starts_with("Line 12"));
+    app.toggle_play();
+    until(|| current_line().starts_with("Line 13"));
+    app.toggle_play();
+    app.seek(12.25);
+    until(|| current_line().starts_with("Line 12"));
+    let details: gtk::ScrolledWindow = object(&app.ui, "detail_scroller");
+    details
+        .vadjustment()
+        .set_value(details.vadjustment().upper());
+    settle();
+    screenshot(app.window.upcast_ref(), "lyrics-follow-wide.png");
+    object::<gtk::ScrolledWindow>(&app.ui, "sidebar_scroller").set_visible(false);
+    app.window.set_default_size(820, 650);
+    settle();
+    app.window.set_default_size(800, 650);
+    settle();
+    details
+        .vadjustment()
+        .set_value(details.vadjustment().upper());
+    settle();
+    assert!(app.window.width() <= 820);
+    screenshot(app.window.upcast_ref(), "lyrics-follow-compact.png");
+    {
+        let mut state = app.state.borrow_mut();
+        let track = state
+            .tracks
+            .iter_mut()
+            .find(|t| t.id == id(&timed))
+            .unwrap();
+        track.synced_lyrics = None;
+        track.lyrics = Some("Untimed lyrics remain readable.".into());
+    }
+    app.update_metadata();
+    assert!(!scroller.is_visible() && !follow.is_visible());
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "lyrics_text").text(),
+        "Untimed lyrics remain readable."
+    );
+    app.stop_playback();
+    assert!(app.set_speed(1.0));
+    app.window.set_default_size(1240, 800);
+    app.toggle_details();
+    object::<gtk::ScrolledWindow>(&app.ui, "sidebar_scroller").set_visible(true);
+    app.navigate("library");
+    object::<gtk::ToggleButton>(&app.ui, "tracks_view").set_active(true);
+    app.application
+        .activate_action("remove-local", Some(&id(&keep).to_variant()));
+    assert!(keep.exists());
+    assert!(app.state.borrow().track(&id(&keep)).is_none());
+    let folders = app.state.borrow().folders.clone();
+    app.scan_folders(folders, true);
+    until(|| !app.scanning.get());
+    assert!(
+        app.state.borrow().track(&id(&keep)).is_none(),
+        "Folder scans must respect library removal"
+    );
+    app.import_local(vec![keep.clone()]);
+    until(|| !app.files.importing.get() && app.state.borrow().track(&id(&keep)).is_some());
+    let ids = vec![id(&keep), id(&delete)];
+    let playlist = app
+        .state
+        .borrow_mut()
+        .create_playlist("Trash fixture", ids.clone())
+        .unwrap();
+    app.state.borrow_mut().queue = ids.clone();
+    app.play_track(&ids[0], None);
+    until(|| app.audio.borrow().position() > 0.1);
+    app.refresh();
+    let selection = object::<gtk::ListView>(&app.ui, "track_list")
+        .model()
+        .unwrap();
+    selection.unselect_all();
+    for row in 0..app.tracks_model.n_items() {
+        if app
+            .tracks_model
+            .string(row)
+            .is_some_and(|s| ids.contains(&s.to_string()))
+        {
+            selection.select_item(row, false);
+        }
+    }
+    assert_eq!(app.selected_rows().len(), 2);
+    assert!(
+        app.application
+            .lookup_action("selection-trash")
+            .unwrap()
+            .is_enabled()
+    );
+    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+    app.application.activate_action("selection-trash", None);
+    until(|| !app.files.deleting.get());
+    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(keep.is_file() && delete.is_file());
+    assert!(ids.iter().all(|id| app.state.borrow().track(id).is_some()));
+    let results = [&keep, &delete]
+        .into_iter()
+        .map(|path| {
+            (
+                path.clone(),
+                trash_for_test(path).map_err(|e| e.to_string()),
+            )
+        })
+        .collect();
+    app.local_trashed(results);
+    assert!(!keep.exists() && !delete.exists());
+    assert!(ids.iter().all(|id| app.state.borrow().track(id).is_none()));
+    assert!(
+        app.state
+            .borrow()
+            .playlist(&playlist)
+            .unwrap()
+            .tracks
+            .is_empty()
+    );
+    assert!(app.state.borrow().queue.is_empty());
+    assert!(!app.audio.borrow().loaded);
+    let old = library::probe(&timed, &app.cache).unwrap();
+    app.remove_local_tracks(&[id(&timed)]);
+    app.state.borrow_mut().merge(vec![old]);
+    assert!(
+        app.state.borrow().track(&id(&timed)).is_none(),
+        "Stale worker results must not resurrect removed files"
+    );
+    app.state.borrow_mut().folders.retain(|p| p != dir.path());
+}
+
+fn trash_for_test(path: &std::path::Path) -> Result<(), glib::Error> {
+    match gio::File::for_path(path).trash(None::<&gio::Cancellable>) {
+        Err(error) if error.matches(gio::IOErrorEnum::NotSupported) => {
+            // Native Trash is unavailable on some container mounts. Keep a recoverable
+            // fixture, using the production completion handlers without permanent deletion.
+            assert!(glib::user_data_dir().starts_with(storage::data_dir()));
+            let trash = glib::user_data_dir().join("Trash");
+            std::fs::create_dir_all(trash.join("files")).unwrap();
+            std::fs::create_dir_all(trash.join("info")).unwrap();
+            let name = format!(
+                "{}-{}",
+                model::stable_id(&path.to_string_lossy()),
+                path.file_name().unwrap().to_string_lossy()
+            );
+            let uri = gio::File::for_path(path).uri();
+            let date = glib::DateTime::now_local()
+                .unwrap()
+                .format("%Y-%m-%dT%H:%M:%S")
+                .unwrap();
+            std::fs::write(
+                trash.join("info").join(format!("{name}.trashinfo")),
+                format!(
+                    "[Trash Info]\nPath={}\nDeletionDate={date}\n",
+                    uri.strip_prefix("file://").unwrap()
+                ),
+            )
+            .unwrap();
+            std::fs::rename(path, trash.join("files").join(name)).unwrap();
+            Ok(())
+        }
+        result => result,
+    }
 }
 
 fn exercise_downloads_and_timing(app: &Rc<App>, local: &std::path::Path) {
@@ -1333,34 +1609,7 @@ fn exercise_downloads_and_timing(app: &Rc<App>, local: &std::path::Path) {
     std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
     assert!(saved.path.is_file());
     assert_eq!(app.state.borrow().saved_audio.len(), 1);
-    let result = gio::File::for_path(&saved.path).trash(None::<&gio::Cancellable>);
-    let result = match result {
-        Err(error) if error.matches(gio::IOErrorEnum::NotSupported) => {
-            // Container mounts can forbid native Trash. Exercise the same completion
-            // handler against an isolated recoverable file move, never permanent deletion.
-            assert!(glib::user_data_dir().starts_with(storage::data_dir()));
-            let trash = glib::user_data_dir().join("Trash");
-            std::fs::create_dir_all(trash.join("files")).unwrap();
-            std::fs::create_dir_all(trash.join("info")).unwrap();
-            let name = saved.path.file_name().unwrap().to_str().unwrap();
-            let uri = gio::File::for_path(&saved.path).uri();
-            let date = glib::DateTime::now_local()
-                .unwrap()
-                .format("%Y-%m-%dT%H:%M:%S")
-                .unwrap();
-            std::fs::write(
-                trash.join("info").join(format!("{name}.trashinfo")),
-                format!(
-                    "[Trash Info]\nPath={}\nDeletionDate={date}\n",
-                    uri.strip_prefix("file://").unwrap()
-                ),
-            )
-            .unwrap();
-            std::fs::rename(&saved.path, trash.join("files").join(name)).unwrap();
-            Ok(())
-        }
-        result => result,
-    };
+    let result = trash_for_test(&saved.path);
     app.finish_download_delete(saved.clone(), result);
     assert!(app.state.borrow().saved_audio.is_empty());
     assert!(!saved.path.exists());

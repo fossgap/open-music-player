@@ -419,7 +419,7 @@ fn matching_lyrics(query: &Query, value: &Value) -> Option<Found> {
         instrumental,
     })
 }
-/// LRC-only provider responses are displayed readably; timestamp data stays in the cache.
+/// Keep a plain fallback as well as the original synchronized lyrics.
 fn plain_lrc(text: &str) -> String {
     text.lines()
         .filter_map(|line| {

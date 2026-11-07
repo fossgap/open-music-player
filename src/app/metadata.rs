@@ -25,10 +25,33 @@ impl App {
 
     pub(super) fn schedule_metadata(&self) {
         let state = self.state.borrow();
+        if let Some(track) = state
+            .current_track()
+            .filter(|t| t.audio_details.codec.is_none())
+        {
+            if let Some(path) = library::local_path(&track.uri) {
+                if self
+                    .details_requested
+                    .borrow_mut()
+                    .insert(track.uri.clone())
+                {
+                    let tx = self.tx.clone();
+                    let id = track.id.clone();
+                    let uri = track.uri.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(Message::AudioDetails(
+                            id,
+                            uri,
+                            library::audio_details(&path),
+                        ));
+                    });
+                }
+            }
+        }
         let mut service = self.metadata.borrow_mut();
         let lyrics = state
             .current_track()
-            .filter(|t| state.fetch_lyrics && enrichment::missing(t, Field::Lyrics))
+            .filter(|t| state.fetch_lyrics && enrichment::needs_lookup(t, Field::Lyrics))
             .and_then(|t| Query::for_track(t, Field::Lyrics));
         let key = lyrics.as_ref().map(|q| q.key.clone());
         if *self.lyrics_key.borrow() != key {
@@ -200,17 +223,58 @@ impl App {
                     }),
                 }
             };
-            self.label(
-                if field == Field::Cover {
-                    "cover_status"
-                } else {
-                    "lyrics_text"
-                },
-                &text,
-            );
+            if field == Field::Lyrics {
+                self.render_lyrics(track, &text);
+            } else {
+                self.label("cover_status", &text);
+            }
             if field == Field::Cover {
                 object::<gtk::Box>(&self.ui, "cover_lookup").set_visible(missing);
             }
+        }
+        self.update_audio_details();
+    }
+
+    fn update_audio_details(&self) {
+        let state = self.state.borrow();
+        let track = state.current_track();
+        object::<gtk::Expander>(&self.ui, "audio_details").set_visible(track.is_some());
+        let mut details = track.map(|t| t.audio_details.clone()).unwrap_or_default();
+        details.fill_missing(&self.audio.borrow().details());
+        for (id, value) in [
+            ("detail_codec", details.codec.map(|s| s.to_uppercase())),
+            (
+                "detail_bitrate",
+                details.bitrate.map(|n| {
+                    format!(
+                        "{}{:.0} kbps",
+                        if details.bitrate_estimated {
+                            "≈ "
+                        } else {
+                            ""
+                        },
+                        n as f64 / 1000.0
+                    )
+                }),
+            ),
+            (
+                "detail_sample_rate",
+                details
+                    .sample_rate
+                    .map(|n| format!("{} kHz", f64::from(n) / 1000.0)),
+            ),
+            (
+                "detail_bit_depth",
+                details.bit_depth.map(|n| format!("{n} {}", self.tr("bit"))),
+            ),
+        ] {
+            let label: gtk::Label = object(&self.ui, id);
+            label.set_label(value.as_deref().unwrap_or("—"));
+            label.set_tooltip_text(Some(
+                value
+                    .as_deref()
+                    .unwrap_or(&self.tr("Not reported by this source.")),
+            ));
         }
     }
 

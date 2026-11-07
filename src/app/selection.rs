@@ -30,7 +30,7 @@ impl App {
             .collect()
     }
 
-    fn selected_ids(&self) -> Vec<String> {
+    pub(super) fn selected_ids(&self) -> Vec<String> {
         self.selected_rows()
             .into_iter()
             .filter_map(|i| self.tracks_model.string(i as u32).map(|s| s.to_string()))
@@ -142,6 +142,9 @@ impl App {
         self.action("selection-remove", |app| {
             app.remove_rows(&app.selected_rows())
         });
+        self.action("selection-trash", |app| {
+            app.trash_local_tracks(app.selected_ids())
+        });
         self.action("selection-clear", |app| {
             app.track_selection().unselect_all();
         });
@@ -175,6 +178,7 @@ impl App {
             ("Move to top", "selection-first"),
             ("Move to bottom", "selection-last"),
             ("Remove from this list", "selection-remove"),
+            ("Move files to Trash", "selection-trash"),
             ("Select all", "selection-all"),
         ] {
             menu.append(Some(&self.tr(label)), Some(&format!("app.{action}")));
@@ -241,6 +245,22 @@ impl App {
             &format!("{} {}", selected.len(), self.tr("selected")),
         );
         let reorder = tracks && self.can_reorder() && !selected.is_empty();
+        let can_trash = tracks
+            && !selected.is_empty()
+            && !self.files.deleting.get()
+            && self.selected_ids().iter().all(|id| {
+                self.state
+                    .borrow()
+                    .track(id)
+                    .is_some_and(|t| t.kind == Kind::Music && library::local_path(&t.uri).is_some())
+            });
+        if let Some(action) = self
+            .application
+            .lookup_action("selection-trash")
+            .and_downcast::<gio::SimpleAction>()
+        {
+            action.set_enabled(can_trash);
+        }
         for name in [
             "selection-play",
             "selection-queue",
@@ -329,6 +349,9 @@ impl App {
                     track.favorite = false;
                 }
             }
+        } else if self.page.borrow().as_str() == "library" {
+            self.remove_local_tracks(&ids);
+            return;
         } else {
             if self
                 .state
@@ -340,7 +363,7 @@ impl App {
                 self.stop_playback();
             }
             let mut state = self.state.borrow_mut();
-            state.forget_many(ids.iter().map(String::as_str));
+            state.remove_from_library(&ids);
         }
         self.refresh();
         self.update_player();

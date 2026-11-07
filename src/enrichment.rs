@@ -113,6 +113,11 @@ pub fn missing(track: &Track, field: Field) -> bool {
         }
     }
 }
+
+pub fn needs_lookup(track: &Track, field: Field) -> bool {
+    missing(track, field)
+        || (field == Field::Lyrics && track.lyrics_source.is_some() && !track.lyrics_timing_checked)
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Found {
     Cover {
@@ -142,7 +147,8 @@ impl Found {
 }
 pub fn apply(track: &mut Track, key: &str, found: &Found) -> bool {
     let field = found.field();
-    if !missing(track, field) || !Query::for_track(track, field).is_some_and(|q| q.key == key) {
+    if !needs_lookup(track, field) || !Query::for_track(track, field).is_some_and(|q| q.key == key)
+    {
         return false;
     }
     match found {
@@ -152,11 +158,13 @@ pub fn apply(track: &mut Track, key: &str, found: &Found) -> bool {
         }
         Found::Lyrics {
             plain,
+            synced,
             source,
             instrumental,
-            ..
         } => {
             track.lyrics = (!plain.is_empty()).then(|| plain.clone());
+            track.synced_lyrics.clone_from(synced);
+            track.lyrics_timing_checked = true;
             track.lyrics_source = Some(source.clone());
             track.instrumental = *instrumental;
         }
@@ -180,6 +188,8 @@ pub fn preserve_downloaded(old: &Track, new: &mut Track) {
             }
             Field::Lyrics if old.lyrics_source.is_some() => {
                 new.lyrics.clone_from(&old.lyrics);
+                new.synced_lyrics.clone_from(&old.synced_lyrics);
+                new.lyrics_timing_checked = old.lyrics_timing_checked;
                 new.lyrics_source.clone_from(&old.lyrics_source);
                 new.instrumental = old.instrumental;
             }

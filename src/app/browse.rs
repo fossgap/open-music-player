@@ -150,7 +150,15 @@ impl App {
             entry.set_action_and_target_value(Some(action), Some(&track.id.to_variant()));
             menu.append_item(&entry);
         }
-        let remove = gio::MenuItem::new(Some(&self.tr("Remove")), None);
+        let local = track.kind == Kind::Music && library::local_path(&track.uri).is_some();
+        let remove = gio::MenuItem::new(
+            Some(&self.tr(if local && *self.page.borrow() == "library" {
+                "Remove from library"
+            } else {
+                "Remove"
+            })),
+            None,
+        );
         remove.set_action_and_target_value(
             Some("app.row-remove"),
             Some(
@@ -172,6 +180,20 @@ impl App {
                 Some("app.open-location"),
                 Some(&track.id.to_variant()),
             );
+            menu.append_item(&entry);
+        }
+        if local {
+            if *self.page.borrow() != "library" {
+                let entry = gio::MenuItem::new(Some(&self.tr("Remove from library")), None);
+                entry.set_action_and_target_value(
+                    Some("app.remove-local"),
+                    Some(&track.id.to_variant()),
+                );
+                menu.append_item(&entry);
+            }
+            let entry = gio::MenuItem::new(Some(&self.tr("Move file to Trash")), None);
+            entry
+                .set_action_and_target_value(Some("app.trash-local"), Some(&track.id.to_variant()));
             menu.append_item(&entry);
         }
         object::<gtk::Image>(ui, "drag_handle").set_visible(self.can_reorder());

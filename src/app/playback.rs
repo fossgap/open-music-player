@@ -75,6 +75,7 @@ impl App {
     }
 
     pub(super) fn update_timing(&self) {
+        self.sync_lyrics(false);
         let audio = self.audio.borrow();
         let state = self.state.borrow();
         let duration = if audio.loaded {

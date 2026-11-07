@@ -73,6 +73,8 @@ scale highlight { background: #c2dfa3; min-height: 4px; border-radius: 10px; }
 scale slider { background: #e3efda; min-width: 12px; min-height: 12px; margin: -4px; border: 0; box-shadow: none; }
 .detail-panel { background: #202923; border-left: 1px solid #344037; padding: 20px; }
 .lyrics { color: #d0dacb; font-size: 15px; line-height: 1.6; }
+.timed-lyrics, .timed-lyrics text { background: transparent; color: #d0dacb; }
+.timed-lyrics text selection { background: #526345; color: #fff; }
 popover > contents { background: #29312d; color: #f1f3eb; border: 1px solid #435146; border-radius: 10px; padding: 6px; }
 popover modelbutton { padding: 8px; border-radius: 5px; }
 popover modelbutton:hover { background: #3b4c36; }

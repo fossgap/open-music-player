@@ -50,6 +50,16 @@ pub fn supported(path: &Path) -> bool {
 }
 
 pub fn scan(folders: &[PathBuf], existing: &[Track], cache: &Path) -> Result<Scan, String> {
+    scan_filtered(folders, existing, cache, &[])
+}
+
+pub fn scan_filtered(
+    folders: &[PathBuf],
+    existing: &[Track],
+    cache: &Path,
+    ignored: &[String],
+) -> Result<Scan, String> {
+    let ignored: std::collections::HashSet<_> = ignored.iter().map(String::as_str).collect();
     process::output(
         Command::new("ffprobe").arg("-version"),
         Duration::from_secs(5),
@@ -94,6 +104,9 @@ pub fn scan(folders: &[PathBuf], existing: &[Track], cache: &Path) -> Result<Sca
             if !found.insert(uri.to_string()) {
                 continue;
             }
+            if ignored.contains(uri.as_str()) {
+                continue;
+            }
             let Ok(meta) = path.metadata() else {
                 result.skipped += 1;
                 continue;
@@ -104,10 +117,9 @@ pub fn scan(folders: &[PathBuf], existing: &[Track], cache: &Path) -> Result<Sca
                 .and_then(|m| m.duration_since(UNIX_EPOCH).ok())
                 .map(|m| m.as_nanos().min(u128::from(u64::MAX)) as u64)
                 .unwrap_or(0);
-            if let Some(t) = old
-                .get(uri.as_str())
-                .filter(|t| t.modified == modified && t.size == meta.len())
-            {
+            if let Some(t) = old.get(uri.as_str()).filter(|t| {
+                t.modified == modified && t.size == meta.len() && t.audio_details.codec.is_some()
+            }) {
                 let mut cached = (*t).clone();
                 refresh_sidecars(&path, &mut cached);
                 result.tracks.push(cached);
@@ -189,7 +201,7 @@ pub fn import_paths(paths: &[PathBuf], existing: &[Track], cache: &Path) -> Resu
     })
 }
 
-pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
+fn probe_data(path: &Path) -> Result<serde_json::Value, String> {
     let bytes = process::output(
         Command::new("ffprobe")
             .args([
@@ -204,7 +216,15 @@ pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
         Duration::from_secs(12),
         2_000_000,
     )?;
-    let data: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    serde_json::from_slice(&bytes).map_err(|e| e.to_string())
+}
+
+pub fn audio_details(path: &Path) -> Result<crate::audio_info::Details, String> {
+    Ok(crate::audio_info::Details::from_probe(&probe_data(path)?))
+}
+
+pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
+    let data = probe_data(path)?;
     let streams = data["streams"].as_array().ok_or("No audio stream")?;
     if !streams.iter().any(|s| s["codec_type"] == "audio") {
         return Err("No audio stream".into());
@@ -229,6 +249,7 @@ pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
         tags.get("title").map(String::as_str).unwrap_or(&fallback),
         Kind::Music,
     );
+    t.audio_details = crate::audio_info::Details::from_probe(&data);
     t.artist = tags.get("artist").cloned().unwrap_or_default();
     t.album = tags.get("album").cloned().unwrap_or_default();
     t.album_artist = tags
@@ -295,6 +316,8 @@ fn refresh_sidecars(path: &Path, t: &mut Track) {
         if sidecar.metadata().is_ok_and(|m| m.len() < 512_000) {
             if let Ok(text) = fs::read_to_string(sidecar) {
                 t.lyrics = Some(text);
+                t.synced_lyrics = None;
+                t.lyrics_timing_checked = true;
                 t.lyrics_source = None;
                 t.instrumental = false;
                 break;

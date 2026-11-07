@@ -184,6 +184,33 @@ fn results_are_fallbacks_and_metadata_refresh_keeps_only_matching_downloads() {
 }
 
 #[test]
+fn existing_provider_lyrics_gain_timing_without_overwriting_local_lyrics() {
+    let mut track = song();
+    track.lyrics = Some("Existing lyric".into());
+    track.lyrics_source = Some("https://lrclib.net/api/get/42".into());
+    assert!(!missing(&track, Field::Lyrics));
+    assert!(needs_lookup(&track, Field::Lyrics));
+    let key = Query::for_track(&track, Field::Lyrics).unwrap().key;
+    let found = Found::Lyrics {
+        plain: "Existing lyric".into(),
+        synced: Some("[00:01]Existing lyric".into()),
+        source: "https://lrclib.net/api/get/42".into(),
+        instrumental: false,
+    };
+    assert!(apply(&mut track, &key, &found));
+    assert!(!needs_lookup(&track, Field::Lyrics));
+    assert!(track.synced_lyrics.is_some());
+    let mut refreshed = song();
+    preserve_downloaded(&track, &mut refreshed);
+    assert_eq!(refreshed.synced_lyrics, track.synced_lyrics);
+    refreshed.lyrics_source = None;
+    refreshed.lyrics_timing_checked = false;
+    assert!(!apply(&mut refreshed, &key, &found));
+    let restored: Track = serde_json::from_str(&serde_json::to_string(&track).unwrap()).unwrap();
+    assert_eq!(restored.synced_lyrics, track.synced_lyrics);
+}
+
+#[test]
 fn cover_matching_download_validation_cache_and_album_artist() {
     let fixture = Fixture::new(artwork_routes());
     let temp = tempfile::tempdir().unwrap();

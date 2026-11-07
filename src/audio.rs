@@ -55,6 +55,20 @@ pub struct Audio {
 }
 
 impl Audio {
+    pub fn details(&self) -> crate::audio_info::Details {
+        if !self.loaded {
+            return Default::default();
+        }
+        if self.spotify_active {
+            // This is the native source PCM rate, not the device/output rate.
+            return crate::audio_info::Details {
+                sample_rate: Some(44_100),
+                ..Default::default()
+            };
+        }
+        self.deck.details()
+    }
+
     pub fn new() -> Result<Self, String> {
         gst::init().map_err(|e| e.to_string())?;
         Ok(Self {

@@ -419,5 +419,21 @@
   "Stop and save recording": "Stop and save recording",
   "The download is finishing. Try again in a moment.": "The download is finishing. Try again in a moment.",
   "The source returned an invalid download range. Try again.": "The source returned an invalid download range. Try again.",
-  "Wait for cancellation to finish before resuming.": "Wait for cancellation to finish before resuming."
+  "Wait for cancellation to finish before resuming.": "Wait for cancellation to finish before resuming.",
+  "Audio details": "Audio details",
+  "Bit depth": "Bit depth",
+  "Bitrate": "Bitrate",
+  "Codec": "Codec",
+  "Could not move files to Trash.": "Could not move files to Trash.",
+  "Files moved to Trash and removed from the library.": "Files moved to Trash and removed from the library.",
+  "Follow": "Follow",
+  "Follow playback": "Follow playback",
+  "Move file to Trash": "Move file to Trash",
+  "Move files to Trash": "Move files to Trash",
+  "Moving files to Trash…": "Moving files to Trash…",
+  "Not reported by this source.": "Not reported by this source.",
+  "Remove from library": "Remove from library",
+  "Removed from the library. Your files are unchanged. Import them again to restore them.": "Removed from the library. Your files are unchanged. Import them again to restore them.",
+  "Sample rate": "Sample rate",
+  "bit": "bit"
 }

@@ -38,6 +38,43 @@ pub(super) struct Deck {
 }
 
 impl Deck {
+    pub fn details(&self) -> crate::audio_info::Details {
+        let index = self.pipeline.property::<i32>("current-audio");
+        if index < 0 {
+            return Default::default();
+        }
+        let mut details = crate::audio_info::Details::default();
+        if let Some(tags) = self
+            .pipeline
+            .emit_by_name::<Option<gst::TagList>>("get-audio-tags", &[&index])
+        {
+            details.codec = tags
+                .get::<gst::tags::AudioCodec>()
+                .map(|t| t.get().to_string());
+            details.bitrate = tags
+                .get::<gst::tags::Bitrate>()
+                .map(|t| u64::from(t.get()))
+                .or_else(|| {
+                    tags.get::<gst::tags::NominalBitrate>()
+                        .map(|t| u64::from(t.get()))
+                })
+                .filter(|n| *n > 0);
+        }
+        if let Some(pad) = self
+            .pipeline
+            .emit_by_name::<Option<gst::Pad>>("get-audio-pad", &[&index])
+        {
+            details.sample_rate = pad.current_caps().and_then(|caps| {
+                caps.structure(0)?
+                    .get::<i32>("rate")
+                    .ok()
+                    .filter(|n| *n > 0)
+                    .map(|n| n as u32)
+            });
+        }
+        details
+    }
+
     pub fn new() -> Result<Self, String> {
         let pipeline = gst::ElementFactory::make("playbin")
             .build()

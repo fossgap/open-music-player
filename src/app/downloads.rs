@@ -70,7 +70,11 @@ impl App {
                 let uri = gio::File::for_path(saved.path).uri();
                 let track = Track::new(&uri, &saved.title, Kind::Music);
                 let id = track.id.clone();
-                app.state.borrow_mut().merge(vec![track]);
+                {
+                    let mut state = app.state.borrow_mut();
+                    state.ignored_local.retain(|uri| uri != &track.uri);
+                    state.merge(vec![track]);
+                }
                 app.play_track(&id, None);
             }
         });

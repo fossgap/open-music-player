@@ -108,6 +108,26 @@ fn poll_until(audio: &mut Audio, condition: impl Fn(&Audio, &[Event]) -> bool) -
 }
 
 #[test]
+fn audio_details_report_source_rate_and_reset_when_stopped() {
+    let dir = tempfile::tempdir().unwrap();
+    let track = wav(&dir.path().join("details.wav"), 1.0);
+    let mut audio = Audio::new().unwrap();
+    audio
+        .load_queued(&track.uri, 0.0, false, HashMap::new(), None, 0.0)
+        .unwrap();
+    poll_until(&mut audio, |a, _| a.deck.ready);
+    let details = audio.details();
+    assert_eq!(details.sample_rate, Some(48_000));
+    assert!(details.codec.is_some(), "{details:?}");
+    assert_eq!(
+        details.bit_depth, None,
+        "Decoder output format must not masquerade as source precision"
+    );
+    audio.stop();
+    assert_eq!(audio.details(), crate::audio_info::Details::default());
+}
+
+#[test]
 fn playback_speed_changes_output_duration_and_survives_pause_and_seek() {
     let dir = tempfile::tempdir().unwrap();
     let track = wav(&dir.path().join("speed.wav"), 2.0);

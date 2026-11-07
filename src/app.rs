@@ -12,6 +12,7 @@ mod browse;
 mod downloads;
 mod files;
 mod interactions;
+mod lyrics;
 mod metadata;
 mod playback;
 mod podcasts;
@@ -35,6 +36,7 @@ use std::{
 enum Message {
     Scan(Result<library::Scan, String>, Vec<PathBuf>),
     LocalImport(Result<library::Import, String>),
+    AudioDetails(String, String, Result<crate::audio_info::Details, String>),
     Radio(u64, Result<Vec<Track>, String>),
     PodcastSearch(u64, Result<Vec<services::PodcastShow>, String>),
     PlaylistImport(Result<playlists::Import, String>),
@@ -73,6 +75,8 @@ pub struct App {
     metadata: RefCell<enrichment::Service>,
     metadata_last: Cell<Instant>,
     lyrics_key: RefCell<Option<String>>,
+    lyrics: lyrics::Controls,
+    details_requested: RefCell<HashSet<String>>,
     streaming_service: RefCell<String>,
     radio_results: RefCell<Vec<String>>,
     playlist: RefCell<Option<String>>,
@@ -193,6 +197,8 @@ impl App {
             metadata: RefCell::new(enrichment::Service::new(enrichment::Config::default())),
             metadata_last: Cell::new(Instant::now()),
             lyrics_key: RefCell::new(None),
+            lyrics: Default::default(),
+            details_requested: Default::default(),
             streaming_service: RefCell::new("youtube".into()),
             radio_results: RefCell::new(vec![]),
             playlist: RefCell::new(None),
@@ -243,6 +249,7 @@ impl App {
         this.setup_timing();
         this.setup_downloads();
         this.setup_metadata();
+        this.setup_lyrics();
         this.setup_wheel_controls();
         this.setup_drawing();
         this.audio.borrow().volume(this.state.borrow().volume);
@@ -793,10 +800,11 @@ impl App {
         }
         self.button("refresh").set_sensitive(false);
         let existing = self.state.borrow().tracks.clone();
+        let ignored = self.state.borrow().ignored_local.clone();
         let cache = self.cache.clone();
         let tx = self.tx.clone();
         std::thread::spawn(move || {
-            let result = library::scan(&folders, &existing, &cache);
+            let result = library::scan_filtered(&folders, &existing, &cache, &ignored);
             let _ = tx.send(Message::Scan(result, folders));
         });
     }
@@ -1148,7 +1156,9 @@ impl App {
             if self.state.borrow().current.as_deref() == Some(id) {
                 self.stop_playback();
             }
-            self.state.borrow_mut().forget(id);
+            self.state
+                .borrow_mut()
+                .remove_from_library(&[id.to_string()]);
         }
         self.refresh();
         self.update_player();
@@ -1186,6 +1196,7 @@ impl App {
 
     pub fn shutdown(&self) {
         self.files.watcher.stop();
+        self.finish_trash();
         self.metadata.borrow().stop();
         self.audio.borrow_mut().stop();
         self.downloads.manager.borrow_mut().shutdown();
@@ -1385,6 +1396,19 @@ impl App {
                     }
                 }
                 Message::LocalImport(result) => self.imported_local(result),
+                Message::AudioDetails(id, uri, Ok(details)) => {
+                    if let Some(track) = self
+                        .state
+                        .borrow_mut()
+                        .tracks
+                        .iter_mut()
+                        .find(|t| t.id == id && t.uri == uri && t.audio_details.codec.is_none())
+                    {
+                        track.audio_details = details;
+                    }
+                    self.persist();
+                    self.update_metadata();
+                }
                 Message::Scan(result, folders) => {
                     let background = self.scan_background.replace(false);
                     self.scanning.set(false);

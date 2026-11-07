@@ -28,6 +28,9 @@ pub struct Track {
     pub kind: Kind,
     pub artwork: Option<String>,
     pub lyrics: Option<String>,
+    pub synced_lyrics: Option<String>,
+    pub lyrics_timing_checked: bool,
+    pub audio_details: crate::audio_info::Details,
     pub artwork_source: Option<String>,
     pub lyrics_source: Option<String>,
     pub instrumental: bool,
@@ -148,6 +151,7 @@ pub struct State {
     pub version: u32,
     pub tracks: Vec<Track>,
     pub folders: Vec<PathBuf>,
+    pub ignored_local: Vec<String>,
     pub subscriptions: Vec<Subscription>,
     pub playlists: Vec<Playlist>,
     pub queue: Vec<String>,
@@ -182,6 +186,7 @@ impl Default for State {
             version: 1,
             tracks: vec![],
             folders: vec![],
+            ignored_local: vec![],
             subscriptions: vec![],
             playlists: vec![],
             queue: vec![],
@@ -224,6 +229,7 @@ impl State {
     }
 
     pub fn merge(&mut self, incoming: Vec<Track>) {
+        let ignored: HashSet<_> = self.ignored_local.iter().map(String::as_str).collect();
         let mut indices: std::collections::HashMap<String, usize> = self
             .tracks
             .iter()
@@ -231,6 +237,9 @@ impl State {
             .map(|(i, t)| (t.id.clone(), i))
             .collect();
         for mut track in incoming {
+            if track.kind == Kind::Music && ignored.contains(track.uri.as_str()) {
+                continue;
+            }
             if let Some(&i) = indices.get(&track.id) {
                 track.favorite = self.tracks[i].favorite;
                 track.download_path = self.tracks[i].download_path.clone();
@@ -382,6 +391,22 @@ impl State {
 
     pub fn forget(&mut self, id: &str) {
         self.forget_many([id]);
+    }
+
+    /// Explicit library removal must survive automatic folder refreshes.
+    pub fn remove_from_library(&mut self, ids: &[String]) {
+        let selected: HashSet<_> = ids.iter().collect();
+        let mut ignored: HashSet<_> = self.ignored_local.iter().cloned().collect();
+        for track in &self.tracks {
+            if selected.contains(&track.id)
+                && track.kind == Kind::Music
+                && crate::library::local_path(&track.uri).is_some()
+                && ignored.insert(track.uri.clone())
+            {
+                self.ignored_local.push(track.uri.clone());
+            }
+        }
+        self.forget_many(ids.iter().map(String::as_str));
     }
 
     pub fn forget_many<'a>(&mut self, ids: impl IntoIterator<Item = &'a str>) {
@@ -598,5 +623,31 @@ mod tests {
         state.rename_playlist(&id, "EVENING").unwrap();
         assert_eq!(state.unique_playlist_name("Evening"), "Evening (2)");
         assert_eq!(state.playlists.len(), 1);
+    }
+
+    #[test]
+    fn library_removal_survives_rescans_and_state_restoration() {
+        let mut state = State::default();
+        let track = Track::new(
+            "file:///tmp/library-removal.wav",
+            "Keep on disk",
+            Kind::Music,
+        );
+        state.merge(vec![track.clone()]);
+        state.queue.push(track.id.clone());
+        state
+            .create_playlist("Favorites", vec![track.id.clone()])
+            .unwrap();
+        state.current = Some(track.id.clone());
+        state.remove_from_library(std::slice::from_ref(&track.id));
+        assert!(state.current.is_none() && state.queue.is_empty());
+        assert!(state.playlists[0].tracks.is_empty());
+        let mut restored: State =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        restored.merge(vec![track.clone()]);
+        assert!(restored.track(&track.id).is_none());
+        restored.ignored_local.clear();
+        restored.merge(vec![track.clone()]);
+        assert!(restored.track(&track.id).is_some());
     }
 }
