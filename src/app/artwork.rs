@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 pub(super) struct Cover {
     texture: gdk::Texture,
     pub backdrop: Option<Pixbuf>,
+    watermark: Option<Pixbuf>,
     pub color: (f64, f64, f64),
 }
 
@@ -125,6 +126,16 @@ impl Images {
             let cover = Cover {
                 texture: gdk::Texture::for_pixbuf(&pixbuf),
                 backdrop: pixbuf.scale_simple(16, 16, InterpType::Bilinear),
+                // A small cached image softens fine detail when enlarged as a watermark.
+                // Preserve aspect ratio; decoding and resizing never happen during drawing.
+                watermark: {
+                    let scale = 64.0 / f64::from(pixbuf.width().max(pixbuf.height()));
+                    pixbuf.scale_simple(
+                        (f64::from(pixbuf.width()) * scale).round().max(1.0) as i32,
+                        (f64::from(pixbuf.height()) * scale).round().max(1.0) as i32,
+                        InterpType::Bilinear,
+                    )
+                },
                 color,
             };
             if cache.images.len() >= 256 {
@@ -180,6 +191,8 @@ impl App {
             .images
             .backdrop(state.current_track().and_then(|t| t.artwork.as_deref()));
         *self.backdrop_art.borrow_mut() = cover.as_ref().and_then(|c| c.backdrop.clone());
+        self.watermark
+            .set_artwork(cover.as_ref().and_then(|c| c.watermark.clone()));
         self.backdrop
             .set(cover.map(|c| c.color).unwrap_or((0.17, 0.23, 0.17)));
         object::<gtk::DrawingArea>(&self.ui, "detail_backdrop").queue_draw();

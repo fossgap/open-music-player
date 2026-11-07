@@ -1375,6 +1375,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     xdo(&["key", "--clearmodifiers", "space"]);
     settle();
     assert_eq!(app.state.borrow().visualization, Visualization::Mood);
+    assert!(!app.watermark.is_visible());
     assert!(!object::<gtk::Overlay>(&app.ui, "detail_artwork").is_visible());
     assert!(button.prev_sibling().is_none());
     assert!(button.has_focus());
@@ -1454,7 +1455,24 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
         let accent = app.theme.borrow().color("oap_accent");
         accent[0] > accent[2] + 0.12
     });
-    skin_pixels(app);
+    until(|| app.watermark.is_visible());
+    let watermarked_skin = skin_pixels(app);
+    for area in &app.watermark.areas {
+        assert!(!area.can_target() && !area.is_focusable());
+        area.set_opacity(0.0);
+    }
+    let plain_skin = skin_pixels(app);
+    assert!(
+        watermarked_skin
+            .iter()
+            .zip(&plain_skin)
+            .all(|(a, b)| a != b),
+        "The cover must reach the library, sidebar, and transport"
+    );
+    for area in &app.watermark.areas {
+        area.set_opacity(1.0);
+    }
+    settle();
     assert!(!object::<gtk::Image>(&app.ui, "visualization_placeholder").is_visible());
     screenshot(app.window.upcast_ref(), "visualizer-artwork-wide.png");
     assert_eq!(art.height(), 136);
@@ -1464,8 +1482,44 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
         Some("visualizerfixture")
     );
     assert_eq!(app.state.borrow().queue, queue);
+    // The decorative layer neither catches clicks nor rebuilds the library.
+    let bounds = list.compute_bounds(&app.window).unwrap();
+    xdo(&[
+        "mousemove",
+        "--window",
+        window,
+        &((f64::from(bounds.x() + 90.0) + dx) as i32).to_string(),
+        &((f64::from(bounds.y() + 24.0) + dy) as i32).to_string(),
+    ]);
+    xdo(&["click", "1"]);
+    settle();
+    assert!(selection.is_selected(0));
+    assert_eq!(app.play_generation.get(), generation);
+    app.toggle_details();
+    settle();
+    scroller.vadjustment().set_value(300.0);
+    settle();
+    let scroll = scroller.vadjustment().value();
+    let row = app.tracks_model.item(0).unwrap();
+    app.seek(24.0);
+    settle();
+    assert!((scroller.vadjustment().value() - scroll).abs() < 1.0);
+    assert_eq!(app.tracks_model.item(0).unwrap(), row);
+    assert!(selection.is_selected(0));
+    screenshot(app.window.upcast_ref(), "watermark-hidden-details.png");
+    app.mini();
+    settle();
+    assert!(app.watermark.areas[1].is_mapped());
+    screenshot(&mini, "watermark-mini.png");
+    app.show();
+    settle();
+    app.toggle_details();
+    settle();
+    scroller.vadjustment().set_value(0.0);
     button.emit_clicked();
     assert_eq!(app.state.borrow().visualization, Visualization::Waveform);
+    until(|| !app.watermark.is_visible());
+    assert!(!app.window.has_css_class("artwork-watermark"));
     until(|| app.theme.borrow().is_original());
     assert_eq!(skin_pixels(app), original_skin);
     assert!(object::<gtk::Overlay>(&app.ui, "detail_artwork").is_visible());
@@ -1491,6 +1545,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     button.emit_clicked();
     settle();
     details.vadjustment().set_value(0.0);
+    assert!(!app.watermark.is_visible());
     screenshot(app.window.upcast_ref(), "visualizer-mood-compact.png");
     let settings = button.settings();
     let animations = settings.is_gtk_enable_animations();
@@ -1527,6 +1582,10 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     });
     assert!(!app.audio.borrow().playing);
     screenshot(app.window.upcast_ref(), "visualizer-paused.png");
+    settings.set_gtk_enable_animations(false);
+    settle();
+    screenshot(app.window.upcast_ref(), "watermark-reduced.png");
+    settings.set_gtk_enable_animations(animations);
     app.state
         .borrow_mut()
         .tracks
@@ -1538,6 +1597,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     assert!(art.paintable().is_none());
     assert!(object::<gtk::Image>(&app.ui, "visualization_placeholder").is_visible());
     until(|| app.theme.borrow().is_original());
+    until(|| !app.watermark.is_visible());
     screenshot(app.window.upcast_ref(), "visualizer-artwork-missing.png");
     button.emit_clicked();
     assert_eq!(app.state.borrow().visualization, Visualization::Waveform);
@@ -1599,15 +1659,32 @@ fn skin_pixels(app: &Rc<App>) -> Vec<[u8; 3]> {
         let rgb = [pixels[at + 2], pixels[at + 1], pixels[at]];
         #[cfg(target_endian = "big")]
         let rgb = [pixels[at + 1], pixels[at + 2], pixels[at + 3]];
-        let expected = app
-            .theme
-            .borrow()
-            .color(role)
-            .map(|c| (c * 255.0).round() as u8);
-        assert!(
-            rgb.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 4),
-            "{id}: {rgb:?}, expected {expected:?}"
-        );
+        let theme = app.theme.borrow();
+        let expected = theme.color(role);
+        if app.window.has_css_class("artwork-watermark") {
+            let panel = match id {
+                "sidebar" => 0.6,
+                "player_bar" => 0.65,
+                _ => 0.0,
+            };
+            for i in 0..3 {
+                let window = theme.color("oap_window")[i];
+                let bounds = [0.0, 1.0].map(|cover| {
+                    let base = window + (cover - window) * watermark::MAX_OPACITY;
+                    (base * (1.0 - panel) + expected[i] * panel) * 255.0
+                });
+                assert!(
+                    f64::from(rgb[i]) >= bounds[0] - 4.0 && f64::from(rgb[i]) <= bounds[1] + 4.0,
+                    "{id}: {rgb:?}, expected channel {i} within {bounds:?}"
+                );
+            }
+        } else {
+            let expected = expected.map(|c| (c * 255.0).round() as u8);
+            assert!(
+                rgb.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 4),
+                "{id}: {rgb:?}, expected {expected:?}"
+            );
+        }
         rgb
     })
     .collect()

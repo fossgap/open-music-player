@@ -250,6 +250,7 @@ impl App {
             .iter()
             .any(|window| window.is_mapped());
         let changed = self.theme.borrow_mut().update(tone, visible, animated);
+        self.update_watermark(tone.map(|(_, energy)| energy).unwrap_or(0.0), animated);
         if changed {
             let [r, g, b] = self.theme.borrow().color("oap_accent");
             if let Some(tag) = object::<gtk::TextView>(&self.ui, "lyrics_timed")

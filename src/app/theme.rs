@@ -275,6 +275,27 @@ mod tests {
                             );
                         }
                     }
+                    // A white cover is the worst case for light text, including
+                    // the translucent sidebar, details, and transport surfaces.
+                    let white_cover = palette
+                        .color("oap_window")
+                        .map(|c| c + (1.0 - c) * super::super::watermark::MAX_OPACITY);
+                    for (role, opacity) in [
+                        ("oap_window", 0.0),
+                        ("oap_rail", 0.6),
+                        ("oap_rail", 0.65),
+                        ("oap_detail", 0.65),
+                    ] {
+                        let background = std::array::from_fn(|i| {
+                            white_cover[i] * (1.0 - opacity) + palette.color(role)[i] * opacity
+                        });
+                        for fg in ["oap_text", "oap_muted", "oap_lyrics", "oap_accent"] {
+                            assert!(
+                                contrast(palette.color(fg), background) >= 4.5,
+                                "White watermark: {h}°, energy {energy}: {fg} on {role}"
+                            );
+                        }
+                    }
                     for bg in ["oap_accent", "oap_accent_hover", "oap_play_hover"] {
                         assert!(
                             contrast(palette.color("oap_accent_ink"), palette.color(bg)) >= 4.5

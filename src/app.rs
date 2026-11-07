@@ -25,6 +25,7 @@ mod tests;
 mod theme;
 mod updates;
 mod visualization;
+mod watermark;
 mod youtube;
 type BoundItems = RefCell<HashMap<usize, (glib::WeakRef<gtk::ListItem>, gtk::Builder)>>;
 use gtk::{gdk, gio, glib, prelude::*};
@@ -120,6 +121,7 @@ pub struct App {
     buffering_notice: Cell<bool>,
     visualization: RefCell<visualization::Controls>,
     theme: RefCell<theme::Theme>,
+    watermark: watermark::Controls,
     backdrop: Cell<(f64, f64, f64)>,
     backdrop_art: RefCell<Option<gtk::gdk_pixbuf::Pixbuf>>,
     artwork_pending: RefCell<HashSet<String>>,
@@ -245,6 +247,7 @@ impl App {
             buffering_notice: Cell::new(false),
             visualization: RefCell::new(Default::default()),
             theme: RefCell::new(theme::Theme::new()),
+            watermark: Default::default(),
             backdrop: Cell::new((0.17, 0.23, 0.17)),
             backdrop_art: RefCell::new(None),
             artwork_pending: RefCell::new(HashSet::new()),
@@ -256,6 +259,7 @@ impl App {
         this.setup_lists();
         this.setup_selection();
         this.setup_files();
+        this.setup_watermark();
         this.setup_controls();
         this.setup_timing();
         this.setup_downloads();

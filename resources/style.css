@@ -114,6 +114,11 @@ scale trough { background: @oap_outline; border-color: @oap_outline; box-shadow:
 scale highlight { background: @oap_accent; border-color: @oap_accent; box-shadow: none; min-height: 4px; border-radius: 10px; }
 scale slider { background: @oap_thumb; min-width: 12px; min-height: 12px; margin: -4px; border: 0; box-shadow: none; }
 .detail-panel { background: @oap_detail; border-left: 1px solid @oap_divider; padding: 20px; }
+/* One continuous cover sits underneath the content; controls remain opaque and legible. */
+.artwork-watermark .sidebar-scroll { background: alpha(@oap_rail, 0.6); }
+.artwork-watermark .sidebar { background: transparent; }
+.artwork-watermark .player-bar { background: alpha(@oap_rail, 0.65); }
+.artwork-watermark .detail-panel { background: alpha(@oap_detail, 0.65); }
 .detail-tabs button { background: transparent; color: @oap_muted; border-radius: 0; border-bottom: 2px solid transparent; padding: 8px 4px; min-width: 0; font-size: 12px; }
 .detail-tabs button:hover { background: @oap_row_hover; color: @oap_text; }
 .detail-tabs button:checked { background: transparent; color: @oap_accent; border-bottom-color: @oap_accent; }
