@@ -12,6 +12,11 @@ impl App {
     pub(super) fn layout_player(&self, compact: bool) {
         let bar: gtk::Box = object(&self.ui, "player_bar");
         bar.set_spacing(if compact { 8 } else { 20 });
+        object::<gtk::Box>(&self.ui, "player_output_controls").set_spacing(if compact {
+            8
+        } else {
+            20
+        });
         if compact {
             bar.add_css_class("compact");
         } else {

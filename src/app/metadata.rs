@@ -7,7 +7,6 @@ impl App {
         for (name, title) in [
             ("now-playing", "Now playing"),
             ("information", "Artist & album"),
-            ("audio", "Audio details"),
         ] {
             stack
                 .page(&stack.child_by_name(name).unwrap())
@@ -303,19 +302,14 @@ impl App {
     fn update_audio_details(&self) {
         let state = self.state.borrow();
         let track = state.current_track();
-        object::<gtk::Box>(&self.ui, "audio_details").set_visible(track.is_some());
-        object::<gtk::Label>(&self.ui, "audio_empty").set_visible(track.is_none());
-        self.label("audio_title", track.map(|t| t.title.as_str()).unwrap_or(""));
-        self.label(
-            "audio_artist",
-            &track.map(|t| self.artist(t)).unwrap_or_default(),
-        );
         let mut details = track.map(|t| t.audio_details.clone()).unwrap_or_default();
-        details.fill_missing(&self.audio.borrow().details());
-        for (id, value) in [
-            ("detail_codec", details.codec.map(|s| s.to_uppercase())),
+        if track.is_some() {
+            details.fill_missing(&self.audio.borrow().details());
+        }
+        let values = [
+            ("Codec", details.codec.map(|s| s.to_uppercase())),
             (
-                "detail_bitrate",
+                "Bitrate",
                 details.bitrate.map(|n| {
                     format!(
                         "{}{:.0} kbps",
@@ -329,24 +323,41 @@ impl App {
                 }),
             ),
             (
-                "detail_sample_rate",
+                "Sample rate",
                 details
                     .sample_rate
                     .map(|n| format!("{} kHz", f64::from(n) / 1000.0)),
             ),
             (
-                "detail_bit_depth",
+                "Bit depth",
                 details.bit_depth.map(|n| format!("{n} {}", self.tr("bit"))),
             ),
+        ];
+        let describe = |fields: &[(&str, Option<String>)]| {
+            fields
+                .iter()
+                .map(|(name, value)| {
+                    format!("{}: {}", self.tr(name), value.as_deref().unwrap_or("-"))
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        for (id, fields) in [
+            ("player_encoding", &values[..2]),
+            ("player_resolution", &values[2..]),
         ] {
+            let text = fields
+                .iter()
+                .map(|(_, value)| value.as_deref().unwrap_or("-"))
+                .collect::<Vec<_>>()
+                .join(" · ");
             let label: gtk::Label = object(&self.ui, id);
-            label.set_label(value.as_deref().unwrap_or("—"));
-            label.set_tooltip_text(Some(
-                value
-                    .as_deref()
-                    .unwrap_or(&self.tr("Not reported by this source.")),
-            ));
+            label.set_label(&text);
+            label.update_property(&[gtk::accessible::Property::Label(&describe(fields))]);
         }
+        let summary: gtk::Box = object(&self.ui, "player_audio");
+        summary.set_visible(track.is_some());
+        summary.set_tooltip_text(track.map(|_| describe(&values)).as_deref());
     }
 
     pub(super) fn narrow_details(&self) -> bool {

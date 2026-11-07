@@ -1290,6 +1290,8 @@ fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {
     }
     let stack: gtk::Stack = object(&app.ui, "detail_stack");
     assert_eq!(stack.visible_child_name().as_deref(), Some("now-playing"));
+    assert_eq!(stack.pages().n_items(), 2);
+    assert!(stack.child_by_name("audio").is_none());
     let tabs: gtk::StackSwitcher = object(&app.ui, "detail_tabs");
     let information_tab = tabs
         .first_child()
@@ -1303,7 +1305,7 @@ fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {
     assert_eq!(stack.visible_child_name().as_deref(), Some("information"));
     assert!(information_tab.grab_focus());
     assert!(!object::<gtk::Label>(&app.ui, "detail_title").is_mapped());
-    assert!(!object::<gtk::Label>(&app.ui, "detail_codec").is_mapped());
+    assert!(object::<gtk::Box>(&app.ui, "player_audio").is_mapped());
     assert!(object::<gtk::Label>(&app.ui, "info_artist_summary").is_mapped());
     until(|| {
         object::<gtk::Picture>(&app.ui, "info_album_art")
@@ -1376,14 +1378,6 @@ fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {
         .set_value(playing.vadjustment().upper());
     settle();
     let playing_scroll = playing.vadjustment().value();
-    stack.set_visible_child_name("audio");
-    settle();
-    assert!(object::<gtk::Label>(&app.ui, "detail_codec").is_mapped());
-    assert_eq!(
-        object::<gtk::Label>(&app.ui, "audio_title").text(),
-        "Evening Window"
-    );
-    screenshot(app.window.upcast_ref(), "audio-tab-wide.png");
     stack.set_visible_child_name("information");
     settle();
     assert!(
@@ -1454,7 +1448,7 @@ fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {
     scroll_to("discography_section");
     screenshot(app.window.upcast_ref(), "discography-tab-compact.png");
     // Longer translated tab names and long metadata must wrap without growing the window.
-    let tab_titles = |titles: [&str; 3]| {
+    let tab_titles = |titles: [&str; 2]| {
         let mut child = tabs.first_child();
         for title in titles {
             let button = child.unwrap().downcast::<gtk::ToggleButton>().unwrap();
@@ -1468,7 +1462,7 @@ fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {
                 .set_text(title);
         }
     };
-    tab_titles(["Aktuelle Wiedergabe", "Künstler & Album", "Audiodetails"]);
+    tab_titles(["Aktuelle Wiedergabe", "Künstler & Album"]);
     let original_info = app
         .state
         .borrow()
@@ -1495,7 +1489,7 @@ fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {
     settle();
     assert!(app.window.width() <= 820);
     screenshot(app.window.upcast_ref(), "information-long-text-compact.png");
-    tab_titles(["Now playing", "Artist & album", "Audio details"]);
+    tab_titles(["Now playing", "Artist & album"]);
     app.state
         .borrow_mut()
         .tracks
@@ -1504,9 +1498,6 @@ fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {
         .unwrap()
         .music_info = original_info;
     app.update_metadata();
-    stack.set_visible_child_name("audio");
-    settle();
-    screenshot(app.window.upcast_ref(), "audio-tab-compact.png");
     stack.set_visible_child_name("now-playing");
     settle();
     screenshot(app.window.upcast_ref(), "now-playing-tab-compact.png");
@@ -1629,13 +1620,126 @@ fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {
             .text()
             .contains("Play a music track")
     );
-    stack.set_visible_child_name("audio");
-    settle();
-    assert!(object::<gtk::Label>(&app.ui, "audio_empty").is_mapped());
-    assert!(!object::<gtk::Box>(&app.ui, "audio_details").is_visible());
+    assert!(!object::<gtk::Box>(&app.ui, "player_audio").is_visible());
     stack.set_visible_child_name("now-playing");
+    exercise_audio_summary(app);
     app.window.set_default_size(1240, 800);
     app.update_player();
+}
+
+// The properties remain available with the details panel closed and cannot
+// enlarge the player when a stream reports a long or incomplete codec name.
+fn exercise_audio_summary(app: &Rc<App>) {
+    let before = app.state.borrow().clone();
+    app.stop_playback();
+    let panel: gtk::Revealer = object(&app.ui, "detail_revealer");
+    let panel_visible = panel.is_visible();
+    panel.set_visible(false);
+    app.update_metadata();
+    settle();
+    let bar: gtk::Box = object(&app.ui, "player_bar");
+    let height = bar.height();
+    let volume_y = || app.button("mute").compute_bounds(&bar).unwrap().y();
+    let original_volume_y = volume_y();
+    let summary: gtk::Box = object(&app.ui, "player_audio");
+    assert!(!summary.is_visible());
+    let encoding: gtk::Label = object(&app.ui, "player_encoding");
+    let resolution: gtk::Label = object(&app.ui, "player_resolution");
+    let mut track = Track::new(
+        "https://example.invalid/fixture",
+        "Audio format fixture",
+        Kind::Radio,
+    );
+    track.id = "audioformatfixture".into();
+    track.artist = "Open Audio test session".into();
+    track.audio_details = crate::audio_info::Details {
+        codec: Some("flac".into()),
+        bitrate: Some(921_000),
+        bitrate_estimated: true,
+        sample_rate: Some(96_000),
+        bit_depth: Some(24),
+    };
+    let update = |details: crate::audio_info::Details| {
+        app.state
+            .borrow_mut()
+            .tracks
+            .iter_mut()
+            .find(|t| t.id == "audioformatfixture")
+            .unwrap()
+            .audio_details = details;
+        app.update_player();
+        settle();
+    };
+    app.state.borrow_mut().merge(vec![track.clone()]);
+    app.state.borrow_mut().current = Some(track.id.clone());
+    update(track.audio_details.clone());
+    assert!(summary.is_mapped() && summary.is_ancestor(&bar));
+    assert_eq!(encoding.text(), "FLAC · ≈ 921 kbps");
+    assert_eq!(resolution.text(), "96 kHz · 24 bit");
+    assert_eq!(
+        bar.height(),
+        height,
+        "Audio properties must fit the existing player height"
+    );
+    assert!((volume_y() - original_volume_y).abs() < 1.0);
+    let tooltip = summary.tooltip_text().unwrap();
+    for field in [
+        "Codec: FLAC",
+        "Bitrate: ≈ 921 kbps",
+        "Sample rate: 96 kHz",
+        "Bit depth: 24 bit",
+    ] {
+        assert!(tooltip.contains(field));
+    }
+    screenshot(app.window.upcast_ref(), "playback-audio-compact.png");
+    app.window.set_default_size(1280, 820);
+    settle();
+    screenshot(app.window.upcast_ref(), "playback-audio-wide.png");
+
+    track.audio_details.codec =
+        Some("A very long audio codec description from a streaming source".into());
+    update(track.audio_details.clone());
+    app.window.set_default_size(820, 650);
+    settle();
+    app.window.set_default_size(800, 650);
+    settle();
+    assert!(app.window.width() <= 820);
+    assert!(
+        summary
+            .tooltip_text()
+            .unwrap()
+            .contains("A VERY LONG AUDIO CODEC DESCRIPTION")
+    );
+    assert_eq!(
+        encoding.text(),
+        "A VERY LONG AUDIO CODEC DESCRIPTION FROM A STREAMING SOURCE · ≈ 921 kbps"
+    );
+    assert!(encoding.layout().is_ellipsized());
+    screenshot(app.window.upcast_ref(), "playback-audio-long-codec.png");
+
+    track.audio_details.codec = Some("mp3".into());
+    track.audio_details.bitrate = None;
+    track.audio_details.bit_depth = None;
+    update(track.audio_details);
+    assert_eq!(encoding.text(), "MP3 · -");
+    assert_eq!(resolution.text(), "96 kHz · -");
+    assert!(summary.tooltip_text().unwrap().contains("Bit depth: -"));
+    screenshot(app.window.upcast_ref(), "playback-audio-partial.png");
+    update(Default::default());
+    assert!(summary.is_mapped());
+    assert_eq!(encoding.text(), "- · -");
+    assert_eq!(resolution.text(), "- · -");
+    assert_eq!(
+        summary.tooltip_text().unwrap(),
+        "Codec: -\nBitrate: -\nSample rate: -\nBit depth: -"
+    );
+    screenshot(app.window.upcast_ref(), "playback-audio-unreported.png");
+    assert!((volume_y() - original_volume_y).abs() < 1.0);
+    *app.state.borrow_mut() = before;
+    panel.set_visible(panel_visible);
+    app.update_player();
+    assert!(!summary.is_visible());
+    assert!(summary.tooltip_text().is_none());
 }
 
 fn exercise_library_details(app: &Rc<App>, tone: &std::path::Path) {
@@ -1684,23 +1788,14 @@ fn exercise_library_details(app: &Rc<App>, tone: &std::path::Path) {
         app.toggle_details();
     }
     let stack: gtk::Stack = object(&app.ui, "detail_stack");
-    stack.set_visible_child_name("audio");
-    settle();
+    assert!(stack.child_by_name("audio").is_none());
     assert_eq!(
-        object::<gtk::Label>(&app.ui, "detail_codec").text(),
-        "PCM_S16LE"
+        object::<gtk::Label>(&app.ui, "player_encoding").text(),
+        "PCM_S16LE · 128 kbps"
     );
     assert_eq!(
-        object::<gtk::Label>(&app.ui, "detail_bitrate").text(),
-        "128 kbps"
-    );
-    assert_eq!(
-        object::<gtk::Label>(&app.ui, "detail_sample_rate").text(),
-        "8 kHz"
-    );
-    assert_eq!(
-        object::<gtk::Label>(&app.ui, "detail_bit_depth").text(),
-        "16 bit"
+        object::<gtk::Label>(&app.ui, "player_resolution").text(),
+        "8 kHz · 16 bit"
     );
     screenshot(app.window.upcast_ref(), "playback-details-wide.png");
     stack.set_visible_child_name("now-playing");

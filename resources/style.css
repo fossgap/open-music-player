@@ -66,7 +66,7 @@ gridview > child:selected { background: #34412f; color: #f1f3eb; }
 .player-bar { background: #141917; border-top: 1px solid #344037; padding: 16px 24px 12px; }
 .player-bar.compact { padding-left: 16px; padding-right: 16px; }
 button.art-button { padding: 0; }
-.time { font-size: 11px; color: #adb9b0; font-feature-settings: "tnum"; }
+.time, .audio-summary { font-size: 11px; color: #adb9b0; font-feature-settings: "tnum"; }
 scale { padding: 9px 0; }
 scale trough { background: #3c4941; min-height: 4px; border-radius: 10px; }
 scale highlight { background: #c2dfa3; min-height: 4px; border-radius: 10px; }

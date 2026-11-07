@@ -1300,184 +1300,6 @@
                             </property>
                           </object>
                         </child>
-                        <child>
-                          <object class="GtkStackPage">
-                            <property name="name">audio</property>
-                            <property name="title">Audio details</property>
-                            <property name="child">
-                              <object class="GtkScrolledWindow" id="audio_scroller">
-                                <property name="hscrollbar-policy">never</property>
-                                <property name="vexpand">true</property>
-                                <property name="child">
-                                  <object class="GtkBox">
-                                    <property name="orientation">vertical</property>
-                                    <property name="spacing">24</property>
-                                    <child>
-                                      <object class="GtkLabel" id="audio_empty">
-                                        <property name="label">Play a track to see its audio details.</property>
-                                        <property name="wrap">true</property>
-                                        <property name="wrap-mode">word-char</property>
-                                        <property name="max-width-chars">24</property>
-                                        <property name="xalign">0</property>
-                                        <style>
-                                          <class name="muted" />
-                                        </style>
-                                      </object>
-                                    </child>
-                                    <child>
-                                      <object class="GtkBox" id="audio_details">
-                                        <property name="orientation">vertical</property>
-                                        <property name="spacing">24</property>
-                                        <child>
-                                          <object class="GtkBox">
-                                            <property name="orientation">vertical</property>
-                                            <property name="spacing">8</property>
-                                            <child>
-                                              <object class="GtkLabel" id="audio_title">
-                                                <property name="wrap">true</property>
-                                                <property name="wrap-mode">word-char</property>
-                                                <property name="max-width-chars">24</property>
-                                                <property name="xalign">0</property>
-                                                <style>
-                                                  <class name="section-title" />
-                                                </style>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel" id="audio_artist">
-                                                <property name="wrap">true</property>
-                                                <property name="wrap-mode">word-char</property>
-                                                <property name="max-width-chars">24</property>
-                                                <property name="xalign">0</property>
-                                                <style>
-                                                  <class name="muted" />
-                                                </style>
-                                              </object>
-                                            </child>
-                                          </object>
-                                        </child>
-                                        <child>
-                                          <object class="GtkSeparator" />
-                                        </child>
-                                        <child>
-                                          <object class="GtkGrid">
-                                            <property name="column-spacing">12</property>
-                                            <property name="row-spacing">20</property>
-                                            <property name="margin-top">8</property>
-                                            <child>
-                                              <object class="GtkLabel">
-                                                <property name="label">Codec</property>
-                                                <property name="xalign">0</property>
-                                                <style>
-                                                  <class name="muted" />
-                                                </style>
-                                                <layout>
-                                                  <property name="column">0</property>
-                                                  <property name="row">0</property>
-                                                </layout>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel" id="detail_codec">
-                                                <property name="xalign">1</property>
-                                                <property name="hexpand">true</property>
-                                                <property name="ellipsize">end</property>
-                                                <property name="max-width-chars">18</property>
-                                                <property name="selectable">true</property>
-                                                <layout>
-                                                  <property name="column">1</property>
-                                                  <property name="row">0</property>
-                                                </layout>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel">
-                                                <property name="label">Bitrate</property>
-                                                <property name="xalign">0</property>
-                                                <style>
-                                                  <class name="muted" />
-                                                </style>
-                                                <layout>
-                                                  <property name="column">0</property>
-                                                  <property name="row">1</property>
-                                                </layout>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel" id="detail_bitrate">
-                                                <property name="xalign">1</property>
-                                                <property name="hexpand">true</property>
-                                                <property name="ellipsize">end</property>
-                                                <property name="max-width-chars">18</property>
-                                                <property name="selectable">true</property>
-                                                <layout>
-                                                  <property name="column">1</property>
-                                                  <property name="row">1</property>
-                                                </layout>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel">
-                                                <property name="label">Sample rate</property>
-                                                <property name="xalign">0</property>
-                                                <style>
-                                                  <class name="muted" />
-                                                </style>
-                                                <layout>
-                                                  <property name="column">0</property>
-                                                  <property name="row">2</property>
-                                                </layout>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel" id="detail_sample_rate">
-                                                <property name="xalign">1</property>
-                                                <property name="hexpand">true</property>
-                                                <property name="ellipsize">end</property>
-                                                <property name="max-width-chars">18</property>
-                                                <property name="selectable">true</property>
-                                                <layout>
-                                                  <property name="column">1</property>
-                                                  <property name="row">2</property>
-                                                </layout>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel">
-                                                <property name="label">Bit depth</property>
-                                                <property name="xalign">0</property>
-                                                <style>
-                                                  <class name="muted" />
-                                                </style>
-                                                <layout>
-                                                  <property name="column">0</property>
-                                                  <property name="row">3</property>
-                                                </layout>
-                                              </object>
-                                            </child>
-                                            <child>
-                                              <object class="GtkLabel" id="detail_bit_depth">
-                                                <property name="xalign">1</property>
-                                                <property name="hexpand">true</property>
-                                                <property name="ellipsize">end</property>
-                                                <property name="max-width-chars">18</property>
-                                                <property name="selectable">true</property>
-                                                <layout>
-                                                  <property name="column">1</property>
-                                                  <property name="row">3</property>
-                                                </layout>
-                                              </object>
-                                            </child>
-                                          </object>
-                                        </child>
-                                      </object>
-                                    </child>
-                                  </object>
-                                </property>
-                              </object>
-                            </property>
-                          </object>
-                        </child>
                       </object>
                     </child>
                   </object>
@@ -1661,36 +1483,73 @@
               </object>
             </child>
             <child>
-              <object class="GtkBox" id="volume_box">
+              <object class="GtkBox" id="player_output">
+                <property name="orientation">vertical</property>
                 <property name="spacing">4</property>
-                <property name="valign">center</property>
+                <property name="valign">fill</property>
                 <child>
-                  <object class="GtkButton" id="mute">
-                    <property name="icon-name">audio-volume-high-symbolic</property>
-                    <property name="tooltip-text">Mute</property>
-                    <style>
-                      <class name="flat" />
-                    </style>
+                  <object class="GtkBox" id="player_output_controls">
+                    <property name="spacing">20</property>
+                    <child>
+                      <object class="GtkBox" id="volume_box">
+                        <property name="spacing">4</property>
+                        <property name="valign">center</property>
+                        <child>
+                          <object class="GtkButton" id="mute">
+                            <property name="icon-name">audio-volume-high-symbolic</property>
+                            <property name="tooltip-text">Mute</property>
+                            <style>
+                              <class name="flat" />
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkScale" id="volume">
+                            <property name="adjustment">volume_adjustment</property>
+                            <property name="width-request">80</property>
+                            <property name="draw-value">false</property>
+                            <property name="tooltip-text">Volume — scroll to adjust by 5%</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="mini">
+                        <property name="icon-name">view-restore-symbolic</property>
+                        <property name="tooltip-text">Mini player</property>
+                        <property name="valign">center</property>
+                        <style>
+                          <class name="flat" />
+                        </style>
+                      </object>
+                    </child>
                   </object>
                 </child>
                 <child>
-                  <object class="GtkScale" id="volume">
-                    <property name="adjustment">volume_adjustment</property>
-                    <property name="width-request">80</property>
-                    <property name="draw-value">false</property>
-                    <property name="tooltip-text">Volume — scroll to adjust by 5%</property>
+                  <object class="GtkBox" id="player_audio">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">2</property>
+                    <property name="visible">false</property>
+                    <child>
+                      <object class="GtkLabel" id="player_encoding">
+                        <property name="ellipsize">end</property>
+                        <property name="width-chars">1</property>
+                        <property name="max-width-chars">22</property>
+                        <property name="single-line-mode">true</property>
+                        <style><class name="audio-summary"/></style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="player_resolution">
+                        <property name="ellipsize">end</property>
+                        <property name="width-chars">1</property>
+                        <property name="max-width-chars">22</property>
+                        <property name="single-line-mode">true</property>
+                        <style><class name="audio-summary"/></style>
+                      </object>
+                    </child>
                   </object>
                 </child>
-              </object>
-            </child>
-            <child>
-              <object class="GtkButton" id="mini">
-                <property name="icon-name">view-restore-symbolic</property>
-                <property name="tooltip-text">Mini player</property>
-                <property name="valign">center</property>
-                <style>
-                  <class name="flat" />
-                </style>
               </object>
             </child>
           </object>
@@ -1699,4 +1558,5 @@
     </child>
   </object>
   <object class="GtkSizeGroup" id="playback_sides"><property name="mode">horizontal</property><widgets><widget name="playback_speed"/><widget name="playback_download"/></widgets></object>
+  <object class="GtkSizeGroup" id="playback_control_rows"><property name="mode">vertical</property><widgets><widget name="playback_actions"/><widget name="player_output_controls"/></widgets></object>
 </interface>
