@@ -1721,18 +1721,17 @@ fn exercise_audio_summary(app: &Rc<App>) {
     track.audio_details.bitrate = None;
     track.audio_details.bit_depth = None;
     update(track.audio_details);
-    assert_eq!(encoding.text(), "MP3 · -");
-    assert_eq!(resolution.text(), "96 kHz · -");
-    assert!(summary.tooltip_text().unwrap().contains("Bit depth: -"));
-    screenshot(app.window.upcast_ref(), "playback-audio-partial.png");
-    update(Default::default());
-    assert!(summary.is_mapped());
-    assert_eq!(encoding.text(), "- · -");
-    assert_eq!(resolution.text(), "- · -");
+    assert_eq!(encoding.text(), "MP3");
+    assert_eq!(resolution.text(), "96 kHz");
     assert_eq!(
         summary.tooltip_text().unwrap(),
-        "Codec: -\nBitrate: -\nSample rate: -\nBit depth: -"
+        "Codec: MP3\nBitrate: -\nSample rate: 96 kHz\nBit depth: -"
     );
+    screenshot(app.window.upcast_ref(), "playback-audio-partial.png");
+    update(Default::default());
+    assert!(!summary.is_visible());
+    assert!(encoding.text().is_empty() && resolution.text().is_empty());
+    assert!(summary.tooltip_text().is_none());
     screenshot(app.window.upcast_ref(), "playback-audio-unreported.png");
     assert!((volume_y() - original_volume_y).abs() < 1.0);
     *app.state.borrow_mut() = before;

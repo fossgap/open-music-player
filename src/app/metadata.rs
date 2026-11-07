@@ -348,16 +348,18 @@ impl App {
         ] {
             let text = fields
                 .iter()
-                .map(|(_, value)| value.as_deref().unwrap_or("-"))
+                .filter_map(|(_, value)| value.as_deref())
                 .collect::<Vec<_>>()
                 .join(" · ");
             let label: gtk::Label = object(&self.ui, id);
             label.set_label(&text);
+            label.set_visible(!text.is_empty());
             label.update_property(&[gtk::accessible::Property::Label(&describe(fields))]);
         }
         let summary: gtk::Box = object(&self.ui, "player_audio");
-        summary.set_visible(track.is_some());
-        summary.set_tooltip_text(track.map(|_| describe(&values)).as_deref());
+        let available = values.iter().any(|(_, value)| value.is_some());
+        summary.set_visible(available);
+        summary.set_tooltip_text(available.then(|| describe(&values)).as_deref());
     }
 
     pub(super) fn narrow_details(&self) -> bool {
