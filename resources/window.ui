@@ -936,9 +936,14 @@
                                       </object>
                                     </child>
                                     <child>
-                                      <object class="GtkDrawingArea" id="spectrum">
-                                        <property name="content-height">64</property>
-                                        <property name="tooltip-text">Live audio waveform</property>
+                                      <object class="GtkButton" id="visualization_toggle">
+                                        <property name="action-name">app.toggle-visualization</property>
+                                        <style><class name="visualization-button"/></style>
+                                        <property name="child">
+                                          <object class="GtkDrawingArea" id="spectrum">
+                                            <property name="content-height">64</property>
+                                          </object>
+                                        </property>
                                       </object>
                                     </child>
                                     <child>

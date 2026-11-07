@@ -1,6 +1,6 @@
 //! librespot decodes; the application's GStreamer version owns the audio device.
 use crate::{
-    audio::{Event, NextTrack},
+    audio::{Event, NextTrack, visualization},
     model::{PlaybackSettings, ReplayGain},
 };
 use gst::prelude::*;
@@ -41,7 +41,7 @@ impl PcmSink {
         } else {
             "identity"
         };
-        let pipeline = gst::parse_launch(&format!("appsrc name=pcm format=time block=true max-bytes=16384 ! audioconvert ! audioresample ! {tempo} name=tempo ! volume name=volume ! {output}"))
+        let pipeline = gst::parse_launch(&format!("appsrc name=pcm format=time block=true max-bytes=16384 ! audioconvert ! audioresample ! {tempo} name=tempo ! {} ! volume name=volume ! {output}", visualization::filter()))
             .map_err(|e| e.to_string())?.downcast::<gst::Pipeline>().map_err(|_| "Could not create Spotify audio output.")?;
         let source = pipeline
             .by_name("pcm")
@@ -449,7 +449,11 @@ impl Playback {
                 "Spotify playback timed out. Reconnect your account and try again.".into(),
             ));
         }
+        let mut spectrum = None;
         for message in self.bus.iter().take(50) {
+            if let Some(levels) = visualization::from_message(&message) {
+                spectrum = Some(levels);
+            }
             if let gst::MessageView::Error(error) = message.view() {
                 out.push(Event::Error(error.error().to_string()));
             }
@@ -458,6 +462,9 @@ impl Playback {
             self.stop();
         }
         if self.playing && self.running {
+            if let Some(levels) = spectrum {
+                out.push(Event::Spectrum(levels));
+            }
             if let Ok(mut wave) = self.waveform.lock() {
                 if !wave.is_empty() {
                     out.push(Event::Waveform(std::mem::take(&mut *wave)));
@@ -709,6 +716,37 @@ mod tests {
                 .any(|m| matches!(m.view(), gst::MessageView::Error(_)))
         );
     }
+    #[test]
+    fn pcm_output_produces_a_real_frequency_spectrum() {
+        gst::init().unwrap();
+        let (mut sink, _) = PcmSink::with_output("fakesink sync=true").unwrap();
+        sink.start().unwrap();
+        let samples = (0..8820)
+            .flat_map(|i| {
+                let sample = 0.5 * (std::f64::consts::TAU * 440.0 * i as f64 / 44100.0).sin();
+                [sample, sample]
+            })
+            .collect();
+        sink.write(AudioPacket::Samples(samples), &mut Converter::new(None))
+            .unwrap();
+        let bus = sink.pipeline.bus().unwrap();
+        let message = bus
+            .timed_pop_filtered(
+                gst::ClockTime::from_seconds(2),
+                &[gst::MessageType::Element],
+            )
+            .expect("No Spotify PCM spectrum");
+        let levels = visualization::from_message(&message).unwrap();
+        let (index, peak) = levels
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.total_cmp(b.1))
+            .unwrap();
+        assert!((11..16).contains(&index), "440 Hz peak at {index}");
+        assert!(*peak > 0.4);
+        sink.stop().unwrap();
+    }
+
     #[test]
     fn obsolete_track_events_cannot_advance_or_restart_the_queue() {
         gst::init().unwrap();

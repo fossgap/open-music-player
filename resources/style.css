@@ -75,6 +75,8 @@ scale slider { background: #e3efda; min-width: 12px; min-height: 12px; margin: -
 .detail-tabs button { background: transparent; color: #adb9b0; border-radius: 0; border-bottom: 2px solid transparent; padding: 8px 4px; min-width: 0; font-size: 12px; }
 .detail-tabs button:hover { background: #29332c; color: #f1f3eb; }
 .detail-tabs button:checked { background: transparent; color: #c2dfa3; border-bottom-color: #c2dfa3; }
+button.visualization-button { background: transparent; padding: 0; min-height: 0; min-width: 0; }
+button.visualization-button:hover { background: #29332c; }
 .information-summary { line-height: 1.35; }
 button.summary-toggle { padding: 4px 0; color: #c2dfa3; font-size: 12px; }
 button.summary-toggle:checked { background: transparent; }

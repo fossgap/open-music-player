@@ -23,6 +23,7 @@ mod spotify;
 #[cfg(test)]
 mod tests;
 mod updates;
+mod visualization;
 mod youtube;
 type BoundItems = RefCell<HashMap<usize, (glib::WeakRef<gtk::ListItem>, gtk::Builder)>>;
 use gtk::{gdk, gio, glib, prelude::*};
@@ -116,7 +117,7 @@ pub struct App {
     buffering_since: Cell<Option<Instant>>,
     buffering_percent: Cell<i32>,
     buffering_notice: Cell<bool>,
-    spectrum: RefCell<Vec<f64>>,
+    visualization: RefCell<visualization::Controls>,
     backdrop: Cell<(f64, f64, f64)>,
     backdrop_art: RefCell<Option<gtk::gdk_pixbuf::Pixbuf>>,
     artwork_pending: RefCell<HashSet<String>>,
@@ -240,7 +241,7 @@ impl App {
             buffering_since: Cell::new(None),
             buffering_percent: Cell::new(100),
             buffering_notice: Cell::new(false),
-            spectrum: RefCell::new(vec![0.0; 48]),
+            visualization: RefCell::new(Default::default()),
             backdrop: Cell::new((0.17, 0.23, 0.17)),
             backdrop_art: RefCell::new(None),
             artwork_pending: RefCell::new(HashSet::new()),
@@ -598,27 +599,7 @@ impl App {
             cr.arc(x, y, 5.0, 0.0, std::f64::consts::TAU);
             let _ = cr.fill();
         });
-        let weak = Rc::downgrade(self);
-        object::<gtk::DrawingArea>(&self.ui, "spectrum").set_draw_func(
-            move |_, cr, width, height| {
-                let Some(a) = weak.upgrade() else {
-                    return;
-                };
-                let data = a.spectrum.borrow();
-                let step = f64::from(width) / data.len().saturating_sub(1).max(1) as f64;
-                cr.set_source_rgba(0.76, 0.87, 0.64, 0.8);
-                cr.set_line_width(1.8);
-                for (i, value) in data.iter().enumerate() {
-                    let y = f64::from(height) * (0.5 - value * 0.45);
-                    if i == 0 {
-                        cr.move_to(0.0, y);
-                    } else {
-                        cr.line_to(i as f64 * step, y);
-                    }
-                }
-                let _ = cr.stroke();
-            },
-        );
+        self.setup_visualization();
         let weak = Rc::downgrade(self);
         object::<gtk::DrawingArea>(&self.ui, "detail_backdrop").set_draw_func(
             move |_, cr, w, h| {
@@ -916,6 +897,7 @@ impl App {
 
     pub fn play_track(self: &Rc<Self>, id: &str, resume: Option<f64>) {
         self.cancel_discography_playback();
+        self.clear_visualization();
         let track = self.state.borrow().track(id).cloned();
         let Some(track) = track else {
             return;
@@ -1046,6 +1028,7 @@ impl App {
 
     pub fn stop_playback(&self) {
         self.cancel_discography_playback();
+        self.clear_visualization();
         self.set_buffering(100);
         self.play_generation.set(self.play_generation.get() + 1);
         self.resolving.set(false);
@@ -1613,21 +1596,12 @@ impl App {
                 Event::Buffering(percent) => {
                     self.set_buffering(percent);
                 }
-                Event::Waveform(values) => {
-                    *self.spectrum.borrow_mut() = values;
-                }
+                Event::Waveform(values) => self.visualization_data(true, values),
+                Event::Spectrum(values) => self.visualization_data(false, values),
             }
         }
         self.prepare_transition();
         self.update_buffering_notice();
-        if !self.audio.borrow().playing {
-            for value in self.spectrum.borrow_mut().iter_mut() {
-                *value *= 0.8;
-            }
-        }
-        if object::<gtk::Revealer>(&self.ui, "detail_revealer").reveals_child() {
-            object::<gtk::DrawingArea>(&self.ui, "spectrum").queue_draw();
-        }
         let audio = self.audio.borrow();
         let duration = if audio.loaded {
             audio.duration()

@@ -132,6 +132,15 @@ pub enum ReplayGain {
     Album,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Visualization {
+    Spectrum,
+    #[default]
+    #[serde(other)]
+    Waveform,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct PlaybackSettings {
@@ -179,6 +188,7 @@ pub struct State {
     pub watch_music: bool,
     pub playback_rate: f64,
     pub show_remaining: bool,
+    pub visualization: Visualization,
     pub download_directory: Option<PathBuf>,
     pub saved_audio: Vec<SavedAudio>,
     pub playback: PlaybackSettings,
@@ -215,6 +225,7 @@ impl Default for State {
             watch_music: true,
             playback_rate: 1.0,
             show_remaining: false,
+            visualization: Visualization::default(),
             download_directory: None,
             saved_audio: Vec::new(),
             playback: PlaybackSettings::default(),
@@ -526,6 +537,18 @@ mod tests {
         state.refresh_minutes = u32::MAX;
         state.sanitize();
         assert_eq!(state.refresh_minutes, 1440);
+    }
+
+    #[test]
+    fn visualization_preference_defaults_and_survives_storage() {
+        let mut state: State = serde_json::from_str("{}").unwrap();
+        assert_eq!(state.visualization, Visualization::Waveform);
+        state.visualization = Visualization::Spectrum;
+        let restored: State =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert_eq!(restored.visualization, Visualization::Spectrum);
+        let future: State = serde_json::from_str(r#"{"visualization":"future-mode"}"#).unwrap();
+        assert_eq!(future.visualization, Visualization::Waveform);
     }
 
     fn state() -> State {

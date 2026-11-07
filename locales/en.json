@@ -485,5 +485,8 @@
   "YouTube Music returned an incomplete album. Try again.": "YouTube Music returned an incomplete album. Try again.",
   "Add album to queue": "Add album to queue",
   "Replace queue and play album": "Replace queue and play album",
-  "Append album without interrupting playback": "Append album without interrupting playback"
+  "Append album without interrupting playback": "Append album without interrupting playback",
+  "Live audio waveform — click to show spectrum": "Live audio waveform — click to show spectrum",
+  "Audio spectrum — click to show waveform": "Audio spectrum — click to show waveform",
+  "Install the GStreamer spectrum plugin to use the spectrum visualizer.": "Install the GStreamer spectrum plugin to use the spectrum visualizer."
 }

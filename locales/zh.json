@@ -485,5 +485,8 @@
   "YouTube Music returned an incomplete album. Try again.": "YouTube Music returned an incomplete album. Try again.",
   "Add album to queue": "将专辑添加到队列",
   "Replace queue and play album": "替换队列并播放专辑",
-  "Append album without interrupting playback": "添加专辑而不中断播放"
+  "Append album without interrupting playback": "添加专辑而不中断播放",
+  "Live audio waveform — click to show spectrum": "实时音频波形 — 点击显示频谱",
+  "Audio spectrum — click to show waveform": "音频频谱 — 点击显示波形",
+  "Install the GStreamer spectrum plugin to use the spectrum visualizer.": "请安装 GStreamer 的 spectrum 插件以使用频谱可视化。"
 }

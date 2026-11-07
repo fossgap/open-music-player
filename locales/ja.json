@@ -485,5 +485,8 @@
   "YouTube Music returned an incomplete album. Try again.": "YouTube Music returned an incomplete album. Try again.",
   "Add album to queue": "アルバムをキューに追加",
   "Replace queue and play album": "キューを置き換えてアルバムを再生",
-  "Append album without interrupting playback": "再生を中断せずにアルバムを追加"
+  "Append album without interrupting playback": "再生を中断せずにアルバムを追加",
+  "Live audio waveform — click to show spectrum": "音声波形 — クリックしてスペクトラムを表示",
+  "Audio spectrum — click to show waveform": "音声スペクトラム — クリックして波形を表示",
+  "Install the GStreamer spectrum plugin to use the spectrum visualizer.": "スペクトラム表示を使用するには、GStreamer の spectrum プラグインをインストールしてください。"
 }

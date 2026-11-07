@@ -222,7 +222,7 @@ impl App {
         } else {
             200
         });
-        object::<gtk::DrawingArea>(&self.ui, "spectrum").set_visible(!compact);
+        self.update_visualization();
         for (field, prefix) in [(Field::Cover, "cover"), (Field::Lyrics, "lyrics")] {
             let query = track.and_then(|t| Query::for_track(t, field));
             let missing = track.is_some_and(|t| enrichment::missing(t, field));

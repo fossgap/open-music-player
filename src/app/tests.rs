@@ -77,6 +77,13 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     application.register(None::<&gio::Cancellable>).unwrap();
     let app = App::new(&application, state).unwrap();
     settle();
+    if std::env::var_os("OPEN_AUDIO_TEST_VISUALIZATION_ONLY").is_some() {
+        exercise_visualization(&app, directory.path());
+        app.shutdown();
+        app.window.destroy();
+        object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+        return;
+    }
     if std::env::var_os("OPEN_AUDIO_TEST_INFORMATION_ONLY").is_some() {
         exercise_information(&app, &audio);
         super::discography::exercise(&app, &audio);
@@ -1220,10 +1227,179 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     exercise_downloads_and_timing(&app, &audio);
     exercise_information(&app, &audio);
     super::discography::exercise(&app, &audio);
+    exercise_visualization(&app, directory.path());
     app.shutdown();
     drop(spotify_runtime);
     app.window.destroy();
     object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+}
+
+fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
+    use crate::model::Visualization;
+    let before = app.state.borrow().clone();
+    let page = app.page.borrow().clone();
+    app.stop_playback();
+    let rate = 32_000_u32;
+    let frames = rate * 20;
+    let mut wav = b"RIFF".to_vec();
+    wav.extend((36 + frames * 2).to_le_bytes());
+    wav.extend(b"WAVEfmt ");
+    wav.extend(16_u32.to_le_bytes());
+    wav.extend(1_u16.to_le_bytes());
+    wav.extend(1_u16.to_le_bytes());
+    wav.extend(rate.to_le_bytes());
+    wav.extend((rate * 2).to_le_bytes());
+    wav.extend(2_u16.to_le_bytes());
+    wav.extend(16_u16.to_le_bytes());
+    wav.extend(b"data");
+    wav.extend((frames * 2).to_le_bytes());
+    for frame in 0..frames {
+        let t = f64::from(frame) / f64::from(rate);
+        let phase = std::f64::consts::TAU * t;
+        let value = [110.0, 440.0, 1760.0, 6000.0]
+            .iter()
+            .enumerate()
+            .map(|(i, freq)| {
+                (phase * freq).sin() * (0.10 + 0.06 * (phase * (i + 1) as f64 * 0.7).sin())
+            })
+            .sum::<f64>();
+        wav.extend(((value * 32767.0) as i16).to_le_bytes());
+    }
+    let path = directory.join("visualizer.wav");
+    std::fs::write(&path, wav).unwrap();
+    let mut track = Track::new(
+        &gio::File::for_path(&path).uri(),
+        "Spectrum test session",
+        Kind::Music,
+    );
+    track.id = "visualizerfixture".into();
+    track.artist = "Open Audio test session".into();
+    {
+        let mut state = app.state.borrow_mut();
+        state.fetch_covers = false;
+        state.fetch_lyrics = false;
+        state.fetch_information = false;
+        state.visualization = Visualization::Waveform;
+        state.merge(vec![track]);
+        state.queue = vec!["visualizerfixture".into()];
+    }
+    app.set_speed(1.0);
+    app.navigate("library");
+    app.window.set_default_size(1280, 820);
+    if !object::<gtk::Revealer>(&app.ui, "detail_revealer").is_visible() {
+        app.toggle_details();
+    }
+    let stack: gtk::Stack = object(&app.ui, "detail_stack");
+    stack.set_visible_child_name("now-playing");
+    let details: gtk::ScrolledWindow = object(&app.ui, "detail_scroller");
+    details.vadjustment().set_value(0.0);
+    app.play_track("visualizerfixture", Some(0.0));
+    until(|| app.visualization.borrow().target.iter().any(|n| *n > 0.2));
+    assert!(
+        app.visualization
+            .borrow()
+            .waveform
+            .iter()
+            .any(|n| n.abs() > 0.05)
+    );
+    let button = app.button("visualization_toggle");
+    assert!(button.is_mapped());
+    let queue = app.state.borrow().queue.clone();
+    let generation = app.play_generation.get();
+    screenshot(app.window.upcast_ref(), "visualizer-waveform-wide.png");
+    let xdo = |args: &[&str]| {
+        let result = std::process::Command::new("xdotool")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "xdotool: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        String::from_utf8(result.stdout).unwrap()
+    };
+    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Audio Player$"]);
+    let window = windows.lines().last().unwrap();
+    xdo(&["windowfocus", "--sync", window]);
+    let bounds = button.compute_bounds(&details).unwrap();
+    if bounds.y() + bounds.height() > details.height() as f32 {
+        details.vadjustment().set_value(
+            details.vadjustment().value() + f64::from(bounds.y() + bounds.height())
+                - f64::from(details.height())
+                + 12.0,
+        );
+        settle();
+    }
+    let bounds = button.compute_bounds(&app.window).unwrap();
+    let (dx, dy) = app.window.surface_transform();
+    xdo(&[
+        "mousemove",
+        "--window",
+        window,
+        &((f64::from(bounds.x() + bounds.width() / 2.0) + dx) as i32).to_string(),
+        &((f64::from(bounds.y() + bounds.height() / 2.0) + dy) as i32).to_string(),
+    ]);
+    xdo(&["click", "1"]);
+    xdo(&["mousemove", "--window", window, "10", "10"]);
+    settle();
+    assert_eq!(app.state.borrow().visualization, Visualization::Spectrum);
+    assert!(button.tooltip_text().unwrap().contains("show waveform"));
+    assert_eq!(app.play_generation.get(), generation);
+    assert_eq!(app.state.borrow().queue, queue);
+    assert!(app.audio.borrow().playing);
+    until(|| app.visualization.borrow().bars.iter().any(|n| *n > 0.2));
+    screenshot(app.window.upcast_ref(), "visualizer-spectrum-wide.png");
+    assert!(button.grab_focus());
+    xdo(&["key", "--clearmodifiers", "space"]);
+    settle();
+    assert_eq!(app.state.borrow().visualization, Visualization::Waveform);
+    xdo(&["key", "--clearmodifiers", "Return"]);
+    settle();
+    assert_eq!(app.state.borrow().visualization, Visualization::Spectrum);
+    assert_eq!(app.play_generation.get(), generation);
+    assert_eq!(
+        app.state.borrow().current.as_deref(),
+        Some("visualizerfixture")
+    );
+
+    object::<gtk::ScrolledWindow>(&app.ui, "sidebar_scroller").set_visible(false);
+    app.window.set_default_size(820, 650);
+    settle();
+    app.window.set_default_size(800, 650);
+    settle();
+    assert!(app.window.width() <= 820);
+    assert!(button.is_mapped());
+    let bounds = button.compute_bounds(&details).unwrap();
+    details
+        .vadjustment()
+        .set_value(details.vadjustment().value() + f64::from(bounds.y()) - 32.0);
+    settle();
+    screenshot(app.window.upcast_ref(), "visualizer-spectrum-compact.png");
+    app.toggle_play();
+    until(|| {
+        app.visualization
+            .borrow()
+            .bars
+            .iter()
+            .chain(&app.visualization.borrow().waveform)
+            .all(|n| n.abs() < 0.01)
+    });
+    assert!(!app.audio.borrow().playing);
+    screenshot(app.window.upcast_ref(), "visualizer-paused.png");
+    button.emit_clicked();
+    assert_eq!(app.state.borrow().visualization, Visualization::Waveform);
+    assert!(!app.audio.borrow().playing);
+    app.stop_playback();
+    assert!(app.visualization.borrow().bars.iter().all(|n| *n == 0.0));
+    *app.state.borrow_mut() = before;
+    let _ = app
+        .audio
+        .borrow_mut()
+        .set_rate(app.state.borrow().playback_rate);
+    app.window.set_default_size(1240, 800);
+    app.navigate(&page);
+    app.update_player();
 }
 
 fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {

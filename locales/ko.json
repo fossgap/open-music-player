@@ -485,5 +485,8 @@
   "YouTube Music returned an incomplete album. Try again.": "YouTube Music returned an incomplete album. Try again.",
   "Add album to queue": "앨범을 대기열에 추가",
   "Replace queue and play album": "대기열을 교체하고 앨범 재생",
-  "Append album without interrupting playback": "재생을 중단하지 않고 앨범 추가"
+  "Append album without interrupting playback": "재생을 중단하지 않고 앨범 추가",
+  "Live audio waveform — click to show spectrum": "실시간 오디오 파형 — 클릭하여 스펙트럼 표시",
+  "Audio spectrum — click to show waveform": "오디오 스펙트럼 — 클릭하여 파형 표시",
+  "Install the GStreamer spectrum plugin to use the spectrum visualizer.": "스펙트럼 시각화를 사용하려면 GStreamer spectrum 플러그인을 설치하세요."
 }

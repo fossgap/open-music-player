@@ -1,4 +1,4 @@
-use super::{Event, NextTrack, gain::Gain};
+use super::{Event, NextTrack, gain::Gain, visualization};
 use crate::model::ReplayGain;
 use gst::prelude::*;
 use gst_controller::prelude::*;
@@ -114,11 +114,14 @@ impl Deck {
         });
         // Bound both queues so visualization and decoding cannot run far ahead of audio.
         let filter = gst::parse_bin_from_description(
-            "audioconvert ! scaletempo ! volume name=normalization ! tee name=t \
+            &format!(
+                "audioconvert ! scaletempo ! volume name=normalization ! tee name=t \
              t. ! queue max-size-time=100000000 ! identity name=out \
              t. ! queue leaky=downstream max-size-buffers=2 ! audioconvert ! \
-             audio/x-raw,format=F32LE,channels=1 ! appsink name=wave \
+             audio/x-raw,format=F32LE,channels=1 ! {} ! appsink name=wave \
              max-buffers=1 drop=true sync=false async=false",
+                visualization::filter()
+            ),
             true,
         )
         .map_err(|e| e.to_string())?;
@@ -404,7 +407,11 @@ impl Deck {
 
     pub fn poll(&mut self, playing: bool) -> Vec<Event> {
         let mut events = Vec::new();
+        let mut spectrum = None;
         for message in self.bus.iter().take(100).collect::<Vec<_>>() {
+            if let Some(levels) = visualization::from_message(&message) {
+                spectrum = Some(levels);
+            }
             match message.view() {
                 gst::MessageView::Application(m)
                     if m.structure().is_some_and(|s| s.name() == "oap-started") =>
@@ -455,6 +462,11 @@ impl Deck {
                     events.push(Event::Buffering(b.percent()));
                 }
                 _ => {}
+            }
+        }
+        if playing && !self.buffering {
+            if let Some(levels) = spectrum {
+                events.push(Event::Spectrum(levels));
             }
         }
         if let Some(sample) = self.waveform.try_pull_sample(gst::ClockTime::ZERO) {

@@ -2,6 +2,7 @@ mod deck;
 mod gain;
 #[cfg(test)]
 mod tests;
+pub(crate) mod visualization;
 
 use crate::model::PlaybackSettings;
 use deck::Deck;
@@ -14,6 +15,7 @@ pub enum Event {
     Error(String),
     Buffering(i32),
     Waveform(Vec<f64>),
+    Spectrum(Vec<f64>),
     Ready,
 }
 
