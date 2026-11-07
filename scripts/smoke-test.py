@@ -49,6 +49,19 @@ def window(title):
     return subprocess.check_output(['xdotool', 'search', '--onlyvisible', '--name', '^' + re.escape(title) + '$'], text=True).splitlines()[-1]
 
 
+def visible_player_windows():
+    return subprocess.run(['xdotool', 'search', '--onlyvisible', '--name', '^Open Audio'],
+                          capture_output=True, text=True).stdout.splitlines()
+
+
+def close_player_window(title):
+    # Click GTK's actual titlebar Close button in the isolated virtual display.
+    target = window(title)
+    geometry = subprocess.check_output(['xdotool', 'getwindowgeometry', '--shell', target], text=True)
+    width = int(re.search(r'^WIDTH=(\d+)', geometry, re.M)[1])
+    subprocess.run(['xdotool', 'mousemove', '--window', target, str(width - 22), '23', 'click', '1'], check=True)
+
+
 def keys(*sequence):
     subprocess.run(['xdotool', 'key', '--clearmodifiers', *sequence], check=True)
 
@@ -341,10 +354,45 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         wait_until(lambda: int(re.search(r'int64 (\d+)', prop('Position'))[1]) >= 7_800_000)
         call('org.mpris.MediaPlayer2', 'Quit')
         assert child.wait(timeout=10) == 0
+        # Startup and close preferences remain independent, including without a tray.
+        saved = state()
+        saved.update(start_in_background=True, background=True, theme='sage')
+        (data / 'library.json').write_text(json.dumps(saved))
+        child = subprocess.Popen([str(BINARY)], env=env, stdout=log, stderr=log)
+        wait_until(lambda: 'Stopped' in prop('PlaybackStatus'))
+        assert child.poll() is None and not visible_player_windows()
+        subprocess.run([str(BINARY)], env=env, stdout=log, stderr=log, check=True, timeout=10)
+        wait_until(lambda: window('Open Audio Player'))
+        close_player_window('Open Audio Player')
+        wait_until(lambda: not visible_player_windows())
+        assert child.poll() is None
+        call('org.mpris.MediaPlayer2', 'Raise')
+        wait_until(lambda: window('Open Audio Player'))
+        call(PLAYER, 'Play')
+        wait_until(lambda: 'Playing' in prop('PlaybackStatus'))
+        call(PLAYER, 'Pause')
+        close_player_window('Open Audio Player')
+        wait_until(lambda: not visible_player_windows())
+        assert child.poll() is None
+        call('org.mpris.MediaPlayer2', 'Quit')
+        assert child.wait(timeout=10) == 0
+        assert state()['theme'] == 'sage' and state()['start_in_background']
+        for hidden in (True, False):
+            saved = state()
+            saved.update(start_in_background=hidden, background=False, theme='system')
+            (data / 'library.json').write_text(json.dumps(saved))
+            child = subprocess.Popen([str(BINARY)], env=env, stdout=log, stderr=log)
+            wait_until(lambda: 'Stopped' in prop('PlaybackStatus'))
+            if hidden:
+                assert not visible_player_windows()
+                call('org.mpris.MediaPlayer2', 'Raise')
+            wait_until(lambda: window('Open Audio Player'))
+            close_player_window('Open Audio Player')
+            assert child.wait(timeout=10) == 0
         log.seek(0)
         output = log.read()
         assert 'panicked' not in output and 'CRITICAL' not in output, output
-        print('PASS: library/audio/MPRIS, albums, playlist create/add/rename/import/grid, Apple and gPodder discovery/search/subscription toggles, empty/error states, mini player, compact layouts, and session restoration.')
+        print('PASS: library/audio/MPRIS, albums, playlist create/add/rename/import/grid, Apple and gPodder discovery/search/subscription toggles, empty/error states, mini player, compact layouts, session restoration, theme persistence, and independent startup/close preferences.')
     except Exception:
         log.seek(0)
         print(log.read())

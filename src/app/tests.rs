@@ -20,13 +20,6 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     );
     assert!(std::env::var_os("OPEN_AUDIO_FAKE_SINK").is_some());
     gtk::init().unwrap();
-    let css = gtk::CssProvider::new();
-    css.load_from_data(include_str!("../../resources/style.css"));
-    gtk::style_context_add_provider_for_display(
-        &gdk::Display::default().unwrap(),
-        &css,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
     let bytes =
         glib::Bytes::from_static(include_bytes!(concat!(env!("OUT_DIR"), "/icons.gresource")));
     gio::resources_register(&gio::Resource::from_data(&bytes).unwrap());
@@ -77,6 +70,13 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     application.register(None::<&gio::Cancellable>).unwrap();
     let app = App::new(&application, state).unwrap();
     settle();
+    if std::env::var_os("OPEN_AUDIO_TEST_PREFERENCES_ONLY").is_some() {
+        exercise_preferences(&app);
+        app.shutdown();
+        app.window.destroy();
+        object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+        return;
+    }
     if std::env::var_os("OPEN_AUDIO_TEST_VISUALIZATION_ONLY").is_some() {
         exercise_visualization(&app, directory.path());
         app.shutdown();
@@ -1227,6 +1227,7 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     exercise_downloads_and_timing(&app, &audio);
     exercise_information(&app, &audio);
     super::discography::exercise(&app, &audio);
+    exercise_preferences(&app);
     exercise_visualization(&app, directory.path());
     app.shutdown();
     drop(spotify_runtime);
@@ -1234,11 +1235,149 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
 }
 
+fn exercise_preferences(app: &Rc<App>) {
+    fn assert_readable(app: &App) {
+        fn luminance(rgb: [f64; 3]) -> f64 {
+            let rgb = rgb.map(|c| {
+                if c <= 0.04045 {
+                    c / 12.92
+                } else {
+                    ((c + 0.055) / 1.055).powf(2.4)
+                }
+            });
+            rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722
+        }
+        let theme = app.theme.borrow();
+        for bg in [
+            "oap_window",
+            "oap_rail",
+            "oap_detail",
+            "oap_field",
+            "oap_raised",
+            "oap_selected",
+            "oap_nav_selected",
+            "oap_row_hover",
+        ] {
+            for fg in ["oap_text", "oap_muted", "oap_lyrics", "oap_accent"] {
+                let (a, b) = (luminance(theme.color(fg)), luminance(theme.color(bg)));
+                let contrast = (a.max(b) + 0.05) / (a.min(b) + 0.05);
+                assert!(
+                    contrast >= 4.5,
+                    "System theme: {fg} on {bg} has contrast {contrast}"
+                );
+            }
+        }
+    }
+    let before = app.state.borrow().clone();
+    app.stop_playback();
+    app.state.borrow_mut().theme = model::Theme::System;
+    app.apply_theme();
+    let settings = app.window.settings();
+    let original_name = settings.gtk_theme_name();
+    settings.set_gtk_theme_name(Some("Adwaita"));
+    app.theme.borrow_mut().system_scheme(2);
+    until(|| {
+        app.theme
+            .borrow()
+            .color("oap_window")
+            .iter()
+            .all(|c| *c > 0.7)
+    });
+    app.window.set_default_size(1240, 800);
+    settle();
+    assert_readable(app);
+    screenshot(app.window.upcast_ref(), "theme-system-light.png");
+    app.settings();
+    settle();
+    let dialog = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|w| w.downcast::<gtk::Window>().ok())
+        .find(|w| w.is_visible() && w.title().as_deref() == Some("Settings"))
+        .unwrap();
+    let theme = descendant(dialog.upcast_ref(), "theme")
+        .unwrap()
+        .downcast::<gtk::DropDown>()
+        .unwrap();
+    let start = descendant(dialog.upcast_ref(), "start_in_background")
+        .unwrap()
+        .downcast::<gtk::Switch>()
+        .unwrap();
+    let background = descendant(dialog.upcast_ref(), "background")
+        .unwrap()
+        .downcast::<gtk::Switch>()
+        .unwrap();
+    assert_eq!(theme.selected(), 0);
+    start.set_active(true);
+    background.set_active(false);
+    assert!(app.state.borrow().start_in_background);
+    assert!(!app.state.borrow().background);
+    start.set_active(false);
+    background.set_active(true);
+    assert!(!app.state.borrow().start_in_background);
+    assert!(app.state.borrow().background);
+    screenshot(&dialog, "preferences-system-light.png");
+    app.theme.borrow_mut().system_scheme(1);
+    until(|| {
+        app.theme
+            .borrow()
+            .color("oap_window")
+            .iter()
+            .all(|c| *c < 0.3)
+    });
+    assert_readable(app);
+    screenshot(&dialog, "preferences-system-dark.png");
+    theme.set_selected(1);
+    settle();
+    assert_eq!(app.state.borrow().theme, model::Theme::Sage);
+    let sage = app.theme.borrow().color("oap_window");
+    app.theme.borrow_mut().system_scheme(2);
+    settle();
+    assert_eq!(app.theme.borrow().color("oap_window"), sage);
+    screenshot(&dialog, "preferences-sage.png");
+    theme.set_selected(0);
+    until(|| {
+        app.theme
+            .borrow()
+            .color("oap_window")
+            .iter()
+            .all(|c| *c > 0.7)
+    });
+    dialog.set_default_size(430, 560);
+    settle();
+    screenshot(&dialog, "preferences-compact.png");
+    dialog.close();
+    // Closing without playback or a tray still hides the process; reopening is explicit.
+    app.tray_available.set(false);
+    app.window.close();
+    settle();
+    assert!(!app.window.is_visible());
+    assert!(app.background_hold.borrow().is_some());
+    app.show();
+    settle();
+    assert!(app.window.is_visible());
+    assert!(app.background_hold.borrow().is_none());
+    app.mini();
+    settle();
+    let mini: gtk::Window = object(&app.mini_ui, "mini_window");
+    mini.close();
+    settle();
+    assert!(!mini.is_visible() && !app.window.is_visible());
+    assert!(app.background_hold.borrow().is_some());
+    app.show();
+    *app.state.borrow_mut() = before;
+    settings.set_gtk_theme_name(original_name.as_deref());
+    app.theme.borrow_mut().system_scheme(0);
+    app.apply_theme();
+    app.update_player();
+}
+
 fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     use crate::model::Visualization;
     let previous_animations = app.window.settings().is_gtk_enable_animations();
     app.window.settings().set_gtk_enable_animations(true);
     let before = app.state.borrow().clone();
+    app.state.borrow_mut().theme = model::Theme::Sage;
+    app.apply_theme();
     let page = app.page.borrow().clone();
     app.stop_playback();
     let rate = 32_000_u32;
@@ -1644,6 +1783,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     app.stop_playback();
     assert!(app.visualization.borrow().bars.iter().all(|n| *n == 0.0));
     *app.state.borrow_mut() = before;
+    app.apply_theme();
     let _ = app
         .audio
         .borrow_mut()

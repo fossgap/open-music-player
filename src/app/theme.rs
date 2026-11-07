@@ -1,4 +1,4 @@
-//! Music-driven semantic colors, shared by every application window.
+//! System and music-driven semantic colors, shared by every application window.
 use super::*;
 use std::fmt::Write;
 
@@ -81,6 +81,22 @@ fn hsl(hue: f64, saturation: f64, lightness: f64) -> Color {
 struct Palette([Color; ROLES.len()]);
 
 impl Palette {
+    fn system(widget: &gtk::Widget) -> Self {
+        let fallback = Self::baseline();
+        Self(std::array::from_fn(|i| {
+            widget
+                .style_context()
+                .lookup_color(ROLES[i].0)
+                .map(|c| {
+                    [
+                        f64::from(c.red()),
+                        f64::from(c.green()),
+                        f64::from(c.blue()),
+                    ]
+                })
+                .unwrap_or(fallback.0[i])
+        }))
+    }
     fn baseline() -> Self {
         // The stylesheet remains the single source for the original skin.
         let css = include_str!("../../resources/style.css");
@@ -158,6 +174,7 @@ impl Palette {
 }
 
 pub(super) struct Theme {
+    styles: gtk::CssProvider,
     provider: gtk::CssProvider,
     display: gdk::Display,
     baseline: Palette,
@@ -166,11 +183,25 @@ pub(super) struct Theme {
     last_tick: Instant,
     last_write: Instant,
     attached: bool,
+    mode: model::Theme,
+    probe: gtk::Box,
+    settings: gtk::Settings,
+    original_dark: bool,
+    system_dark: Option<bool>,
+    dirty: Rc<Cell<bool>>,
+    settings_changed: Option<glib::SignalHandlerId>,
+    pub portal: Option<gio::SignalSubscription>,
 }
 
 impl Theme {
-    pub fn new() -> Self {
+    pub fn new(mode: model::Theme) -> Self {
         let display = gdk::Display::default().expect("GTK display");
+        let styles = gtk::CssProvider::new();
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &styles,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
         let provider = gtk::CssProvider::new();
         gtk::style_context_add_provider_for_display(
             &display,
@@ -178,7 +209,13 @@ impl Theme {
             gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1,
         );
         let baseline = Palette::baseline();
-        Self {
+        let settings = gtk::Settings::for_display(&display);
+        let original_dark = settings.is_gtk_application_prefer_dark_theme();
+        let dirty = Rc::new(Cell::new(true));
+        let changed = dirty.clone();
+        let settings_changed = settings.connect_notify_local(None, move |_, _| changed.set(true));
+        let mut theme = Self {
+            styles,
             provider,
             display,
             current: baseline.clone(),
@@ -187,7 +224,89 @@ impl Theme {
             last_tick: Instant::now(),
             last_write: Instant::now(),
             attached: true,
+            mode,
+            probe: gtk::Box::new(gtk::Orientation::Vertical, 0),
+            settings,
+            original_dark,
+            system_dark: None,
+            dirty,
+            settings_changed: Some(settings_changed),
+            portal: None,
+        };
+        theme.select(mode);
+        theme
+    }
+
+    pub fn select(&mut self, mode: model::Theme) {
+        self.mode = mode;
+        self.provider.load_from_data("");
+        let stylesheet = include_str!("../../resources/style.css");
+        if mode == model::Theme::Sage {
+            self.styles.load_from_data(stylesheet);
+        } else {
+            // Share one layout, while leaving the GTK theme's own named colors intact.
+            let layout = stylesheet
+                .split("/* Keep native controls and auxiliary windows in the same semantic palette. */")
+                .next().unwrap()
+                .lines()
+                .filter(|line| !line.starts_with("@define-color"))
+                .collect::<Vec<_>>()
+                .join("\n")
+                .replace(
+                    " font-family: \"Adwaita Sans\", \"Cantarell\", sans-serif; font-size: 14px;",
+                    "",
+                );
+            self.styles.load_from_data(&format!(
+                "{}\n{layout}",
+                include_str!("../../resources/system.css")
+            ));
         }
+        self.apply_dark_preference();
+        self.current = self.baseline.clone();
+        self.applied = if mode == model::Theme::Sage {
+            self.baseline.clone()
+        } else {
+            Palette::system(self.probe.upcast_ref())
+        };
+        self.dirty.set(true);
+    }
+
+    pub fn system_scheme(&mut self, value: u32) {
+        if !self.attached {
+            return;
+        }
+        self.system_dark = match value {
+            1 => Some(true),
+            2 => Some(false),
+            _ => None,
+        };
+        self.apply_dark_preference();
+        self.dirty.set(true);
+    }
+
+    fn apply_dark_preference(&self) {
+        // Detect the newer property at runtime while retaining GTK 4.8 compatibility.
+        if let Some(property) = self.settings.find_property("gtk-interface-color-scheme") {
+            let preference = if self.mode == model::Theme::Sage {
+                Some(true)
+            } else {
+                self.system_dark
+            };
+            if let Some(dark) = preference {
+                if let Some(value) = glib::EnumClass::with_type(property.value_type())
+                    .and_then(|class| class.to_value_by_nick(if dark { "dark" } else { "light" }))
+                {
+                    self.settings
+                        .set_property_from_value("gtk-interface-color-scheme", &value);
+                }
+            } else {
+                self.settings.reset_property("gtk-interface-color-scheme");
+            }
+            return;
+        }
+        self.settings.set_gtk_application_prefer_dark_theme(
+            self.mode == model::Theme::Sage || self.system_dark.unwrap_or(self.original_dark),
+        );
     }
 
     pub fn color(&self, name: &str) -> Color {
@@ -205,6 +324,13 @@ impl Theme {
         self.last_tick = now;
         if !visible || !self.attached {
             return false;
+        }
+        if self.mode == model::Theme::System {
+            if !self.dirty.replace(false) {
+                return false;
+            }
+            self.applied = Palette::system(self.probe.upcast_ref());
+            return true;
         }
         let target = tone
             .map(|(color, energy)| Palette::adaptive(color, energy))
@@ -234,6 +360,21 @@ impl Theme {
 
     pub fn detach(&mut self) {
         if self.attached {
+            self.portal.take();
+            if let Some(handler) = self.settings_changed.take() {
+                self.settings.disconnect(handler);
+            }
+            if self
+                .settings
+                .find_property("gtk-interface-color-scheme")
+                .is_some()
+            {
+                self.settings.reset_property("gtk-interface-color-scheme");
+            } else {
+                self.settings
+                    .set_gtk_application_prefer_dark_theme(self.original_dark);
+            }
+            gtk::style_context_remove_provider_for_display(&self.display, &self.styles);
             gtk::style_context_remove_provider_for_display(&self.display, &self.provider);
             self.attached = false;
         }

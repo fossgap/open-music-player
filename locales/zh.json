@@ -490,5 +490,13 @@
   "Live audio waveform — click to show mood": "实时音频波形 — 点击显示氛围",
   "Audio spectrum — click to show mood": "音频频谱 — 点击显示氛围",
   "Mood theme — click to show album art theme": "氛围主题 — 点击显示专辑封面主题",
-  "Album art theme — click to show waveform": "专辑封面主题 — 点击显示波形"
+  "Album art theme — click to show waveform": "专辑封面主题 — 点击显示波形",
+  "Theme": "主题",
+  "System": "系统",
+  "Sage": "Sage",
+  "System follows your desktop appearance. Sage uses the original colors and music-reactive skin.": "系统主题跟随桌面外观。Sage 使用原有配色和随音乐变化的界面。",
+  "Start in background": "在后台启动",
+  "Launch with the window hidden. Open the app again or use the tray to show it.": "启动时隐藏窗口。再次打开应用或使用托盘图标即可显示窗口。",
+  "Keep running when the window closes": "关闭窗口后继续运行",
+  "Keep running even while paused or stopped. Quit always exits the app.": "即使暂停或停止播放也继续运行。“退出”始终关闭应用。"
 }

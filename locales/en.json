@@ -490,5 +490,13 @@
   "Live audio waveform — click to show mood": "Live audio waveform — click to show mood",
   "Audio spectrum — click to show mood": "Audio spectrum — click to show mood",
   "Mood theme — click to show album art theme": "Mood theme — click to show album art theme",
-  "Album art theme — click to show waveform": "Album art theme — click to show waveform"
+  "Album art theme — click to show waveform": "Album art theme — click to show waveform",
+  "Theme": "Theme",
+  "System": "System",
+  "Sage": "Sage",
+  "System follows your desktop appearance. Sage uses the original colors and music-reactive skin.": "System follows your desktop appearance. Sage uses the original colors and music-reactive skin.",
+  "Start in background": "Start in background",
+  "Launch with the window hidden. Open the app again or use the tray to show it.": "Launch with the window hidden. Open the app again or use the tray to show it.",
+  "Keep running when the window closes": "Keep running when the window closes",
+  "Keep running even while paused or stopped. Quit always exits the app.": "Keep running even while paused or stopped. Quit always exits the app."
 }

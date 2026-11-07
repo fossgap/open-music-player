@@ -490,5 +490,13 @@
   "Live audio waveform — click to show mood": "Звуковая волна — нажмите для показа настроения",
   "Audio spectrum — click to show mood": "Аудиоспектр — нажмите для показа настроения",
   "Mood theme — click to show album art theme": "Тема настроения — нажмите для темы обложки",
-  "Album art theme — click to show waveform": "Тема обложки — нажмите для показа звуковой волны"
+  "Album art theme — click to show waveform": "Тема обложки — нажмите для показа звуковой волны",
+  "Theme": "Тема",
+  "System": "Системная",
+  "Sage": "Sage",
+  "System follows your desktop appearance. Sage uses the original colors and music-reactive skin.": "Системная тема следует оформлению рабочего стола. Sage использует исходные цвета и оформление, реагирующее на музыку.",
+  "Start in background": "Запускать в фоне",
+  "Launch with the window hidden. Open the app again or use the tray to show it.": "Запускать со скрытым окном. Откройте приложение снова или используйте значок в трее, чтобы показать его.",
+  "Keep running when the window closes": "Продолжать работу после закрытия окна",
+  "Keep running even while paused or stopped. Quit always exits the app.": "Продолжать работу даже при паузе или остановке воспроизведения. Команда «Выйти» всегда закрывает приложение."
 }

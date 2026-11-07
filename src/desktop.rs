@@ -509,9 +509,6 @@ fn register_tray(app: &Rc<App>, connection: &gio::DBusConnection) {
         move |_, _| {
             if let Some(app) = gone.upgrade() {
                 app.tray_available.set(false);
-                if !app.window.is_visible() {
-                    app.show();
-                }
             }
         },
     );

@@ -50,19 +50,9 @@ fn main() -> glib::ExitCode {
             glib::Bytes::from_static(include_bytes!(concat!(env!("OUT_DIR"), "/icons.gresource")));
         let resource = gio::Resource::from_data(&bytes).expect("Invalid embedded icons");
         gio::resources_register(&resource);
-        if let Some(settings) = gtk::Settings::default() {
-            settings.set_gtk_application_prefer_dark_theme(true);
-        }
-        let css = gtk::CssProvider::new();
-        css.load_from_data(include_str!("../resources/style.css"));
         if let Some(display) = gtk::gdk::Display::default() {
             gtk::IconTheme::for_display(&display)
                 .add_resource_path("/io/github/openaudio/Player/icons");
-            gtk::style_context_add_provider_for_display(
-                &display,
-                &css,
-                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-            );
         }
     });
     application.connect_activate(move |application| {

@@ -137,7 +137,9 @@ Use **Ctrl + click** for separate tracks or **Shift + click** for a range. The s
 
 Click the current cover to open the artwork, audio visualization, and lyrics panel. Click the live visualization (or focus it and press Space/Enter) to cycle through **Waveform → Spectrum → Mood → Album art**. Your choice is remembered. The spectrum displays 32 logarithmic frequency bands.
 
-**Mood and Album art change the entire app skin**: sidebar, library, playback bar, controls, selections, lyrics, menus, dialogs, and mini player. Mood shifts from cool, quiet colors toward warmer, stronger colors with measured energy, bass and treble; this is a local audio heuristic, not emotion recognition. Album art derives the skin from the current cover, adapting automatically as tracks and artwork change. It also places a faint, softened cover watermark beneath the interface and mini player, fading between covers with a gentle energy-driven intensity. Controls remain readable and interactive; reduced motion keeps watermark intensity steady. Colors fade gradually while text remains readable, even with the details panel closed. Waveform and Spectrum restore the original sage skin. Missing covers also restore the original skin in Album art mode. The matching visual scenes reuse the cover area to preserve space for lyrics.
+**Settings → Theme** defaults to **Sage**, the original green-tinted dark skin. Choose **System** to follow your desktop's light/dark appearance, colors, and font. Theme changes apply immediately to all windows and are saved.
+
+**In Sage, Mood and Album art change the entire app skin**: sidebar, library, playback bar, controls, selections, lyrics, menus, dialogs, and mini player. Mood shifts from cool, quiet colors toward warmer, stronger colors with measured energy, bass and treble; this is a local audio heuristic, not emotion recognition. Album art derives the skin from the current cover, adapting automatically as tracks and artwork change. It also places a faint, softened cover watermark beneath the interface and mini player, fading between covers with a gentle energy-driven intensity. Controls remain readable and interactive; reduced motion keeps watermark intensity steady. Colors fade gradually while text remains readable, even with the details panel closed. Waveform and Spectrum restore the original Sage skin. Missing covers also restore the original skin in Album art mode. The matching visual scenes reuse the cover area to preserve space for lyrics. System keeps the desktop palette and disables the whole-app watermark while retaining the visualizations in Now playing.
 
 All modes follow decoded audio; silence, pause and buffering settle the display. Reduced-motion settings keep the new scenes spatially still while allowing their colors to adapt. The visualizations run locally and reuse the existing artwork cache. The spectrum uses GStreamer’s `spectrum` plugin, included in the good plugins; if missing, the cycle skips Spectrum and the other modes use the waveform signal. Put `cover.jpg`, `cover.png`, `folder.jpg`, or `folder.png` beside an album, or use embedded artwork. A lyrics sidecar must share the audio filename: `Song.flac` and `Song.lrc`. Folder watching picks up new sidecars; use **Refresh** if watching is off. Timed LRC lyrics highlight the current line and scroll with playback, including pause, seeking and speed changes. The parser supports fractional timestamps, repeated timestamps and LRC offsets. Scrolling the lyrics manually pauses automatic following; **Follow** resumes it. Untimed lyrics remain readable as plain text.
 
@@ -166,6 +168,13 @@ Scroll over the volume control to adjust volume by **5 percentage points** per w
 **Settings → Automatic refresh (minutes)** accepts **0–1440** minutes; **0** (the default) disables scheduled refresh, independently of local folder watching. A positive interval refreshes all saved music folders, podcast subscriptions, connected YouTube Music/Spotify playlists, and the open podcast/radio/streaming search view. Linked streaming playlists use their existing **two-way synchronization**, including eligible local edits and conflict handling. In-progress work is not duplicated; missing or expired streaming sign-ins never open an unattended login dialog. Changing the interval restarts the timer. Generic Internet stream URLs have no directory to refresh.
 
 The session is restored without automatically starting audio. Press Play to continue. Podcast episodes also retain individual positions.
+
+**Settings** has two independent background controls:
+
+- **Start in background** (off by default): launch with the window hidden. This changes how the app opens; it does not add login autostart.
+- **Keep running when the window closes** (on by default): closing the main or mini window hides the app even while paused or stopped. Turn it off to quit on close.
+
+Open the app again from your launcher, or choose **Open Audio Player** in its tray menu, to bring it back. Background mode also works without a tray. **Quit** always exits, regardless of these settings.
 
 ### Downloads and recordings
 
@@ -204,7 +213,7 @@ In a playlist or **Play queue**, drag a row's grip to reorder it. Select several
 
 Apple discovery uses an initial podcast search; gPodder uses its public top list. Both support anonymous access without an account or API key. Results and feed availability depend on those services. A failed directory request offers connection and provider recovery; direct RSS subscription remains available.
 
-Closing the main window keeps audio playing **only while playback is active and a compatible system tray is available**. Otherwise the application exits cleanly. On GNOME, a StatusNotifier/AppIndicator extension is needed for tray integration; MPRIS and the mini player work independently of the tray. Choose **Quit** to stop playback and exit explicitly.
+Closing either player window follows **Settings → Keep running when the window closes**, regardless of playback or tray availability. On GNOME, a StatusNotifier/AppIndicator extension is needed for tray integration; MPRIS, background mode and the mini player work independently of the tray. Choose **Quit** to stop playback and exit explicitly.
 
 ### Keyboard shortcuts
 

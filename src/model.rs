@@ -154,6 +154,15 @@ impl Visualization {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Theme {
+    System,
+    #[default]
+    #[serde(other)]
+    Sage,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct PlaybackSettings {
@@ -189,6 +198,8 @@ pub struct State {
     pub repeat: Repeat,
     pub language: String,
     pub background: bool,
+    pub start_in_background: bool,
+    pub theme: Theme,
     pub podcast_positions: std::collections::HashMap<String, f64>,
     pub youtube_account: Option<YoutubeAccount>,
     pub youtube_ignored_playlists: Vec<String>,
@@ -226,6 +237,8 @@ impl Default for State {
             repeat: Repeat::Off,
             language: "system".into(),
             background: true,
+            start_in_background: false,
+            theme: Theme::default(),
             podcast_positions: Default::default(),
             youtube_account: None,
             youtube_ignored_playlists: vec![],
@@ -574,6 +587,33 @@ mod tests {
         assert_eq!(Visualization::Mood.next(false), Visualization::AlbumArt);
         let future: State = serde_json::from_str(r#"{"visualization":"future-mode"}"#).unwrap();
         assert_eq!(future.visualization, Visualization::Waveform);
+    }
+
+    #[test]
+    fn desktop_preferences_are_independent_and_migrate_old_libraries() {
+        assert_eq!(State::default().theme, Theme::Sage);
+        let old: State = serde_json::from_str(r#"{"background":false}"#).unwrap();
+        assert!(!old.background && !old.start_in_background);
+        assert_eq!(old.theme, Theme::Sage);
+        for start in [false, true] {
+            for close in [false, true] {
+                for theme in [Theme::System, Theme::Sage] {
+                    let state = State {
+                        start_in_background: start,
+                        background: close,
+                        theme,
+                        ..State::default()
+                    };
+                    let restored: State =
+                        serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+                    assert_eq!(restored.start_in_background, start);
+                    assert_eq!(restored.background, close);
+                    assert_eq!(restored.theme, theme);
+                }
+            }
+        }
+        let future: State = serde_json::from_str(r#"{"theme":"future-theme"}"#).unwrap();
+        assert_eq!(future.theme, Theme::Sage);
     }
 
     fn state() -> State {

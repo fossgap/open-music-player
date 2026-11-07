@@ -18,6 +18,7 @@ mod lyrics;
 mod metadata;
 mod playback;
 mod podcasts;
+mod preferences;
 mod render_area;
 mod selection;
 mod spotify;
@@ -122,6 +123,7 @@ pub struct App {
     buffering_notice: Cell<bool>,
     visualization: RefCell<visualization::Controls>,
     theme: RefCell<theme::Theme>,
+    background_hold: RefCell<Option<gio::ApplicationHoldGuard>>,
     watermark: watermark::Controls,
     backdrop: Cell<(f64, f64, f64)>,
     backdrop_art: RefCell<Option<gtk::gdk_pixbuf::Pixbuf>>,
@@ -167,6 +169,7 @@ impl App {
         window.set_application(Some(application));
         let mini: gtk::Window = object(&mini_ui, "mini_window");
         mini.set_application(Some(application));
+        let theme = theme::Theme::new(state.theme);
         let (tx, rx) = mpsc::channel();
         let (save_tx, save_rx) = mpsc::channel::<State>();
         let path = storage::data_dir().join("library.json");
@@ -248,7 +251,8 @@ impl App {
             buffering_percent: Cell::new(100),
             buffering_notice: Cell::new(false),
             visualization: RefCell::new(Default::default()),
-            theme: RefCell::new(theme::Theme::new()),
+            theme: RefCell::new(theme),
+            background_hold: RefCell::new(None),
             watermark: Default::default(),
             backdrop: Cell::new((0.17, 0.23, 0.17)),
             backdrop_art: RefCell::new(None),
@@ -269,6 +273,7 @@ impl App {
         this.setup_lyrics();
         this.setup_wheel_controls();
         this.setup_drawing();
+        this.setup_system_appearance();
         this.audio.borrow().volume(this.state.borrow().volume);
         let (volume, shuffle) = {
             let state = this.state.borrow();
@@ -288,7 +293,11 @@ impl App {
             }
         });
         crate::desktop::setup(&this);
-        this.window.present();
+        if this.state.borrow().start_in_background {
+            this.enter_background();
+        } else {
+            this.window.present();
+        }
         Ok(this)
     }
 
@@ -552,9 +561,8 @@ impl App {
         self.window.connect_close_request(move |_| {
             if let Some(a) = weak.upgrade() {
                 a.persist();
-                if a.state.borrow().background && a.audio.borrow().playing && a.tray_available.get()
-                {
-                    a.window.hide();
+                if a.state.borrow().background {
+                    a.enter_background();
                 } else {
                     a.quit();
                 }
@@ -571,7 +579,11 @@ impl App {
         object::<gtk::Window>(&self.mini_ui, "mini_window").connect_close_request(move |w| {
             w.hide();
             if let Some(a) = weak.upgrade() {
-                a.window.present();
+                if a.state.borrow().background {
+                    a.enter_background();
+                } else {
+                    a.quit();
+                }
             }
             glib::Propagation::Stop
         });
@@ -1205,6 +1217,7 @@ impl App {
     }
 
     pub fn shutdown(&self) {
+        self.background_hold.borrow_mut().take();
         self.theme.borrow_mut().detach();
         self.cancel_discography();
         self.files.watcher.stop();
@@ -1223,13 +1236,16 @@ impl App {
     }
     pub fn quit(&self) {
         self.persist();
+        self.background_hold.borrow_mut().take();
         self.application.quit();
     }
     pub fn show(&self) {
+        self.background_hold.borrow_mut().take();
         object::<gtk::Window>(&self.mini_ui, "mini_window").hide();
         self.window.present();
     }
     fn mini(&self) {
+        self.background_hold.borrow_mut().take();
         object::<gtk::Window>(&self.mini_ui, "mini_window").present();
         self.window.hide();
     }
@@ -1686,12 +1702,12 @@ impl App {
                 a.persist();
             }
         });
+        self.preference_settings(&ui);
         self.metadata_settings(&ui);
         self.refresh_settings(&ui);
         self.playback_settings(&ui);
         self.file_settings(&ui);
         self.download_settings(&ui);
-        object::<gtk::Label>(&ui, "tray_note").set_visible(!self.tray_available.get());
         for folder in self.state.borrow().folders.clone() {
             let builder = gtk::Builder::from_string(include_str!("../resources/setting-row.ui"));
             self.i18n.builder(&builder);

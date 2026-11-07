@@ -113,6 +113,12 @@ pub(super) struct Controls {
 }
 
 impl Controls {
+    pub fn clear(&self) {
+        self.artwork.borrow_mut().layers.clear();
+        for area in &self.areas {
+            area.queue_draw();
+        }
+    }
     pub fn set_artwork(&self, art: Option<Pixbuf>) {
         self.artwork.borrow_mut().target = art;
     }
@@ -177,6 +183,7 @@ impl App {
     pub(super) fn update_watermark(&self, energy: f64, animated: bool) {
         let state = self.state.borrow();
         let enabled = state.visualization == model::Visualization::AlbumArt
+            && state.theme == model::Theme::Sage
             && state.current_track().is_some();
         self.watermark.update(enabled, energy, animated);
         let visible = self.watermark.is_visible();

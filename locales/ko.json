@@ -490,5 +490,13 @@
   "Live audio waveform — click to show mood": "실시간 오디오 파형 — 클릭하여 분위기 표시",
   "Audio spectrum — click to show mood": "오디오 스펙트럼 — 클릭하여 분위기 표시",
   "Mood theme — click to show album art theme": "분위기 테마 — 클릭하여 앨범 아트 테마 표시",
-  "Album art theme — click to show waveform": "앨범 아트 테마 — 클릭하여 파형 표시"
+  "Album art theme — click to show waveform": "앨범 아트 테마 — 클릭하여 파형 표시",
+  "Theme": "테마",
+  "System": "시스템",
+  "Sage": "Sage",
+  "System follows your desktop appearance. Sage uses the original colors and music-reactive skin.": "시스템은 데스크톱 모양을 따릅니다. Sage는 기존 색상과 음악에 반응하는 테마를 사용합니다.",
+  "Start in background": "백그라운드에서 시작",
+  "Launch with the window hidden. Open the app again or use the tray to show it.": "창을 숨긴 상태로 시작합니다. 앱을 다시 열거나 트레이를 사용하면 창이 표시됩니다.",
+  "Keep running when the window closes": "창을 닫아도 계속 실행",
+  "Keep running even while paused or stopped. Quit always exits the app.": "재생을 일시 정지하거나 중지해도 계속 실행합니다. 종료를 선택하면 항상 앱이 종료됩니다."
 }
