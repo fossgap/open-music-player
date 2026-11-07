@@ -22,7 +22,7 @@ use std::{
 struct PcmSink {
     pipeline: gst::Pipeline,
     source: gst_app::AppSrc,
-    waveform: Arc<Mutex<Vec<f64>>>,
+    visualization: visualization::Tap,
     capture: Arc<Mutex<Option<crate::downloads::Capture>>>,
     frames: u64,
 }
@@ -41,7 +41,7 @@ impl PcmSink {
         } else {
             "identity"
         };
-        let pipeline = gst::parse_launch(&format!("appsrc name=pcm format=time block=true max-bytes=16384 ! audioconvert ! audioresample ! {tempo} name=tempo ! {} ! volume name=volume ! {output}", visualization::filter()))
+        let pipeline = gst::parse_launch(&format!("appsrc name=pcm format=time block=true max-bytes=16384 ! audioconvert ! audioresample ! {tempo} name=tempo ! tee name=t t. ! queue max-size-time=100000000 ! volume name=volume ! {output} t. ! {}", visualization::branch()))
             .map_err(|e| e.to_string())?.downcast::<gst::Pipeline>().map_err(|_| "Could not create Spotify audio output.")?;
         let source = pipeline
             .by_name("pcm")
@@ -57,11 +57,13 @@ impl PcmSink {
                 .build(),
         ));
         let volume = pipeline.by_name("volume").unwrap();
+        let visualization =
+            visualization::Tap::new(pipeline.upcast_ref(), &pipeline.bus().unwrap());
         Ok((
             Self {
                 pipeline,
                 source,
-                waveform: Arc::new(Mutex::new(Vec::new())),
+                visualization,
                 capture: Arc::new(Mutex::new(None)),
                 frames: 0,
             },
@@ -81,6 +83,7 @@ impl Sink for PcmSink {
         self.pipeline
             .set_state(gst::State::Ready)
             .map_err(|e| SinkError::StateChange(e.to_string()))?;
+        self.visualization.clear();
         Ok(())
     }
     fn write(&mut self, packet: AudioPacket, _converter: &mut Converter) -> SinkResult<()> {
@@ -96,14 +99,6 @@ impl Sink for PcmSink {
             .collect();
         if let Some(capture) = self.capture.lock().unwrap().as_ref() {
             capture.write(&data);
-        }
-        if let Ok(mut wave) = self.waveform.lock() {
-            *wave = samples
-                .chunks_exact(2)
-                .step_by((samples.len() / 360).max(1))
-                .take(180)
-                .map(|s| ((s[0] + s[1]) * 2.0).clamp(-1.0, 1.0))
-                .collect();
         }
         let mut buffer = gst::Buffer::from_mut_slice(data);
         let b = buffer.get_mut().unwrap();
@@ -139,7 +134,7 @@ pub struct Playback {
     volume: gst::Element,
     tempo: gst::Element,
     rate: f64,
-    waveform: Arc<Mutex<Vec<f64>>>,
+    visualization: visualization::Tap,
     capture: Arc<Mutex<Option<crate::downloads::Capture>>>,
     track: Option<SpotifyUri>,
     request: Option<u64>,
@@ -157,7 +152,7 @@ impl Playback {
     }
     fn with_settings(session: Session, settings: PlaybackSettings) -> Result<Self, String> {
         let (sink, volume) = PcmSink::new()?;
-        let waveform = sink.waveform.clone();
+        let visualization = sink.visualization.clone();
         let capture = sink.capture.clone();
         let bus = sink.pipeline.bus().unwrap();
         let tempo = sink.pipeline.by_name("tempo").unwrap();
@@ -197,7 +192,7 @@ impl Playback {
             volume,
             tempo,
             rate: 1.0,
-            waveform,
+            visualization,
             capture,
             track: None,
             request: None,
@@ -449,11 +444,7 @@ impl Playback {
                 "Spotify playback timed out. Reconnect your account and try again.".into(),
             ));
         }
-        let mut spectrum = None;
         for message in self.bus.iter().take(50) {
-            if let Some(levels) = visualization::from_message(&message) {
-                spectrum = Some(levels);
-            }
             if let gst::MessageView::Error(error) = message.view() {
                 out.push(Event::Error(error.error().to_string()));
             }
@@ -461,18 +452,21 @@ impl Playback {
         if out.iter().any(|e| matches!(e, Event::Error(_))) {
             self.stop();
         }
-        if self.playing && self.running {
-            if let Some(levels) = spectrum {
-                out.push(Event::Spectrum(levels));
-            }
-            if let Ok(mut wave) = self.waveform.lock() {
-                if !wave.is_empty() {
-                    out.push(Event::Waveform(std::mem::take(&mut *wave)));
-                }
-            }
-        }
         out
     }
+    pub fn set_visualization_enabled(&self, enabled: bool) {
+        self.visualization.set_enabled(enabled);
+    }
+
+    pub fn visualization_frame(&self) -> visualization::Frame {
+        if self.playing && self.running {
+            self.visualization.take()
+        } else {
+            self.visualization.clear();
+            visualization::Frame::default()
+        }
+    }
+
     fn accepts(&self, request: u64, track: &SpotifyUri) -> bool {
         self.request == Some(request) && self.track.as_ref() == Some(track)
     }
@@ -681,24 +675,38 @@ mod tests {
             "Stop invalidates every prepared successor"
         );
     }
+    fn wait_visualization(sink: &PcmSink, spectrum: bool) -> visualization::Frame {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let frame = sink.visualization.take();
+            if if spectrum {
+                frame.spectrum.is_some()
+            } else {
+                frame.waveform.is_some()
+            } {
+                return frame;
+            }
+            assert!(Instant::now() < deadline, "No Spotify PCM analysis");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     #[test]
     fn pcm_output_can_pause_restart_and_produces_real_waveform() {
         gst::init().unwrap();
         let (mut sink, volume) = PcmSink::with_output("fakesink sync=true").unwrap();
         let mut converter = Converter::new(None);
+        sink.visualization.set_enabled(true);
         sink.start().unwrap();
         sink.write(AudioPacket::Samples(vec![0.1; 8820]), &mut converter)
             .unwrap();
         let (_, state, _) = sink.pipeline.state(gst::ClockTime::from_seconds(2));
         assert_eq!(state, gst::State::Playing);
         assert_eq!(sink.frames, 4410);
-        assert!(
-            sink.waveform
-                .lock()
-                .unwrap()
-                .iter()
-                .all(|s| (*s - 0.4).abs() < 0.001)
-        );
+        let frame = wait_visualization(&sink, false);
+        let wave = frame.waveform.unwrap().values;
+        assert!(!wave.is_empty());
+        assert!(wave.iter().all(|s| (*s - 0.4).abs() < 0.001));
         volume.set_property("volume", 0.25f64);
         assert_eq!(volume.property::<f64>("volume"), 0.25);
         sink.stop().unwrap();
@@ -720,6 +728,7 @@ mod tests {
     fn pcm_output_produces_a_real_frequency_spectrum() {
         gst::init().unwrap();
         let (mut sink, _) = PcmSink::with_output("fakesink sync=true").unwrap();
+        sink.visualization.set_enabled(true);
         sink.start().unwrap();
         let samples = (0..8820)
             .flat_map(|i| {
@@ -729,14 +738,7 @@ mod tests {
             .collect();
         sink.write(AudioPacket::Samples(samples), &mut Converter::new(None))
             .unwrap();
-        let bus = sink.pipeline.bus().unwrap();
-        let message = bus
-            .timed_pop_filtered(
-                gst::ClockTime::from_seconds(2),
-                &[gst::MessageType::Element],
-            )
-            .expect("No Spotify PCM spectrum");
-        let levels = visualization::from_message(&message).unwrap();
+        let levels = wait_visualization(&sink, true).spectrum.unwrap().values;
         let (index, peak) = levels
             .iter()
             .enumerate()

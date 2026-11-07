@@ -1,11 +1,13 @@
 //! A quiet cover layer underneath the interface, shared by the main and mini windows.
+use super::render_area::RenderArea;
 use super::*;
-use gtk::{cairo, gdk_pixbuf::Pixbuf};
+use gtk::{gdk_pixbuf::Pixbuf, graphene::Rect};
 
 pub(super) const MAX_OPACITY: f64 = 0.12;
 
 struct Layer {
     art: Pixbuf,
+    texture: gdk::Texture,
     weight: f64,
 }
 
@@ -45,6 +47,7 @@ impl Artwork {
                 }
                 self.layers.push(Layer {
                     art: art.clone(),
+                    texture: gdk::Texture::for_pixbuf(art),
                     weight: 0.0,
                 });
             }
@@ -81,28 +84,31 @@ impl Artwork {
         changed
     }
 
-    fn draw(&self, cr: &cairo::Context, width: i32, height: i32) {
-        let (w, h) = (f64::from(width), f64::from(height));
+    fn snapshot(&self, snapshot: &gtk::Snapshot, width: i32, height: i32) {
+        let (w, h) = (width as f32, height as f32);
+        snapshot.push_clip(&Rect::new(0.0, 0.0, w, h));
         for layer in &self.layers {
-            let (iw, ih) = (f64::from(layer.art.width()), f64::from(layer.art.height()));
+            let (iw, ih) = (layer.texture.width() as f32, layer.texture.height() as f32);
             let scale = (w / iw).max(h / ih);
-            let _ = cr.save();
-            cr.rectangle(0.0, 0.0, w, h);
-            cr.clip();
-            cr.translate((w - iw * scale) / 2.0, (h - ih * scale) / 2.0);
-            cr.scale(scale, scale);
-            cr.set_source_pixbuf(&layer.art, 0.0, 0.0);
-            cr.source().set_filter(cairo::Filter::Bilinear);
-            cr.source().set_extend(cairo::Extend::Pad);
-            let _ = cr.paint_with_alpha(self.opacity * layer.weight);
-            let _ = cr.restore();
+            snapshot.push_opacity(self.opacity * layer.weight);
+            snapshot.append_texture(
+                &layer.texture,
+                &Rect::new(
+                    (w - iw * scale) / 2.0,
+                    (h - ih * scale) / 2.0,
+                    iw * scale,
+                    ih * scale,
+                ),
+            );
+            snapshot.pop();
         }
+        snapshot.pop();
     }
 }
 
 #[derive(Default)]
 pub(super) struct Controls {
-    pub areas: [gtk::DrawingArea; 2],
+    pub areas: [RenderArea; 2],
     artwork: RefCell<Artwork>,
 }
 
@@ -120,17 +126,25 @@ impl Controls {
         let now = Instant::now();
         let dt = now.duration_since(art.updated).as_secs_f64().min(0.25);
         art.updated = now;
-        if !self.areas.iter().any(|area| area.is_mapped()) {
+        if !self.areas.iter().any(area_visible) {
             return;
         }
         if art.advance(dt, enabled, energy, animated) {
             for area in &self.areas {
-                if area.is_mapped() {
+                if area_visible(area) {
                     area.queue_draw();
                 }
             }
         }
     }
+}
+
+fn area_visible(area: &RenderArea) -> bool {
+    area.is_mapped()
+        && area
+            .root()
+            .and_then(|root| root.dynamic_cast::<gtk::Window>().ok())
+            .is_some_and(|window| super::visualization::window_visible(&window))
 }
 
 impl App {
@@ -152,9 +166,9 @@ impl App {
             overlay.set_measure_overlay(&content, true);
             window.set_child(Some(&overlay));
             let weak = Rc::downgrade(self);
-            area.set_draw_func(move |_, cr, w, h| {
+            area.set_snapshot_func(move |snapshot, w, h| {
                 if let Some(app) = weak.upgrade() {
-                    app.watermark.artwork.borrow().draw(cr, w, h);
+                    app.watermark.artwork.borrow().snapshot(snapshot, w, h);
                 }
             });
         }

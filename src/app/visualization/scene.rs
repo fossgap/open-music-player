@@ -1,6 +1,12 @@
 //! Local, audio-driven atmospheres. These are visual heuristics, not emotion labels.
 use crate::model::Visualization;
-use gtk::{cairo, gdk::prelude::GdkCairoContextExt, gdk_pixbuf::Pixbuf};
+use gtk::{
+    cairo, gdk,
+    gdk_pixbuf::Pixbuf,
+    graphene::{Point, Rect},
+    gsk,
+    prelude::*,
+};
 use std::f64::consts::{PI, TAU};
 
 type Color = [f64; 3];
@@ -9,6 +15,10 @@ const FALLBACK: [Color; 2] = [SAGE, [0.43, 0.65, 0.60]];
 
 fn mix(a: Color, b: Color, weight: f64) -> Color {
     std::array::from_fn(|i| a[i] + (b[i] - a[i]) * weight)
+}
+
+fn rgba(color: Color, alpha: f32) -> gdk::RGBA {
+    gdk::RGBA::new(color[0] as f32, color[1] as f32, color[2] as f32, alpha)
 }
 
 fn ink(cr: &cairo::Context, color: Color, alpha: f64) {
@@ -126,6 +136,8 @@ pub(super) struct Scene {
     animated: bool,
     active: bool,
     has_artwork: bool,
+    artwork: Option<gdk::Texture>,
+    artwork_source: Option<Pixbuf>,
     colors: [Color; 2],
     target_colors: [Color; 2],
 }
@@ -141,6 +153,8 @@ impl Default for Scene {
             animated: true,
             active: false,
             has_artwork: false,
+            artwork: None,
+            artwork_source: None,
             colors: FALLBACK,
             target_colors: FALLBACK,
         }
@@ -149,8 +163,13 @@ impl Default for Scene {
 
 impl Scene {
     pub(super) fn set_artwork(&mut self, art: Option<&Pixbuf>) {
+        if self.artwork_source.as_ref() == art {
+            return;
+        }
+        self.artwork_source = art.cloned();
         self.target_colors = palette(art);
         self.has_artwork = art.is_some();
+        self.artwork = art.map(gdk::Texture::for_pixbuf);
     }
 
     pub(super) fn reset_audio(&mut self) {
@@ -217,21 +236,52 @@ impl Scene {
         ]
     }
 
-    fn wash(&self, cr: &cairo::Context, w: f64, h: f64, colors: [Color; 2], skin: Color) {
-        ink(cr, skin, 1.0);
-        let _ = cr.paint();
-        let gradient = cairo::LinearGradient::new(0.0, h, w, 0.0);
-        for (at, color) in [(0.0, colors[0]), (1.0, colors[1])] {
-            let color = mix(skin, color, 0.12 + self.mood * 0.10);
-            gradient.add_color_stop_rgb(at, color[0], color[1], color[2]);
-        }
-        let _ = cr.set_source(&gradient);
-        let _ = cr.paint();
+    fn wash(&self, snapshot: &gtk::Snapshot, w: f64, h: f64, colors: [Color; 2], skin: Color) {
+        let stops: Vec<_> = colors
+            .into_iter()
+            .enumerate()
+            .map(|(i, color)| {
+                let color = mix(skin, color, 0.12 + self.mood * 0.10);
+                gsk::ColorStop::new(i as f32, rgba(color, 1.0))
+            })
+            .collect();
+        snapshot.append_linear_gradient(
+            &Rect::new(0.0, 0.0, w as f32, h as f32),
+            &Point::new(0.0, h as f32),
+            &Point::new(w as f32, 0.0),
+            &stops,
+        );
     }
 
-    pub(super) fn draw_mood(&self, cr: &cairo::Context, w: f64, h: f64, bars: &[f64], skin: Color) {
+    pub(super) fn snapshot_mood(
+        &self,
+        snapshot: &gtk::Snapshot,
+        w: f64,
+        h: f64,
+        bars: &[f64],
+        skin: Color,
+    ) {
         let colors = self.mood_colors();
-        self.wash(cr, w, h, colors, skin);
+        self.wash(snapshot, w, h, colors, skin);
+        // GTK 4.8 has no native path nodes. Keep only the curves in a Cairo layer;
+        // full-area gradients and artwork are handled by the active GTK renderer.
+        let cr = snapshot.append_cairo(&Rect::new(0.0, 0.0, w as f32, h as f32));
+        self.mood_curves(&cr, w, h, bars, colors);
+        drop(cr);
+        self.fade_edges(snapshot, w, h, skin);
+    }
+
+    fn mood_curves(&self, cr: &cairo::Context, w: f64, h: f64, bars: &[f64], colors: [Color; 2]) {
+        let smoothed: Vec<f64> = (0..=bars.len())
+            .map(|at| {
+                let start = at.saturating_sub(2);
+                let end = (at + 3).min(bars.len());
+                bars.get(start..end)
+                    .filter(|values| !values.is_empty())
+                    .map(|values| values.iter().sum::<f64>() / values.len() as f64)
+                    .unwrap_or(0.0)
+            })
+            .collect();
         let amplitude = if self.animated { self.energy } else { 0.0 };
         for layer in (0..3).rev() {
             let layer = f64::from(layer);
@@ -241,16 +291,9 @@ impl Scene {
                     let t = f64::from(i) / 96.0;
                     let position = (1.0 - t) * bars.len().saturating_sub(1) as f64;
                     let index = position as usize;
-                    let sample = |at: usize| {
-                        let start = at.saturating_sub(2);
-                        let end = (at + 3).min(bars.len());
-                        bars.get(start..end)
-                            .filter(|values| !values.is_empty())
-                            .map(|values| values.iter().sum::<f64>() / values.len() as f64)
-                            .unwrap_or(0.0)
-                    };
-                    let band =
-                        sample(index) + (sample(index + 1) - sample(index)) * position.fract();
+                    let a = smoothed.get(index).copied().unwrap_or(0.0);
+                    let b = smoothed.get(index + 1).copied().unwrap_or(0.0);
+                    let band = a + (b - a) * position.fract();
                     let envelope = (PI * t).sin().max(0.0).powf(0.7);
                     let shape =
                         (t * TAU * (1.1 + self.brightness) + self.phase + layer * 0.8).sin();
@@ -267,6 +310,7 @@ impl Scene {
                 }
             };
             path(cr);
+            let stroke = cr.copy_path().ok();
             cr.line_to(w, h);
             cr.line_to(0.0, h);
             cr.close_path();
@@ -275,31 +319,29 @@ impl Scene {
             gradient.add_color_stop_rgba(1.0, color[0], color[1], color[2], 0.0);
             let _ = cr.set_source(&gradient);
             let _ = cr.fill();
-            path(cr);
+            if let Some(path) = stroke {
+                cr.append_path(&path);
+            }
             ink(cr, color, 0.42 + self.mood * 0.30);
             cr.set_line_width(1.0 + (2.0 - layer) * 0.35);
             let _ = cr.stroke();
         }
-        self.fade_edges(cr, w, h, skin);
     }
 
-    pub(super) fn draw_artwork(
-        &self,
-        cr: &cairo::Context,
-        w: f64,
-        h: f64,
-        art: Option<&Pixbuf>,
-        skin: Color,
-    ) {
-        self.wash(cr, w, h, self.colors, skin);
-        if let Some(art) = art {
-            let _ = cr.save();
-            cr.scale(w / f64::from(art.width()), h / f64::from(art.height()));
-            cr.set_source_pixbuf(art, 0.0, 0.0);
-            cr.source().set_filter(cairo::Filter::Bilinear);
-            let _ = cr.paint_with_alpha(0.13 + self.mood * 0.10);
-            let _ = cr.restore();
+    pub(super) fn snapshot_artwork(&self, snapshot: &gtk::Snapshot, w: f64, h: f64, skin: Color) {
+        self.wash(snapshot, w, h, self.colors, skin);
+        if let Some(art) = &self.artwork {
+            snapshot.push_opacity(0.13 + self.mood * 0.10);
+            snapshot.append_texture(art, &Rect::new(0.0, 0.0, w as f32, h as f32));
+            snapshot.pop();
         }
+        let cr = snapshot.append_cairo(&Rect::new(0.0, 0.0, w as f32, h as f32));
+        self.artwork_curves(&cr, w, h);
+        drop(cr);
+        self.fade_edges(snapshot, w, h, skin);
+    }
+
+    fn artwork_curves(&self, cr: &cairo::Context, w: f64, h: f64) {
         let cover = if h < 150.0 { 80.0 } else { 136.0 };
         let reach = ((w - cover) / 2.0 - 12.0).max(0.0);
         let energy = if self.animated { self.energy } else { 0.0 };
@@ -329,17 +371,18 @@ impl Scene {
                 let _ = cr.stroke();
             }
         }
-        self.fade_edges(cr, w, h, skin);
     }
 
-    fn fade_edges(&self, cr: &cairo::Context, w: f64, h: f64, skin: Color) {
-        for (x, y) in [(w, 0.0), (0.0, h)] {
-            let gradient = cairo::LinearGradient::new(0.0, 0.0, x, y);
-            for (at, alpha) in [(0.0, 1.0), (0.12, 0.0), (0.88, 0.0), (1.0, 1.0)] {
-                gradient.add_color_stop_rgba(at, skin[0], skin[1], skin[2], alpha);
-            }
-            let _ = cr.set_source(&gradient);
-            let _ = cr.paint();
+    fn fade_edges(&self, snapshot: &gtk::Snapshot, w: f64, h: f64, skin: Color) {
+        let stops = [(0.0, 1.0), (0.12, 0.0), (0.88, 0.0), (1.0, 1.0)]
+            .map(|(at, alpha)| gsk::ColorStop::new(at, rgba(skin, alpha)));
+        for end in [Point::new(w as f32, 0.0), Point::new(0.0, h as f32)] {
+            snapshot.append_linear_gradient(
+                &Rect::new(0.0, 0.0, w as f32, h as f32),
+                &Point::new(0.0, 0.0),
+                &end,
+                &stops,
+            );
         }
     }
 }

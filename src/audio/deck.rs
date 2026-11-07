@@ -20,7 +20,7 @@ pub(super) struct Deck {
     pub pipeline: gst::Element,
     pub(super) output: gst::Element,
     bus: gst::Bus,
-    waveform: gst_app::AppSink,
+    pub visualization: visualization::Tap,
     headers: Arc<Mutex<HashMap<String, String>>>,
     queue: Arc<Mutex<Queue>>,
     pub current: Option<NextTrack>,
@@ -117,19 +117,12 @@ impl Deck {
             &format!(
                 "audioconvert ! scaletempo ! volume name=normalization ! tee name=t \
              t. ! queue max-size-time=100000000 ! identity name=out \
-             t. ! queue leaky=downstream max-size-buffers=2 ! audioconvert ! \
-             audio/x-raw,format=F32LE,channels=1 ! {} ! appsink name=wave \
-             max-buffers=1 drop=true sync=false async=false",
-                visualization::filter()
+             t. ! {}",
+                visualization::branch()
             ),
             true,
         )
         .map_err(|e| e.to_string())?;
-        let waveform = filter
-            .by_name("wave")
-            .unwrap()
-            .downcast::<gst_app::AppSink>()
-            .unwrap();
         let gain = Gain::new(filter.by_name("normalization").unwrap());
         let fade = gst::ElementFactory::make("volume")
             .build()
@@ -195,11 +188,12 @@ impl Deck {
         let bus = pipeline
             .bus()
             .ok_or("GStreamer did not create a message bus")?;
+        let visualization = visualization::Tap::new(&filter, &bus);
         Ok(Self {
             pipeline,
             output,
             bus,
-            waveform,
+            visualization,
             headers,
             queue,
             current: None,
@@ -394,6 +388,7 @@ impl Deck {
         *self.queue.lock().unwrap() = Queue::default();
         let _ = self.pipeline.set_state(gst::State::Null);
         while self.bus.pop().is_some() {}
+        self.visualization.clear();
         self.current = None;
         self.pending_seek = None;
         self.initial_seek = false;
@@ -407,11 +402,7 @@ impl Deck {
 
     pub fn poll(&mut self, playing: bool) -> Vec<Event> {
         let mut events = Vec::new();
-        let mut spectrum = None;
         for message in self.bus.iter().take(100).collect::<Vec<_>>() {
-            if let Some(levels) = visualization::from_message(&message) {
-                spectrum = Some(levels);
-            }
             match message.view() {
                 gst::MessageView::Application(m)
                     if m.structure().is_some_and(|s| s.name() == "oap-started") =>
@@ -462,34 +453,6 @@ impl Deck {
                     events.push(Event::Buffering(b.percent()));
                 }
                 _ => {}
-            }
-        }
-        if playing && !self.buffering {
-            if let Some(levels) = spectrum {
-                events.push(Event::Spectrum(levels));
-            }
-        }
-        if let Some(sample) = self.waveform.try_pull_sample(gst::ClockTime::ZERO) {
-            if let Some(buffer) = sample.buffer() {
-                if let Ok(map) = buffer.map_readable() {
-                    let samples: Vec<f64> = map
-                        .as_slice()
-                        .chunks_exact(4)
-                        .take(2048)
-                        .map(|b| f64::from(f32::from_le_bytes([b[0], b[1], b[2], b[3]])))
-                        .filter(|s| s.is_finite())
-                        .collect();
-                    if !samples.is_empty() {
-                        let step = (samples.len() / 180).max(1);
-                        events.push(Event::Waveform(
-                            samples
-                                .into_iter()
-                                .step_by(step)
-                                .map(|s| (s * 4.0).clamp(-1.0, 1.0))
-                                .collect(),
-                        ));
-                    }
-                }
             }
         }
         events

@@ -18,6 +18,7 @@ mod lyrics;
 mod metadata;
 mod playback;
 mod podcasts;
+mod render_area;
 mod selection;
 mod spotify;
 #[cfg(test)]
@@ -157,6 +158,7 @@ impl App {
         let mut audio = Audio::new()?;
         audio.configure(state.playback);
         let i18n = I18n::new(&state.language);
+        render_area::RenderArea::static_type();
         let ui = gtk::Builder::from_string(include_str!("../resources/window.ui"));
         let mini_ui = gtk::Builder::from_string(include_str!("../resources/mini.ui"));
         i18n.builder(&ui);
@@ -1611,11 +1613,10 @@ impl App {
                 Event::Buffering(percent) => {
                     self.set_buffering(percent);
                 }
-                Event::Waveform(values) => self.visualization_data(true, values),
-                Event::Spectrum(values) => self.visualization_data(false, values),
             }
         }
         self.prepare_transition();
+        self.sync_visualization();
         self.update_music_theme();
         self.update_buffering_notice();
         let audio = self.audio.borrow();

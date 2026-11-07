@@ -1,16 +1,20 @@
 use super::*;
 use crate::{audio::visualization as analysis, model::Visualization};
 mod scene;
+use super::render_area::RenderArea;
+use gtk::graphene::Rect;
 
 pub(super) struct Controls {
     pub waveform: Vec<f64>,
     pub target: Vec<f64>,
     pub bars: Vec<f64>,
     scene: scene::Scene,
-    wave_at: Instant,
+    pub(super) wave_at: Instant,
     spectrum_at: Instant,
     frame_at: i64,
     response_at: Instant,
+    pub(super) delivery: Option<glib::SourceId>,
+    pub(super) animation: Option<gtk::TickCallbackId>,
 }
 
 impl Default for Controls {
@@ -24,6 +28,8 @@ impl Default for Controls {
             spectrum_at: Instant::now(),
             frame_at: 0,
             response_at: Instant::now(),
+            delivery: None,
+            animation: None,
         }
     }
 }
@@ -101,9 +107,9 @@ impl App {
         });
         self.button("visualization_toggle")
             .set_cursor_from_name(Some("pointer"));
-        let area: gtk::DrawingArea = object(&self.ui, "spectrum");
+        let area: RenderArea = object(&self.ui, "spectrum");
         let weak = Rc::downgrade(self);
-        area.set_draw_func(move |_, cr, width, height| {
+        area.set_snapshot_func(move |snapshot, width, height| {
             let Some(app) = weak.upgrade() else { return };
             let data = app.visualization.borrow();
             let (w, h) = (f64::from(width), f64::from(height));
@@ -112,6 +118,8 @@ impl App {
             let skin = theme.color("oap_detail");
             match app.state.borrow().visualization {
                 Visualization::Waveform => {
+                    let cr =
+                        snapshot.append_cairo(&Rect::new(0.0, 0.0, width as f32, height as f32));
                     let step = w / data.waveform.len().saturating_sub(1).max(1) as f64;
                     cr.set_source_rgba(r, g, b, 0.8);
                     cr.set_line_width(1.8);
@@ -127,64 +135,32 @@ impl App {
                 }
                 Visualization::Spectrum => {
                     let bottom = (h - 4.0).max(0.0);
-                    cr.set_source_rgba(r, g, b, 0.18);
-                    cr.set_line_width(1.0);
-                    cr.move_to(0.0, bottom);
-                    cr.line_to(w, bottom);
-                    let _ = cr.stroke();
-                    cr.set_source_rgba(r, g, b, 0.85);
+                    let color = |alpha| gdk::RGBA::new(r as f32, g as f32, b as f32, alpha);
+                    snapshot.append_color(
+                        &color(0.18),
+                        &Rect::new(0.0, bottom as f32 - 0.5, w as f32, 1.0),
+                    );
                     let step = w / analysis::BANDS as f64;
                     for (i, level) in data.bars.iter().enumerate() {
                         let height = level * (h - 8.0).max(0.0);
                         if height > 0.1 {
-                            cr.rectangle(
-                                i as f64 * step + 1.0,
-                                bottom - height,
-                                (step - 2.0).max(1.0),
-                                height,
+                            snapshot.append_color(
+                                &color(0.85),
+                                &Rect::new(
+                                    (i as f64 * step + 1.0) as f32,
+                                    (bottom - height) as f32,
+                                    (step - 2.0).max(1.0) as f32,
+                                    height as f32,
+                                ),
                             );
                         }
                     }
-                    let _ = cr.fill();
                 }
-                Visualization::Mood => data.scene.draw_mood(cr, w, h, &data.bars, skin),
+                Visualization::Mood => data.scene.snapshot_mood(snapshot, w, h, &data.bars, skin),
                 Visualization::AlbumArt => {
-                    data.scene
-                        .draw_artwork(cr, w, h, app.backdrop_art.borrow().as_ref(), skin);
+                    data.scene.snapshot_artwork(snapshot, w, h, skin);
                 }
             }
-        });
-        let weak = Rc::downgrade(self);
-        area.add_tick_callback(move |area, clock| {
-            let Some(app) = weak.upgrade() else {
-                return glib::ControlFlow::Break;
-            };
-            if area.is_mapped() {
-                let viewport: gtk::ScrolledWindow = object(&app.ui, "detail_scroller");
-                let on_screen = area.compute_bounds(&viewport).is_some_and(|bounds| {
-                    bounds.y() + bounds.height() > 0.0
-                        && bounds.y() < viewport.height() as f32
-                        && bounds.x() + bounds.width() > 0.0
-                        && bounds.x() < viewport.width() as f32
-                });
-                if !on_screen {
-                    return glib::ControlFlow::Continue;
-                }
-                let animated = area.settings().is_gtk_enable_animations();
-                let changed = app.visualization.borrow_mut().advance(
-                    clock.frame_time(),
-                    app.audio.borrow().playing,
-                    animated,
-                    matches!(
-                        app.state.borrow().visualization,
-                        Visualization::Mood | Visualization::AlbumArt
-                    ),
-                );
-                if changed {
-                    area.queue_draw();
-                }
-            }
-            glib::ControlFlow::Continue
         });
         self.update_visualization();
     }
@@ -244,11 +220,7 @@ impl App {
             None
         };
         // The skin follows music even with the details pane closed or in the mini player.
-        let visible = self
-            .application
-            .windows()
-            .iter()
-            .any(|window| window.is_mapped());
+        let visible = self.application.windows().iter().any(window_visible);
         let changed = self.theme.borrow_mut().update(tone, visible, animated);
         self.update_watermark(tone.map(|(_, energy)| energy).unwrap_or(0.0), animated);
         if changed {
@@ -262,7 +234,7 @@ impl App {
             }
             for id in ["spectrum", "empty_art", "detail_backdrop"] {
                 let area: gtk::DrawingArea = object(&self.ui, id);
-                if area.is_mapped() {
+                if area.is_mapped() && (id != "spectrum" || self.visualization_on_screen()) {
                     area.queue_draw();
                 }
             }
@@ -278,20 +250,109 @@ impl App {
             .borrow_mut()
             .scene
             .set_artwork(self.backdrop_art.borrow().as_ref());
-        object::<gtk::DrawingArea>(&self.ui, "spectrum").queue_draw();
+        if self.visualization_on_screen() {
+            object::<gtk::DrawingArea>(&self.ui, "spectrum").queue_draw();
+        }
     }
 
-    pub(super) fn visualization_data(&self, waveform: bool, values: Vec<f64>) {
-        let mut data = self.visualization.borrow_mut();
-        if waveform {
-            data.waveform = values;
-            data.wave_at = Instant::now();
-        } else if values.len() == analysis::BANDS {
-            data.target = values;
-            data.spectrum_at = Instant::now();
+    pub(super) fn visualization_on_screen(&self) -> bool {
+        let area: gtk::Widget = object(&self.ui, "spectrum");
+        if !area.is_mapped() || !window_visible(self.window.upcast_ref()) {
+            return false;
         }
-        if object::<gtk::DrawingArea>(&self.ui, "spectrum").is_mapped() {
-            object::<gtk::DrawingArea>(&self.ui, "spectrum").queue_draw();
+        let viewport: gtk::ScrolledWindow = object(&self.ui, "detail_scroller");
+        area.compute_bounds(&viewport).is_some_and(|bounds| {
+            bounds.y() + bounds.height() > 0.0
+                && bounds.y() < viewport.height() as f32
+                && bounds.x() + bounds.width() > 0.0
+                && bounds.x() < viewport.width() as f32
+        })
+    }
+
+    fn visualization_needed(&self) -> bool {
+        let audio = self.audio.borrow();
+        audio.playing
+            && audio.loaded
+            && (self.visualization_on_screen()
+                || (matches!(
+                    self.state.borrow().visualization,
+                    Visualization::Mood | Visualization::AlbumArt
+                ) && self.application.windows().iter().any(window_visible)))
+    }
+
+    pub(super) fn sync_visualization(self: &Rc<Self>) {
+        let on_screen = self.visualization_on_screen();
+        let mut data = self.visualization.borrow_mut();
+        if !on_screen {
+            if let Some(callback) = data.animation.take() {
+                callback.remove();
+            }
+        } else if data.animation.is_none() {
+            let area: RenderArea = object(&self.ui, "spectrum");
+            let weak = Rc::downgrade(self);
+            data.animation = Some(area.add_tick_callback(move |area, clock| {
+                let Some(app) = weak.upgrade() else {
+                    return glib::ControlFlow::Break;
+                };
+                if !app.visualization_on_screen() {
+                    app.visualization.borrow_mut().animation.take();
+                    return glib::ControlFlow::Break;
+                }
+                let animated = area.settings().is_gtk_enable_animations();
+                let changed = app.visualization.borrow_mut().advance(
+                    clock.frame_time(),
+                    app.audio.borrow().playing,
+                    animated,
+                    matches!(
+                        app.state.borrow().visualization,
+                        Visualization::Mood | Visualization::AlbumArt
+                    ),
+                );
+                if changed {
+                    area.queue_draw();
+                }
+                glib::ControlFlow::Continue
+            }));
+        }
+        drop(data);
+        let needed = self.visualization_needed();
+        self.audio.borrow_mut().set_visualization_enabled(needed);
+        let mut data = self.visualization.borrow_mut();
+        if !needed {
+            if let Some(source) = data.delivery.take() {
+                source.remove();
+            }
+        } else if data.delivery.is_none() {
+            let weak = Rc::downgrade(self);
+            data.delivery = Some(glib::timeout_add_local(
+                Duration::from_millis(20),
+                move || {
+                    let Some(app) = weak.upgrade() else {
+                        return glib::ControlFlow::Break;
+                    };
+                    if !app.visualization_needed() {
+                        app.audio.borrow_mut().set_visualization_enabled(false);
+                        app.visualization.borrow_mut().delivery.take();
+                        return glib::ControlFlow::Break;
+                    }
+                    let frame = app.audio.borrow().visualization_frame();
+                    let changed = frame.waveform.is_some() || frame.spectrum.is_some();
+                    let mut data = app.visualization.borrow_mut();
+                    if let Some(sample) = frame.waveform {
+                        data.waveform = sample.values;
+                        data.wave_at = sample.at;
+                    }
+                    if let Some(sample) = frame.spectrum {
+                        data.target = sample.values;
+                        data.spectrum_at = sample.at;
+                    }
+                    drop(data);
+                    if changed && app.visualization_on_screen() {
+                        object::<gtk::Widget>(&app.ui, "spectrum").queue_draw();
+                    }
+                    glib::ControlFlow::Continue
+                },
+            ));
         }
     }
 
@@ -303,8 +364,15 @@ impl App {
         data.scene.reset_audio();
         drop(data);
         self.update_visualization_art();
-        object::<gtk::DrawingArea>(&self.ui, "spectrum").queue_draw();
     }
+}
+
+pub(super) fn window_visible(window: &gtk::Window) -> bool {
+    window.is_mapped()
+        && !window
+            .surface()
+            .and_then(|surface| surface.dynamic_cast::<gdk::Toplevel>().ok())
+            .is_some_and(|surface| surface.state().contains(gdk::ToplevelState::MINIMIZED))
 }
 
 #[cfg(test)]

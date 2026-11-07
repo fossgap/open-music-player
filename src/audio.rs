@@ -14,8 +14,6 @@ pub enum Event {
     Advanced(String),
     Error(String),
     Buffering(i32),
-    Waveform(Vec<f64>),
-    Spectrum(Vec<f64>),
     Ready,
 }
 
@@ -53,6 +51,7 @@ pub struct Audio {
     pub loaded: bool,
     spotify: Option<crate::spotify::playback::Playback>,
     spotify_active: bool,
+    visualization_enabled: bool,
     rate: f64,
 }
 
@@ -87,6 +86,7 @@ impl Audio {
             loaded: false,
             spotify: None,
             spotify_active: false,
+            visualization_enabled: false,
             rate: 1.0,
         })
     }
@@ -139,6 +139,7 @@ impl Audio {
         let _ = self.spotify.as_mut().unwrap().set_rate(self.rate);
         self.spotify_active = true;
         self.loaded = true;
+        self.set_visualization_enabled(self.visualization_enabled);
         self.playing = autoplay;
         Ok(())
     }
@@ -158,6 +159,9 @@ impl Audio {
         self.deck.gain(self.settings.replay_gain);
         self.deck.set_rate(self.rate, false)?;
         self.deck.volume(self.volume.get());
+        self.deck
+            .visualization
+            .set_enabled(self.visualization_enabled);
         self.deck.load(
             NextTrack {
                 id: String::new(),
@@ -285,6 +289,10 @@ impl Audio {
         Ok(())
     }
     pub fn stop(&mut self) {
+        self.deck.visualization.set_enabled(false);
+        if let Some(spotify) = &self.spotify {
+            spotify.set_visualization_enabled(false);
+        }
         if self.spotify_active {
             if let Some(spotify) = self.spotify.as_mut() {
                 spotify.stop();
@@ -339,6 +347,28 @@ impl Audio {
         self.deck.seek(seconds, self.playing)
     }
 
+    pub fn set_visualization_enabled(&mut self, enabled: bool) {
+        self.visualization_enabled = enabled;
+        self.deck
+            .visualization
+            .set_enabled(enabled && !self.spotify_active && self.loaded);
+        if let Some(spotify) = &self.spotify {
+            spotify.set_visualization_enabled(enabled && self.spotify_active && self.loaded);
+        }
+    }
+
+    pub fn visualization_frame(&self) -> visualization::Frame {
+        if self.spotify_active {
+            return self.spotify.as_ref().unwrap().visualization_frame();
+        }
+        if self.playing && !self.deck.buffering {
+            self.deck.visualization.take()
+        } else {
+            self.deck.visualization.clear();
+            visualization::Frame::default()
+        }
+    }
+
     pub fn poll(&mut self) -> Vec<Event> {
         if self.spotify_active {
             let spotify = self.spotify.as_mut().unwrap();
@@ -382,7 +412,11 @@ impl Audio {
                 .min(incoming.duration() / 2.0)
                 .max(0.01);
             incoming.fade(0.0, seconds, 0.0, 1.0);
+            incoming
+                .visualization
+                .set_enabled(self.visualization_enabled);
             if incoming.set_playing(true).is_ok() {
+                self.deck.visualization.set_enabled(false);
                 self.deck.fade(self.position(), seconds, 1.0, 0.0);
                 let id = incoming.current.as_ref().unwrap().id.clone();
                 self.outgoing = Some(std::mem::replace(&mut self.deck, incoming));

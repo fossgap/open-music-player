@@ -131,6 +131,22 @@ impl Palette {
         )
     }
 
+    fn should_publish(&self, applied: &Self, baseline: &Self, elapsed: Duration) -> bool {
+        if elapsed < Duration::from_millis(500) || self == applied {
+            return false;
+        }
+        // A one-byte color fluctuation need not invalidate styles across every window.
+        // Still publish the final small step, and always restore the exact original skin.
+        self == baseline
+            || elapsed >= Duration::from_secs(2)
+            || self
+                .0
+                .iter()
+                .flatten()
+                .zip(applied.0.iter().flatten())
+                .any(|(a, b)| (a - b).abs() >= 2.0 / 255.0 - f64::EPSILON)
+    }
+
     fn css(&self) -> String {
         let mut css = String::with_capacity(1800);
         for ((name, _, _), color) in ROLES.iter().zip(self.0) {
@@ -198,11 +214,12 @@ impl Theme {
             &target,
             1.0 - (-dt / if animated { 1.2 } else { 2.5 }).exp(),
         );
-        if now.duration_since(self.last_write) < Duration::from_millis(200) {
-            return false;
-        }
         let next = self.current.quantized();
-        if next == self.applied {
+        if !next.should_publish(
+            &self.applied,
+            &self.baseline,
+            now.duration_since(self.last_write),
+        ) {
             return false;
         }
         if next == self.baseline {
@@ -318,5 +335,23 @@ mod tests {
             palette.approach(&baseline, 0.2);
         }
         assert!(palette.quantized() == baseline);
+    }
+
+    #[test]
+    fn tiny_music_fluctuations_do_not_restyle_the_whole_application() {
+        let baseline = Palette::baseline();
+        let applied = Palette::adaptive([0.9, 0.3, 0.1], 0.5).quantized();
+        let mut jitter = applied.clone();
+        jitter.0[0][0] += 1.0 / 255.0;
+        for ms in [200, 500, 1000, 1900] {
+            assert!(!jitter.should_publish(&applied, &baseline, Duration::from_millis(ms)));
+        }
+        assert!(jitter.should_publish(&applied, &baseline, Duration::from_secs(2)));
+        let changed_cover = Palette::adaptive([0.1, 0.3, 0.9], 0.5).quantized();
+        assert!(!changed_cover.should_publish(&applied, &baseline, Duration::from_millis(200)));
+        assert!(changed_cover.should_publish(&applied, &baseline, Duration::from_millis(500)));
+        let mut nearly_original = baseline.clone();
+        nearly_original.0[0][0] += 1.0 / 255.0;
+        assert!(baseline.should_publish(&nearly_original, &baseline, Duration::from_millis(500)));
     }
 }

@@ -1326,6 +1326,31 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     assert!(button.is_mapped());
     let queue = app.state.borrow().queue.clone();
     let generation = app.play_generation.get();
+    // Closing or scrolling away from the waveform removes both analysis demand and
+    // its frame-clock callback. Resume must receive fresh data without touching playback.
+    let position = app.audio.borrow().position();
+    app.toggle_details();
+    settle();
+    assert!(app.visualization.borrow().delivery.is_none());
+    assert!(app.visualization.borrow().animation.is_none());
+    assert!(app.audio.borrow().playing);
+    assert!(app.audio.borrow().position() > position);
+    app.toggle_details();
+    settle();
+    details.vadjustment().set_value(0.0);
+    until(|| app.visualization.borrow().delivery.is_some());
+    let latest = app.visualization.borrow().wave_at;
+    until(|| app.visualization.borrow().wave_at > latest);
+    details
+        .vadjustment()
+        .set_value(details.vadjustment().upper());
+    settle();
+    if !app.visualization_on_screen() {
+        assert!(app.visualization.borrow().delivery.is_none());
+        assert!(app.visualization.borrow().animation.is_none());
+    }
+    details.vadjustment().set_value(0.0);
+    settle();
     let original_skin = skin_pixels(app);
     screenshot(app.window.upcast_ref(), "visualizer-waveform-wide.png");
     let xdo = |args: &[&str]| {
@@ -1390,6 +1415,11 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     app.toggle_details();
     settle();
     assert!(!button.is_mapped());
+    assert!(
+        app.visualization.borrow().delivery.is_some(),
+        "The visible mood skin still consumes audio"
+    );
+    assert!(app.visualization.borrow().animation.is_none());
     let scroller: gtk::ScrolledWindow = object(&app.ui, "track_scroller");
     let list: gtk::ListView = object(&app.ui, "track_list");
     let selection = list
@@ -1427,6 +1457,15 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     });
     let mini: gtk::Window = object(&app.mini_ui, "mini_window");
     assert!(mini.is_mapped() && !app.window.is_mapped());
+    assert!(app.visualization.borrow().delivery.is_some());
+    mini.set_visible(false);
+    settle();
+    assert!(app.visualization.borrow().delivery.is_none());
+    assert!(app.visualization.borrow().animation.is_none());
+    assert!(app.audio.borrow().playing);
+    mini.present();
+    settle();
+    assert!(app.visualization.borrow().delivery.is_some());
     screenshot(&mini, "skin-mini-calm.png");
     app.show();
     settle();
