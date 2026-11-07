@@ -1236,11 +1236,13 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
 
 fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     use crate::model::Visualization;
+    let previous_animations = app.window.settings().is_gtk_enable_animations();
+    app.window.settings().set_gtk_enable_animations(true);
     let before = app.state.borrow().clone();
     let page = app.page.borrow().clone();
     app.stop_playback();
     let rate = 32_000_u32;
-    let frames = rate * 20;
+    let frames = rate * 90;
     let mut wav = b"RIFF".to_vec();
     wav.extend((36 + frames * 2).to_le_bytes());
     wav.extend(b"WAVEfmt ");
@@ -1263,29 +1265,47 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
                 (phase * freq).sin() * (0.10 + 0.06 * (phase * (i + 1) as f64 * 0.7).sin())
             })
             .sum::<f64>();
-        wav.extend(((value * 32767.0) as i16).to_le_bytes());
+        let dynamics = if t < 12.0 { 0.08 } else { 1.0 };
+        wav.extend(((value * dynamics * 32767.0) as i16).to_le_bytes());
     }
     let path = directory.join("visualizer.wav");
     std::fs::write(&path, wav).unwrap();
     let mut track = Track::new(
         &gio::File::for_path(&path).uri(),
-        "Spectrum test session",
+        "Visualization test session",
         Kind::Music,
     );
     track.id = "visualizerfixture".into();
     track.artist = "Open Audio test session".into();
+    let warm_art = directory.join("visualizer-warm.png");
+    let cool_art = directory.join("visualizer-cool.png");
+    let artwork = std::process::Command::new("python3").args([
+        "-c",
+        "import runpy,sys; from pathlib import Path; png=runpy.run_path(sys.argv[1])['png']; png(Path(sys.argv[2]),(145,67,36),0); png(Path(sys.argv[3]),(43,87,149),1)",
+        concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/create-demo.py"),
+        warm_art.to_str().unwrap(),
+        cool_art.to_str().unwrap(),
+    ]).status().unwrap();
+    assert!(artwork.success());
+    let mut next_track = track.clone();
+    next_track.id = "visualizernext".into();
+    next_track.title = "Next album · test session".into();
+    next_track.artwork = Some(cool_art.to_string_lossy().into_owned());
     {
         let mut state = app.state.borrow_mut();
         state.fetch_covers = false;
         state.fetch_lyrics = false;
         state.fetch_information = false;
         state.visualization = Visualization::Waveform;
-        state.merge(vec![track]);
-        state.queue = vec!["visualizerfixture".into()];
+        state.merge(vec![track, next_track]);
+        state.queue = vec!["visualizerfixture".into(), "visualizernext".into()];
+        state.shuffle = false;
     }
     app.set_speed(1.0);
     app.navigate("library");
     app.window.set_default_size(1280, 820);
+    settle();
+    object::<gtk::ScrolledWindow>(&app.ui, "sidebar_scroller").set_visible(true);
     if !object::<gtk::Revealer>(&app.ui, "detail_revealer").is_visible() {
         app.toggle_details();
     }
@@ -1306,6 +1326,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     assert!(button.is_mapped());
     let queue = app.state.borrow().queue.clone();
     let generation = app.play_generation.get();
+    let original_skin = skin_pixels(app);
     screenshot(app.window.upcast_ref(), "visualizer-waveform-wide.png");
     let xdo = |args: &[&str]| {
         let result = std::process::Command::new("xdotool")
@@ -1344,7 +1365,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     xdo(&["mousemove", "--window", window, "10", "10"]);
     settle();
     assert_eq!(app.state.borrow().visualization, Visualization::Spectrum);
-    assert!(button.tooltip_text().unwrap().contains("show waveform"));
+    assert!(button.tooltip_text().unwrap().contains("show mood"));
     assert_eq!(app.play_generation.get(), generation);
     assert_eq!(app.state.borrow().queue, queue);
     assert!(app.audio.borrow().playing);
@@ -1353,15 +1374,106 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     assert!(button.grab_focus());
     xdo(&["key", "--clearmodifiers", "space"]);
     settle();
-    assert_eq!(app.state.borrow().visualization, Visualization::Waveform);
+    assert_eq!(app.state.borrow().visualization, Visualization::Mood);
+    assert!(!object::<gtk::Overlay>(&app.ui, "detail_artwork").is_visible());
+    assert!(button.prev_sibling().is_none());
+    assert!(button.has_focus());
+    details.vadjustment().set_value(0.0);
+    until(|| {
+        let accent = app.theme.borrow().color("oap_accent");
+        accent[2] > accent[0] + 0.025
+    });
+    assert_ne!(skin_pixels(app), original_skin);
+    screenshot(app.window.upcast_ref(), "visualizer-mood-wide.png");
+    // Theme changes must continue without a mapped visualization, preserving the library.
+    app.toggle_details();
+    settle();
+    assert!(!button.is_mapped());
+    let scroller: gtk::ScrolledWindow = object(&app.ui, "track_scroller");
+    let list: gtk::ListView = object(&app.ui, "track_list");
+    let selection = list
+        .model()
+        .unwrap()
+        .downcast::<gtk::MultiSelection>()
+        .unwrap();
+    let selected = 5.min(app.tracks_model.n_items() - 1);
+    selection.select_item(selected, true);
+    scroller.vadjustment().set_value(500.0);
+    settle();
+    let scroll = scroller.vadjustment().value();
+    let row = app.tracks_model.item(selected).unwrap();
+    let quiet_skin = skin_pixels(app);
+    app.seek(24.0);
+    until(|| {
+        let accent = app.theme.borrow().color("oap_accent");
+        accent[0] > accent[2] + 0.12
+    });
+    assert_ne!(skin_pixels(app), quiet_skin);
+    assert!(selection.is_selected(selected));
+    assert_eq!(app.tracks_model.item(selected).unwrap(), row);
+    assert!((scroller.vadjustment().value() - scroll).abs() < 1.0);
+    assert_eq!(app.play_generation.get(), generation);
+    screenshot(
+        app.window.upcast_ref(),
+        "skin-mood-energetic-hidden-details.png",
+    );
+    app.mini();
+    settle();
+    app.seek(0.0);
+    until(|| {
+        let accent = app.theme.borrow().color("oap_accent");
+        accent[2] > accent[0] + 0.025
+    });
+    let mini: gtk::Window = object(&app.mini_ui, "mini_window");
+    assert!(mini.is_mapped() && !app.window.is_mapped());
+    screenshot(&mini, "skin-mini-calm.png");
+    app.show();
+    settle();
+    app.toggle_details();
+    settle();
+    scroller.vadjustment().set_value(0.0);
+    xdo(&["windowfocus", "--sync", window]);
+    assert!(button.grab_focus());
     xdo(&["key", "--clearmodifiers", "Return"]);
     settle();
-    assert_eq!(app.state.borrow().visualization, Visualization::Spectrum);
+    assert_eq!(app.state.borrow().visualization, Visualization::AlbumArt);
+    assert!(object::<gtk::Image>(&app.ui, "visualization_placeholder").is_visible());
+    let art: gtk::Picture = object(&app.ui, "visualization_art");
+    assert!(art.paintable().is_none());
+    // A late artwork lookup updates the active scene without switching tracks.
+    app.state
+        .borrow_mut()
+        .tracks
+        .iter_mut()
+        .find(|t| t.id == "visualizerfixture")
+        .unwrap()
+        .artwork = Some(warm_art.to_string_lossy().into_owned());
+    app.update_player();
+    until(|| art.paintable().is_some());
+    until(|| {
+        let accent = app.theme.borrow().color("oap_accent");
+        accent[0] > accent[2] + 0.12
+    });
+    skin_pixels(app);
+    assert!(!object::<gtk::Image>(&app.ui, "visualization_placeholder").is_visible());
+    screenshot(app.window.upcast_ref(), "visualizer-artwork-wide.png");
+    assert_eq!(art.height(), 136);
     assert_eq!(app.play_generation.get(), generation);
     assert_eq!(
         app.state.borrow().current.as_deref(),
         Some("visualizerfixture")
     );
+    assert_eq!(app.state.borrow().queue, queue);
+    button.emit_clicked();
+    assert_eq!(app.state.borrow().visualization, Visualization::Waveform);
+    until(|| app.theme.borrow().is_original());
+    assert_eq!(skin_pixels(app), original_skin);
+    assert!(object::<gtk::Overlay>(&app.ui, "detail_artwork").is_visible());
+    assert_eq!(
+        button.prev_sibling(),
+        Some(object::<gtk::Widget>(&app.ui, "cover_source"))
+    );
+    button.emit_clicked();
 
     object::<gtk::ScrolledWindow>(&app.ui, "sidebar_scroller").set_visible(false);
     app.window.set_default_size(820, 650);
@@ -1376,6 +1488,34 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
         .set_value(details.vadjustment().value() + f64::from(bounds.y()) - 32.0);
     settle();
     screenshot(app.window.upcast_ref(), "visualizer-spectrum-compact.png");
+    button.emit_clicked();
+    settle();
+    details.vadjustment().set_value(0.0);
+    screenshot(app.window.upcast_ref(), "visualizer-mood-compact.png");
+    let settings = button.settings();
+    let animations = settings.is_gtk_enable_animations();
+    settings.set_gtk_enable_animations(false);
+    settle();
+    screenshot(app.window.upcast_ref(), "visualizer-mood-reduced.png");
+    settings.set_gtk_enable_animations(animations);
+    button.emit_clicked();
+    settle();
+    screenshot(app.window.upcast_ref(), "visualizer-artwork-compact.png");
+    assert_eq!(art.height(), 80);
+    let old_art = art.paintable();
+    app.next(false);
+    until(|| art.paintable().is_some() && art.paintable() != old_art);
+    until(|| {
+        let accent = app.theme.borrow().color("oap_accent");
+        accent[2] > accent[0] + 0.10
+    });
+    assert_eq!(
+        app.state.borrow().current.as_deref(),
+        Some("visualizernext")
+    );
+    assert_eq!(app.state.borrow().visualization, Visualization::AlbumArt);
+    settle();
+    screenshot(app.window.upcast_ref(), "visualizer-artwork-next.png");
     app.toggle_play();
     until(|| {
         app.visualization
@@ -1387,6 +1527,18 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     });
     assert!(!app.audio.borrow().playing);
     screenshot(app.window.upcast_ref(), "visualizer-paused.png");
+    app.state
+        .borrow_mut()
+        .tracks
+        .iter_mut()
+        .find(|t| t.id == "visualizernext")
+        .unwrap()
+        .artwork = None;
+    app.update_player();
+    assert!(art.paintable().is_none());
+    assert!(object::<gtk::Image>(&app.ui, "visualization_placeholder").is_visible());
+    until(|| app.theme.borrow().is_original());
+    screenshot(app.window.upcast_ref(), "visualizer-artwork-missing.png");
     button.emit_clicked();
     assert_eq!(app.state.borrow().visualization, Visualization::Waveform);
     assert!(!app.audio.borrow().playing);
@@ -1400,6 +1552,65 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     app.window.set_default_size(1240, 800);
     app.navigate(&page);
     app.update_player();
+    app.window
+        .settings()
+        .set_gtk_enable_animations(previous_animations);
+}
+
+fn skin_pixels(app: &Rc<App>) -> Vec<[u8; 3]> {
+    // Verify rendered backgrounds, not just the palette's internal values.
+    let paintable = gtk::WidgetPaintable::new(Some(&app.window));
+    settle();
+    let snapshot = gtk::Snapshot::new();
+    paintable.snapshot(
+        &snapshot,
+        app.window.width() as f64,
+        app.window.height() as f64,
+    );
+    let texture = app.window.renderer().unwrap().render_texture(
+        snapshot.to_node().unwrap(),
+        Some(&gtk::graphene::Rect::new(
+            0.0,
+            0.0,
+            app.window.width() as f32,
+            app.window.height() as f32,
+        )),
+    );
+    let stride = texture.width() as usize * 4;
+    let mut pixels = vec![0; stride * texture.height() as usize];
+    texture.download(&mut pixels, stride);
+    [
+        ("sidebar", "oap_rail"),
+        ("content", "oap_window"),
+        ("player_bar", "oap_rail"),
+    ]
+    .into_iter()
+    .map(|(id, role)| {
+        let widget: gtk::Widget = object(&app.ui, id);
+        assert!(
+            widget.is_mapped(),
+            "{id} must be visible for the palette check"
+        );
+        let bounds = widget.compute_bounds(&app.window).unwrap();
+        let x = bounds.x() as usize;
+        let x = if id == "content" { x - 8 } else { x + 8 };
+        let at = (bounds.y() as usize + 8) * stride + x * 4;
+        #[cfg(target_endian = "little")]
+        let rgb = [pixels[at + 2], pixels[at + 1], pixels[at]];
+        #[cfg(target_endian = "big")]
+        let rgb = [pixels[at + 1], pixels[at + 2], pixels[at + 3]];
+        let expected = app
+            .theme
+            .borrow()
+            .color(role)
+            .map(|c| (c * 255.0).round() as u8);
+        assert!(
+            rgb.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 4),
+            "{id}: {rgb:?}, expected {expected:?}"
+        );
+        rgb
+    })
+    .collect()
 }
 
 fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {

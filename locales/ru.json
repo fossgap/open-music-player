@@ -487,6 +487,8 @@
   "Replace queue and play album": "Заменить очередь и воспроизвести альбом",
   "Append album without interrupting playback": "Добавить альбом, не прерывая воспроизведение",
   "Live audio waveform — click to show spectrum": "Звуковая волна — нажмите, чтобы показать спектр",
-  "Audio spectrum — click to show waveform": "Спектр звука — нажмите, чтобы показать звуковую волну",
-  "Install the GStreamer spectrum plugin to use the spectrum visualizer.": "Установите плагин spectrum для GStreamer, чтобы использовать визуализатор спектра."
+  "Live audio waveform — click to show mood": "Звуковая волна — нажмите для показа настроения",
+  "Audio spectrum — click to show mood": "Аудиоспектр — нажмите для показа настроения",
+  "Mood theme — click to show album art theme": "Тема настроения — нажмите для темы обложки",
+  "Album art theme — click to show waveform": "Тема обложки — нажмите для показа звуковой волны"
 }

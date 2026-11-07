@@ -22,6 +22,7 @@ mod selection;
 mod spotify;
 #[cfg(test)]
 mod tests;
+mod theme;
 mod updates;
 mod visualization;
 mod youtube;
@@ -118,6 +119,7 @@ pub struct App {
     buffering_percent: Cell<i32>,
     buffering_notice: Cell<bool>,
     visualization: RefCell<visualization::Controls>,
+    theme: RefCell<theme::Theme>,
     backdrop: Cell<(f64, f64, f64)>,
     backdrop_art: RefCell<Option<gtk::gdk_pixbuf::Pixbuf>>,
     artwork_pending: RefCell<HashSet<String>>,
@@ -242,6 +244,7 @@ impl App {
             buffering_percent: Cell::new(100),
             buffering_notice: Cell::new(false),
             visualization: RefCell::new(Default::default()),
+            theme: RefCell::new(theme::Theme::new()),
             backdrop: Cell::new((0.17, 0.23, 0.17)),
             backdrop_art: RefCell::new(None),
             artwork_pending: RefCell::new(HashSet::new()),
@@ -581,21 +584,28 @@ impl App {
     }
 
     fn setup_drawing(self: &Rc<Self>) {
-        object::<gtk::DrawingArea>(&self.ui, "empty_art").set_draw_func(|_, cr, w, h| {
+        let weak = Rc::downgrade(self);
+        object::<gtk::DrawingArea>(&self.ui, "empty_art").set_draw_func(move |_, cr, w, h| {
+            let Some(app) = weak.upgrade() else { return };
+            let theme = app.theme.borrow();
             let (x, y) = (f64::from(w) / 2.0, f64::from(h) / 2.0);
-            cr.set_source_rgb(0.16, 0.21, 0.17);
+            let [r, g, b] = theme.color("oap_raised");
+            cr.set_source_rgb(r, g, b);
             cr.arc(x, y, 74.0, 0.0, std::f64::consts::TAU);
             let _ = cr.fill();
-            cr.set_source_rgb(0.24, 0.31, 0.24);
+            let [r, g, b] = theme.color("oap_outline");
+            cr.set_source_rgb(r, g, b);
             cr.set_line_width(1.0);
             for r in [36.0, 43.0, 50.0, 57.0, 64.0] {
                 cr.arc(x, y, r, 0.0, std::f64::consts::TAU);
                 let _ = cr.stroke();
             }
-            cr.set_source_rgb(0.76, 0.87, 0.64);
+            let [r, g, b] = theme.color("oap_accent");
+            cr.set_source_rgb(r, g, b);
             cr.arc(x, y, 27.0, 0.0, std::f64::consts::TAU);
             let _ = cr.fill();
-            cr.set_source_rgb(0.11, 0.15, 0.11);
+            let [r, g, b] = theme.color("oap_accent_ink");
+            cr.set_source_rgb(r, g, b);
             cr.arc(x, y, 5.0, 0.0, std::f64::consts::TAU);
             let _ = cr.fill();
         });
@@ -1189,6 +1199,7 @@ impl App {
     }
 
     pub fn shutdown(&self) {
+        self.theme.borrow_mut().detach();
         self.cancel_discography();
         self.files.watcher.stop();
         self.finish_trash();
@@ -1264,7 +1275,7 @@ impl App {
             self.button("repeat").remove_css_class("active");
         }
         let art = track.and_then(|t| t.artwork.as_deref());
-        for id in ["player_art", "detail_art"] {
+        for id in ["player_art", "detail_art", "visualization_art"] {
             self.set_art(&object::<gtk::Picture>(&self.ui, id), art);
         }
         self.set_art(&object::<gtk::Picture>(&self.mini_ui, "mini_art"), art);
@@ -1601,6 +1612,7 @@ impl App {
             }
         }
         self.prepare_transition();
+        self.update_music_theme();
         self.update_buffering_notice();
         let audio = self.audio.borrow();
         let duration = if audio.loaded {

@@ -183,5 +183,6 @@ impl App {
         self.backdrop
             .set(cover.map(|c| c.color).unwrap_or((0.17, 0.23, 0.17)));
         object::<gtk::DrawingArea>(&self.ui, "detail_backdrop").queue_draw();
+        self.update_visualization_art();
     }
 }

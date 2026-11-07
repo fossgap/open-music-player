@@ -487,6 +487,8 @@
   "Replace queue and play album": "キューを置き換えてアルバムを再生",
   "Append album without interrupting playback": "再生を中断せずにアルバムを追加",
   "Live audio waveform — click to show spectrum": "音声波形 — クリックしてスペクトラムを表示",
-  "Audio spectrum — click to show waveform": "音声スペクトラム — クリックして波形を表示",
-  "Install the GStreamer spectrum plugin to use the spectrum visualizer.": "スペクトラム表示を使用するには、GStreamer の spectrum プラグインをインストールしてください。"
+  "Live audio waveform — click to show mood": "リアルタイム波形 — クリックでムードを表示",
+  "Audio spectrum — click to show mood": "オーディオスペクトラム — クリックでムードを表示",
+  "Mood theme — click to show album art theme": "ムードテーマ — クリックでアルバムアートのテーマを表示",
+  "Album art theme — click to show waveform": "アルバムアートのテーマ — クリックで波形を表示"
 }

@@ -850,11 +850,11 @@
                                 <property name="vexpand">true</property>
                                 <property name="hscrollbar-policy">never</property>
                                 <property name="child">
-                                  <object class="GtkBox">
+                                  <object class="GtkBox" id="detail_content">
                                     <property name="orientation">vertical</property>
                                     <property name="spacing">12</property>
                                     <child>
-                                      <object class="GtkOverlay">
+                                      <object class="GtkOverlay" id="detail_artwork">
                                         <property name="child">
                                           <object class="GtkDrawingArea" id="detail_backdrop">
                                             <property name="content-height">200</property>
@@ -940,8 +940,34 @@
                                         <property name="action-name">app.toggle-visualization</property>
                                         <style><class name="visualization-button"/></style>
                                         <property name="child">
-                                          <object class="GtkDrawingArea" id="spectrum">
-                                            <property name="content-height">64</property>
+                                          <object class="GtkOverlay">
+                                            <property name="child">
+                                              <object class="GtkDrawingArea" id="spectrum">
+                                                <property name="content-height">64</property>
+                                              </object>
+                                            </property>
+                                            <child type="overlay">
+                                              <object class="GtkPicture" id="visualization_art">
+                                                <property name="content-fit">contain</property>
+                                                <property name="can-shrink">true</property>
+                                                <property name="can-target">false</property>
+                                                <property name="halign">center</property>
+                                                <property name="valign">center</property>
+                                                <property name="visible">false</property>
+                                                <style><class name="cover"/></style>
+                                              </object>
+                                            </child>
+                                            <child type="overlay">
+                                              <object class="GtkImage" id="visualization_placeholder">
+                                                <property name="icon-name">audio-x-generic-symbolic</property>
+                                                <property name="pixel-size">48</property>
+                                                <property name="can-target">false</property>
+                                                <property name="halign">center</property>
+                                                <property name="valign">center</property>
+                                                <property name="visible">false</property>
+                                                <style><class name="muted"/></style>
+                                              </object>
+                                            </child>
                                           </object>
                                         </property>
                                       </object>

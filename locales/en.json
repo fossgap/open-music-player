@@ -487,6 +487,8 @@
   "Replace queue and play album": "Replace queue and play album",
   "Append album without interrupting playback": "Append album without interrupting playback",
   "Live audio waveform — click to show spectrum": "Live audio waveform — click to show spectrum",
-  "Audio spectrum — click to show waveform": "Audio spectrum — click to show waveform",
-  "Install the GStreamer spectrum plugin to use the spectrum visualizer.": "Install the GStreamer spectrum plugin to use the spectrum visualizer."
+  "Live audio waveform — click to show mood": "Live audio waveform — click to show mood",
+  "Audio spectrum — click to show mood": "Audio spectrum — click to show mood",
+  "Mood theme — click to show album art theme": "Mood theme — click to show album art theme",
+  "Album art theme — click to show waveform": "Album art theme — click to show waveform"
 }

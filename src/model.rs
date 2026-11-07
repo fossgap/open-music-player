@@ -136,9 +136,22 @@ pub enum ReplayGain {
 #[serde(rename_all = "snake_case")]
 pub enum Visualization {
     Spectrum,
+    Mood,
+    AlbumArt,
     #[default]
     #[serde(other)]
     Waveform,
+}
+
+impl Visualization {
+    pub fn next(self, spectrum_available: bool) -> Self {
+        match self {
+            Self::Waveform if spectrum_available => Self::Spectrum,
+            Self::Waveform | Self::Spectrum => Self::Mood,
+            Self::Mood => Self::AlbumArt,
+            Self::AlbumArt => Self::Waveform,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -543,10 +556,22 @@ mod tests {
     fn visualization_preference_defaults_and_survives_storage() {
         let mut state: State = serde_json::from_str("{}").unwrap();
         assert_eq!(state.visualization, Visualization::Waveform);
-        state.visualization = Visualization::Spectrum;
-        let restored: State =
-            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
-        assert_eq!(restored.visualization, Visualization::Spectrum);
+        let mut mode = Visualization::Waveform;
+        for expected in [
+            Visualization::Spectrum,
+            Visualization::Mood,
+            Visualization::AlbumArt,
+            Visualization::Waveform,
+        ] {
+            mode = mode.next(true);
+            assert_eq!(mode, expected);
+            state.visualization = mode;
+            let restored: State =
+                serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+            assert_eq!(restored.visualization, mode);
+        }
+        assert_eq!(Visualization::Waveform.next(false), Visualization::Mood);
+        assert_eq!(Visualization::Mood.next(false), Visualization::AlbumArt);
         let future: State = serde_json::from_str(r#"{"visualization":"future-mode"}"#).unwrap();
         assert_eq!(future.visualization, Visualization::Waveform);
     }

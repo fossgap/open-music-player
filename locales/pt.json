@@ -487,6 +487,8 @@
   "Replace queue and play album": "Substituir a fila e reproduzir o álbum",
   "Append album without interrupting playback": "Adicionar o álbum sem interromper a reprodução",
   "Live audio waveform — click to show spectrum": "Forma de onda ao vivo — clique para mostrar o espectro",
-  "Audio spectrum — click to show waveform": "Espectro de áudio — clique para mostrar a forma de onda",
-  "Install the GStreamer spectrum plugin to use the spectrum visualizer.": "Instale o plugin spectrum do GStreamer para usar o visualizador de espectro."
+  "Live audio waveform — click to show mood": "Forma de onda de áudio em direto — clique para mostrar o ambiente",
+  "Audio spectrum — click to show mood": "Espetro de áudio — clique para mostrar o ambiente",
+  "Mood theme — click to show album art theme": "Tema de ambiente — clique para mostrar o tema da capa do álbum",
+  "Album art theme — click to show waveform": "Tema da capa do álbum — clique para mostrar a forma de onda"
 }
