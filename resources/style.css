@@ -72,6 +72,19 @@ scale trough { background: #3c4941; min-height: 4px; border-radius: 10px; }
 scale highlight { background: #c2dfa3; min-height: 4px; border-radius: 10px; }
 scale slider { background: #e3efda; min-width: 12px; min-height: 12px; margin: -4px; border: 0; box-shadow: none; }
 .detail-panel { background: #202923; border-left: 1px solid #344037; padding: 20px; }
+.detail-tabs button { background: transparent; color: #adb9b0; border-radius: 0; border-bottom: 2px solid transparent; padding: 8px 4px; min-width: 0; font-size: 12px; }
+.detail-tabs button:hover { background: #29332c; color: #f1f3eb; }
+.detail-tabs button:checked { background: transparent; color: #c2dfa3; border-bottom-color: #c2dfa3; }
+.information-summary { line-height: 1.35; }
+button.summary-toggle { padding: 4px 0; color: #c2dfa3; font-size: 12px; }
+button.summary-toggle:checked { background: transparent; }
+.discography-list, .discography-list > row { background: transparent; color: #f1f3eb; }
+.discography-list > row { padding: 8px 4px; border-radius: 8px; }
+.discography-list > row:hover { background: #29332c; }
+.discography-list > row:selected { background: #34412f; }
+.discography-list > row:focus-visible { outline: 2px solid #c2dfa3; outline-offset: -2px; }
+button.discography-action { background: transparent; padding: 4px; min-width: 20px; min-height: 20px; }
+button.discography-action:hover { background: #354239; }
 .lyrics { color: #d0dacb; font-size: 15px; line-height: 1.6; }
 .timed-lyrics, .timed-lyrics text { background: transparent; color: #d0dacb; }
 .timed-lyrics text selection { background: #526345; color: #fff; }

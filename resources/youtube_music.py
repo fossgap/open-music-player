@@ -186,6 +186,47 @@ def track(item):
     }
 
 
+def album_tracks(client, request):
+    wanted = request["album"]
+    artist, title = wanted["artist"].strip(), wanted["title"].strip()
+    if not artist or not title or len(artist) + len(title) > 500:
+        raise BridgeError("Album lookup needs an artist and album name.")
+
+    def normalize(value):
+        return "".join(c for c in value.lower() if c.isalnum())
+
+    def matches(item):
+        return normalize(item.get("title", "")) == normalize(title) and any(
+            normalize(a.get("name", "")) == normalize(artist) for a in item.get("artists") or []
+        )
+
+    candidates = [item for item in client.search(f"{artist} {title}", filter="albums", limit=20, ignore_spelling=True)
+                  if matches(item) and re.fullmatch(r"[A-Za-z0-9_-]{2,200}", item.get("browseId", ""))]
+    year = wanted.get("date", "")[:4]
+    candidates.sort(key=lambda item: not (year and str(item.get("year", "")).startswith(year)))
+    for candidate in candidates[:3]:
+        data = client.get_album(candidate["browseId"])
+        if not matches(data):
+            continue
+        entries = data.get("tracks") or []
+        if len(entries) > 1000 or (data.get("trackCount") or 0) > len(entries):
+            raise BridgeError("YouTube Music returned an incomplete album. Try again.")
+        tracks = []
+        for index, entry in enumerate(entries, 1):
+            item = dict(entry)
+            item["album"] = {"name": data["title"]}
+            item["artists"] = item.get("artists") or data.get("artists")
+            item["thumbnails"] = item.get("thumbnails") or data.get("thumbnails")
+            value = track(item)
+            if value:
+                value["number"] = index
+                value["album_artist"] = ", ".join(a["name"] for a in data.get("artists") or [] if a.get("name"))
+                tracks.append(value)
+        if tracks:
+            return tracks
+    return []
+
+
 def remote_playlist(client, playlist_id):
     if not PLAYLIST_ID.fullmatch(playlist_id):
         raise BridgeError("Invalid YouTube Music playlist.")
@@ -323,6 +364,8 @@ def dispatch(request):
     if operation == "resolve":
         return resolve(cookies, request["video_id"])
     client = music_client(cookies)
+    if operation == "album":
+        return album_tracks(client, request)
     if operation == "search":
         query = request.get("query", "").strip()
         if not query or len(query) > 500:

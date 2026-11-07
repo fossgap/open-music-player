@@ -471,6 +471,7 @@ impl App {
                 }
             }
             Reply::Disconnected(result) => {
+                self.cancel_discography();
                 self.spotify.busy.set(false);
                 self.spotify.searching.set(false);
                 self.spotify.connecting.set(false);
@@ -505,6 +506,10 @@ impl App {
                         self.notice(&error, true, false);
                     }
                 }
+            }
+            Reply::Album(id, result) => {
+                self.handle_discography(id, super::discography::Provider::Spotify, result);
+                return;
             }
             Reply::Synced(account, before, result) => {
                 self.spotify.busy.set(false);

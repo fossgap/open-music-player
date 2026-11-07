@@ -1,6 +1,6 @@
 use super::*;
 
-fn settle() {
+pub(super) fn settle() {
     let until = Instant::now() + Duration::from_millis(350);
     while Instant::now() < until {
         let context = glib::MainContext::default();
@@ -53,6 +53,7 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     let mut state = State {
         fetch_covers: false,
         fetch_lyrics: false,
+        fetch_information: false,
         ..State::default()
     };
     for i in 0..150 {
@@ -76,6 +77,14 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     application.register(None::<&gio::Cancellable>).unwrap();
     let app = App::new(&application, state).unwrap();
     settle();
+    if std::env::var_os("OPEN_AUDIO_TEST_INFORMATION_ONLY").is_some() {
+        exercise_information(&app, &audio);
+        super::discography::exercise(&app, &audio);
+        app.shutdown();
+        app.window.destroy();
+        object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+        return;
+    }
     if std::env::var_os("OPEN_AUDIO_TEST_LIBRARY_DETAILS_ONLY").is_some() {
         exercise_library_details(&app, &audio);
         app.shutdown();
@@ -814,7 +823,7 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
         app.toggle_details();
     }
     assert!(object::<gtk::ScrolledWindow>(&app.ui, "lyrics_scroller").is_visible());
-    assert!(object::<gtk::LinkButton>(&app.ui, "lyrics_source").is_visible());
+    assert!(app.ui.object::<gtk::Widget>("lyrics_source").is_none());
     assert!(!app.button("lyrics_retry").is_visible());
     assert!(
         app.audio.borrow().playing,
@@ -1209,10 +1218,424 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     exercise_library_controls(&app, directory.path(), &audio);
     exercise_library_details(&app, &audio);
     exercise_downloads_and_timing(&app, &audio);
+    exercise_information(&app, &audio);
+    super::discography::exercise(&app, &audio);
     app.shutdown();
     drop(spotify_runtime);
     app.window.destroy();
     object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+}
+
+fn exercise_information(app: &Rc<App>, tone: &std::path::Path) {
+    let mut routes = enrichment::information_tests::routes();
+    for (path, _, _, body) in &mut routes {
+        if path.starts_with("/wiki?") {
+            let mut value: serde_json::Value = serde_json::from_slice(body).unwrap();
+            let extract = &mut value["query"]["pages"][0]["extract"];
+            *extract = format!(
+                "{} {}",
+                extract.as_str().unwrap(),
+                "Their work brings together piano, strings and field recordings. Each session develops a theme through patient improvisation, with the musicians recording together in one room. The resulting arrangements leave room for silence and the natural character of each instrument."
+            ).into();
+            *body = serde_json::to_vec(&value).unwrap();
+        }
+    }
+    let fixture = enrichment::tests::Fixture::new(routes);
+    let cache = tempfile::tempdir().unwrap();
+    app.stop_playback();
+    *app.metadata.borrow_mut() = enrichment::Service::new(fixture.config(cache.path()));
+    let mut track = enrichment::tests::song();
+    track.uri = gio::File::for_path(tone).uri().into();
+    track.id = "informationfixture".into();
+    track.artist.clear();
+    let cover =
+        gtk::gdk_pixbuf::Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 64, 64).unwrap();
+    cover.fill(0x8a694aff);
+    let cover_path = cache.path().join("album.png");
+    cover.savev(&cover_path, "png", &[]).unwrap();
+    track.artwork = Some(cover_path.to_string_lossy().into());
+    {
+        let mut state = app.state.borrow_mut();
+        state.fetch_information = true;
+        state.fetch_lyrics = false;
+        state.fetch_covers = false;
+        state.merge(vec![track]);
+    }
+    app.window.set_default_size(1280, 820);
+    let start = Instant::now();
+    app.play_track("informationfixture", None);
+    assert!(
+        start.elapsed() < Duration::from_secs(1),
+        "Online information must not block playback"
+    );
+    until(|| {
+        app.state
+            .borrow()
+            .track("informationfixture")
+            .unwrap()
+            .music_info
+            .is_some()
+    });
+    assert_eq!(
+        app.state
+            .borrow()
+            .track("informationfixture")
+            .unwrap()
+            .artist,
+        "The Test Ensemble"
+    );
+    assert!(app.audio.borrow().playing);
+    if !object::<gtk::Revealer>(&app.ui, "detail_revealer").is_visible() {
+        app.toggle_details();
+    }
+    let stack: gtk::Stack = object(&app.ui, "detail_stack");
+    assert_eq!(stack.visible_child_name().as_deref(), Some("now-playing"));
+    let tabs: gtk::StackSwitcher = object(&app.ui, "detail_tabs");
+    let information_tab = tabs
+        .first_child()
+        .unwrap()
+        .next_sibling()
+        .unwrap()
+        .downcast::<gtk::ToggleButton>()
+        .unwrap();
+    information_tab.emit_clicked();
+    settle();
+    assert_eq!(stack.visible_child_name().as_deref(), Some("information"));
+    assert!(information_tab.grab_focus());
+    assert!(!object::<gtk::Label>(&app.ui, "detail_title").is_mapped());
+    assert!(!object::<gtk::Label>(&app.ui, "detail_codec").is_mapped());
+    assert!(object::<gtk::Label>(&app.ui, "info_artist_summary").is_mapped());
+    until(|| {
+        object::<gtk::Picture>(&app.ui, "info_album_art")
+            .paintable()
+            .is_some()
+    });
+    for prefix in ["info_artist", "info_album"] {
+        let more: gtk::ToggleButton = object(&app.ui, &format!("{prefix}_more"));
+        let summary: gtk::Label = object(&app.ui, &format!("{prefix}_summary"));
+        assert!(more.is_visible() && !more.is_active());
+        let preview = summary.text();
+        assert!(preview.ends_with('…'));
+        more.emit_clicked();
+        assert!(summary.text().len() > preview.len());
+        app.update_metadata();
+        assert!(
+            more.is_active(),
+            "Metadata ticks must preserve expanded summaries"
+        );
+        more.emit_clicked();
+        assert_eq!(summary.text(), preview);
+    }
+    assert!(
+        object::<gtk::Label>(&app.ui, "info_artist_summary")
+            .text()
+            .contains("independent group")
+    );
+    assert!(
+        object::<gtk::Label>(&app.ui, "info_album_date")
+            .text()
+            .contains("2020-05-06")
+    );
+    assert!(
+        app.ui
+            .object::<gtk::Widget>("information_credits")
+            .is_none()
+    );
+    let summary: gtk::Label = object(&app.ui, "info_artist_summary");
+    assert!(
+        summary
+            .tooltip_text()
+            .unwrap()
+            .contains("https://en.wikipedia.org/wiki/The_Test_Ensemble")
+    );
+    assert_eq!(summary.extra_menu().unwrap().n_items(), 2);
+    let details: gtk::ScrolledWindow = object(&app.ui, "information_scroller");
+    let scroll_to = |id: &str| {
+        let bounds = object::<gtk::Widget>(&app.ui, id)
+            .compute_bounds(&details)
+            .unwrap();
+        details
+            .vadjustment()
+            .set_value(details.vadjustment().value() + f64::from(bounds.y()) - 12.0);
+        settle();
+    };
+    details.vadjustment().set_value(0.0);
+    settle();
+    screenshot(app.window.upcast_ref(), "artist-album-information-wide.png");
+    scroll_to("info_album_box");
+    let before = details.vadjustment().value();
+    app.update_metadata();
+    settle();
+    assert!((details.vadjustment().value() - before).abs() < 1.0);
+    assert_eq!(stack.visible_child_name().as_deref(), Some("information"));
+    stack.set_visible_child_name("now-playing");
+    settle();
+    let playing: gtk::ScrolledWindow = object(&app.ui, "detail_scroller");
+    playing
+        .vadjustment()
+        .set_value(playing.vadjustment().upper());
+    settle();
+    let playing_scroll = playing.vadjustment().value();
+    stack.set_visible_child_name("audio");
+    settle();
+    assert!(object::<gtk::Label>(&app.ui, "detail_codec").is_mapped());
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "audio_title").text(),
+        "Evening Window"
+    );
+    screenshot(app.window.upcast_ref(), "audio-tab-wide.png");
+    stack.set_visible_child_name("information");
+    settle();
+    assert!(
+        (details.vadjustment().value() - before).abs() < 1.0,
+        "Tab switching must preserve reading position"
+    );
+    stack.set_visible_child_name("now-playing");
+    settle();
+    assert!((playing.vadjustment().value() - playing_scroll).abs() < 1.0);
+    playing.vadjustment().set_value(0.0);
+    settle();
+    screenshot(app.window.upcast_ref(), "now-playing-tab-wide.png");
+    assert_eq!(
+        app.state.borrow().current.as_deref(),
+        Some("informationfixture")
+    );
+    assert!(
+        app.audio.borrow().playing,
+        "Tabs must not interrupt playback"
+    );
+    stack.set_visible_child_name("information");
+    settle();
+    assert!(app.button("discography_more").is_visible());
+    app.button("discography_more").emit_clicked();
+    until(|| {
+        app.state
+            .borrow()
+            .track("informationfixture")
+            .unwrap()
+            .music_info
+            .as_ref()
+            .unwrap()
+            .discography
+            .entries
+            .len()
+            == 3
+    });
+    assert!(!app.button("discography_more").is_visible());
+    assert_eq!(
+        object::<gtk::Label>(&app.ui, "discography_count").text(),
+        "3 / 3"
+    );
+    settle();
+    let releases: gtk::ScrolledWindow = object(&app.ui, "discography_scroller");
+    assert!(
+        releases.vadjustment().upper() <= releases.vadjustment().page_size() + 1.0,
+        "Short discographies must be fully visible without nested scrolling"
+    );
+    scroll_to("info_album_box");
+    screenshot(app.window.upcast_ref(), "album-discography-wide.png");
+    object::<gtk::ScrolledWindow>(&app.ui, "sidebar_scroller").set_visible(false);
+    app.window.set_default_size(820, 650);
+    settle();
+    app.window.set_default_size(800, 650);
+    settle();
+    assert!(
+        app.window.width() <= 820,
+        "Information must fit the compact panel"
+    );
+    details.vadjustment().set_value(0.0);
+    settle();
+    screenshot(
+        app.window.upcast_ref(),
+        "artist-album-information-compact.png",
+    );
+    scroll_to("info_album_box");
+    screenshot(app.window.upcast_ref(), "album-discography-compact.png");
+    scroll_to("discography_section");
+    screenshot(app.window.upcast_ref(), "discography-tab-compact.png");
+    // Longer translated tab names and long metadata must wrap without growing the window.
+    let tab_titles = |titles: [&str; 3]| {
+        let mut child = tabs.first_child();
+        for title in titles {
+            let button = child.unwrap().downcast::<gtk::ToggleButton>().unwrap();
+            child = button.next_sibling();
+            // Simulate translated text with the same wrapping applied during setup.
+            button
+                .child()
+                .unwrap()
+                .downcast::<gtk::Label>()
+                .unwrap()
+                .set_text(title);
+        }
+    };
+    tab_titles(["Aktuelle Wiedergabe", "Künstler & Album", "Audiodetails"]);
+    let original_info = app
+        .state
+        .borrow()
+        .track("informationfixture")
+        .unwrap()
+        .music_info
+        .clone();
+    {
+        let mut state = app.state.borrow_mut();
+        let info = state
+            .tracks
+            .iter_mut()
+            .find(|t| t.id == "informationfixture")
+            .unwrap()
+            .music_info
+            .as_mut()
+            .unwrap();
+        info.artist.as_mut().unwrap().name =
+            "The Test Ensemble with the Orchestra of Very Long Artist Names".into();
+        info.album.as_mut().unwrap().name = "静かな音楽と長いアルバム名".repeat(6);
+    }
+    app.update_metadata();
+    details.vadjustment().set_value(0.0);
+    settle();
+    assert!(app.window.width() <= 820);
+    screenshot(app.window.upcast_ref(), "information-long-text-compact.png");
+    tab_titles(["Now playing", "Artist & album", "Audio details"]);
+    app.state
+        .borrow_mut()
+        .tracks
+        .iter_mut()
+        .find(|t| t.id == "informationfixture")
+        .unwrap()
+        .music_info = original_info;
+    app.update_metadata();
+    stack.set_visible_child_name("audio");
+    settle();
+    screenshot(app.window.upcast_ref(), "audio-tab-compact.png");
+    stack.set_visible_child_name("now-playing");
+    settle();
+    screenshot(app.window.upcast_ref(), "now-playing-tab-compact.png");
+    stack.set_visible_child_name("information");
+
+    app.settings();
+    settle();
+    let settings = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|w| w.downcast::<gtk::Window>().ok())
+        .find(|w| w.is_visible() && w.title().as_deref() == Some("Settings"))
+        .unwrap();
+    let switch = descendant(settings.upcast_ref(), "fetch_information")
+        .unwrap()
+        .downcast::<gtk::Switch>()
+        .unwrap();
+    assert!(switch.is_active());
+    switch.set_active(false);
+    assert!(!app.state.borrow().fetch_information);
+    assert!(
+        object::<gtk::Label>(&app.ui, "info_artist_summary")
+            .text()
+            .contains("independent group")
+    );
+    let requests = fixture.count();
+    let mut other = enrichment::tests::song();
+    other.uri = gio::File::for_path(tone).uri().into();
+    other.id = "informationother".into();
+    other.title = "Another song".into();
+    app.state.borrow_mut().merge(vec![other]);
+    app.play_track("informationother", None);
+    settle();
+    assert_eq!(
+        fixture.count(),
+        requests,
+        "Disabled lookups must not send new requests"
+    );
+    assert!(
+        object::<gtk::Label>(&app.ui, "information_status")
+            .text()
+            .contains("is off")
+    );
+    settings.close();
+
+    let missing = enrichment::tests::Fixture::new(vec![
+        (
+            "/mb/release-group/".into(),
+            200,
+            String::new(),
+            br#"{"count":0,"release-groups":[]}"#.to_vec(),
+        ),
+        (
+            "/mb/artist/".into(),
+            200,
+            String::new(),
+            br#"{"count":0,"artists":[]}"#.to_vec(),
+        ),
+    ]);
+    let missing_cache = tempfile::tempdir().unwrap();
+    *app.metadata.borrow_mut() = enrichment::Service::new(missing.config(missing_cache.path()));
+    app.state.borrow_mut().fetch_information = true;
+    app.schedule_metadata();
+    until(|| {
+        object::<gtk::Label>(&app.ui, "information_status")
+            .text()
+            .contains("No unambiguous")
+    });
+    assert!(app.button("information_retry").is_sensitive());
+    let requests = missing.count();
+    app.button("information_retry").emit_clicked();
+    until(|| missing.count() > requests);
+    until(|| app.button("information_retry").is_sensitive());
+    screenshot(app.window.upcast_ref(), "information-missing-compact.png");
+    let offline = enrichment::tests::Fixture::new(vec![(
+        "/mb/release-group/".into(),
+        503,
+        "Retry-After: 60\r\n".into(),
+        b"Busy".to_vec(),
+    )]);
+    let offline_cache = tempfile::tempdir().unwrap();
+    *app.metadata.borrow_mut() = enrichment::Service::new(offline.config(offline_cache.path()));
+    app.schedule_metadata();
+    until(|| {
+        object::<gtk::Label>(&app.ui, "information_status")
+            .text()
+            .contains("provider is busy")
+    });
+    assert!(!app.button("information_retry").is_sensitive());
+    assert!(app.audio.borrow().playing);
+    screenshot(app.window.upcast_ref(), "information-error-compact.png");
+    app.state.borrow_mut().fetch_information = false;
+    app.metadata
+        .borrow_mut()
+        .cancel(enrichment::Field::Information);
+    app.stop_playback();
+    {
+        let mut state = app.state.borrow_mut();
+        state
+            .tracks
+            .iter_mut()
+            .find(|t| t.id == "informationother")
+            .unwrap()
+            .kind = Kind::Podcast;
+    }
+    app.update_player();
+    assert!(
+        object::<gtk::Label>(&app.ui, "information_status")
+            .text()
+            .contains("available for music tracks")
+    );
+    assert!(!app.button("information_retry").is_visible());
+    app.state
+        .borrow_mut()
+        .forget_many(["informationfixture", "informationother"]);
+    app.state.borrow_mut().current = None;
+    app.update_player();
+    settle();
+    assert!(
+        object::<gtk::Label>(&app.ui, "information_status")
+            .text()
+            .contains("Play a music track")
+    );
+    stack.set_visible_child_name("audio");
+    settle();
+    assert!(object::<gtk::Label>(&app.ui, "audio_empty").is_mapped());
+    assert!(!object::<gtk::Box>(&app.ui, "audio_details").is_visible());
+    stack.set_visible_child_name("now-playing");
+    app.window.set_default_size(1240, 800);
+    app.update_player();
 }
 
 fn exercise_library_details(app: &Rc<App>, tone: &std::path::Path) {
@@ -1260,6 +1683,8 @@ fn exercise_library_details(app: &Rc<App>, tone: &std::path::Path) {
     if !object::<gtk::Revealer>(&app.ui, "detail_revealer").is_visible() {
         app.toggle_details();
     }
+    let stack: gtk::Stack = object(&app.ui, "detail_stack");
+    stack.set_visible_child_name("audio");
     settle();
     assert_eq!(
         object::<gtk::Label>(&app.ui, "detail_codec").text(),
@@ -1278,6 +1703,8 @@ fn exercise_library_details(app: &Rc<App>, tone: &std::path::Path) {
         "16 bit"
     );
     screenshot(app.window.upcast_ref(), "playback-details-wide.png");
+    stack.set_visible_child_name("now-playing");
+    settle();
     let view: gtk::TextView = object(&app.ui, "lyrics_timed");
     let current_line = || {
         let buffer = view.buffer();
@@ -2282,7 +2709,7 @@ fn exercise_file_manager(app: &Rc<App>, track: &str, path: &std::path::Path) {
     connection.unregister_object(registration).unwrap();
 }
 
-fn screenshot(window: &gtk::Window, name: &str) {
+pub(super) fn screenshot(window: &gtk::Window, name: &str) {
     let Some(directory) = std::env::var_os("OPEN_AUDIO_TEST_SCREENSHOTS") else {
         return;
     };

@@ -1,4 +1,5 @@
 use super::*;
+mod information;
 use crate::storage;
 use gtk::gdk_pixbuf::prelude::*;
 use reqwest::{StatusCode, blocking::Client as HttpClient};
@@ -16,6 +17,8 @@ pub struct Config {
     pub musicbrainz: String,
     pub covers: String,
     pub lrclib: String,
+    pub wikipedia: String,
+    pub wikidata: String,
     pub interval: Duration,
 }
 impl Default for Config {
@@ -28,6 +31,10 @@ impl Default for Config {
                 .unwrap_or_else(|_| "https://coverartarchive.org/".into()),
             lrclib: std::env::var("OPEN_AUDIO_LRCLIB_API")
                 .unwrap_or_else(|_| "https://lrclib.net/api/".into()),
+            wikipedia: std::env::var("OPEN_AUDIO_WIKIPEDIA_API")
+                .unwrap_or_else(|_| "https://en.wikipedia.org/w/api.php".into()),
+            wikidata: std::env::var("OPEN_AUDIO_WIKIDATA_API")
+                .unwrap_or_else(|_| "https://www.wikidata.org/w/api.php".into()),
             interval: Duration::from_millis(1100),
         }
     }
@@ -38,14 +45,32 @@ struct Cached {
     checked: u64,
     value: Option<Found>,
 }
+pub(super) struct Pacing {
+    next: Instant,
+    cooldown: SystemTime,
+}
+impl Default for Pacing {
+    fn default() -> Self {
+        Self {
+            next: Instant::now(),
+            cooldown: UNIX_EPOCH,
+        }
+    }
+}
 pub(super) struct Client {
     config: Config,
     http: Result<HttpClient, String>,
     next: Instant,
-    cooldown: SystemTime,
+    cooldowns: HashMap<String, SystemTime>,
+    pacing: Arc<std::sync::Mutex<Pacing>>,
+    refresh_information: bool,
 }
 impl Client {
+    #[cfg(test)]
     pub fn new(config: Config) -> Self {
+        Self::with_pacing(config, Arc::new(std::sync::Mutex::new(Pacing::default())))
+    }
+    pub fn with_pacing(config: Config, pacing: Arc<std::sync::Mutex<Pacing>>) -> Self {
         let http = HttpClient::builder()
             .user_agent(concat!(
                 "OpenAudioPlayer/",
@@ -63,7 +88,9 @@ impl Client {
             config,
             http,
             next: Instant::now(),
-            cooldown: UNIX_EPOCH,
+            cooldowns: HashMap::new(),
+            pacing,
+            refresh_information: false,
         }
     }
     pub fn lookup(
@@ -79,7 +106,10 @@ impl Client {
                     let age = now().saturating_sub(cached.checked);
                     if cached.version == 1
                         && cached.value.as_ref().map_or(age < 7 * 86400, |v| {
-                            v.field() == query.field && v.available()
+                            v.field() == query.field
+                                && v.available()
+                                && (!matches!(query.field, Field::Information | Field::Discography)
+                                    || age < 30 * 86400)
                         })
                     {
                         return Ok(cached.value);
@@ -87,9 +117,18 @@ impl Client {
                 }
             }
         }
+        self.refresh_information = force;
         let value = match query.field {
             Field::Cover => self.cover(query, cancelled)?,
             Field::Lyrics => self.lyrics(query, cancelled)?,
+            Field::Information => self
+                .information(query, cancelled)?
+                .map(|info| Found::Information(Box::new(info))),
+            Field::Discography => Some(Found::Discography(self.discography(
+                query.artist_id.as_deref().unwrap_or(""),
+                query.offset,
+                cancelled,
+            )?)),
         };
         if cancelled() {
             return Err(Failure::new("Lookup cancelled.", 0));
@@ -114,10 +153,31 @@ impl Client {
         max: u64,
         cancelled: &impl Fn() -> bool,
     ) -> Result<Option<Vec<u8>>, Failure> {
-        if SystemTime::now() < self.cooldown {
+        let provider = [
+            ("musicbrainz", &self.config.musicbrainz),
+            ("covers", &self.config.covers),
+            ("lrclib", &self.config.lrclib),
+            ("wikipedia", &self.config.wikipedia),
+            ("wikidata", &self.config.wikidata),
+        ]
+        .into_iter()
+        .find(|(_, base)| {
+            crate::services::http_url(base).is_ok_and(|base| {
+                url.origin() == base.origin()
+                    && (url.path() == base.path()
+                        || (base.path().ends_with('/') && url.path().starts_with(base.path())))
+            })
+        })
+        .map(|(name, _)| name.to_string())
+        .unwrap_or_else(|| url.origin().ascii_serialization());
+        if let Some(&cooldown) = self
+            .cooldowns
+            .get(&provider)
+            .filter(|&&time| SystemTime::now() < time)
+        {
             return Err(Failure {
                 message: "The provider is busy. Try again later.".into(),
-                retry_at: self.cooldown,
+                retry_at: cooldown,
             });
         }
         while Instant::now() < self.next {
@@ -132,6 +192,29 @@ impl Client {
         }
         if cancelled() {
             return Err(Failure::new("Lookup cancelled.", 0));
+        }
+        // Cover and information workers share MusicBrainz's one-request-per-second budget.
+        let musicbrainz = endpoint(&self.config.musicbrainz, "")
+            .is_ok_and(|base| url.origin() == base.origin() && url.path().starts_with(base.path()));
+        if musicbrainz {
+            loop {
+                if cancelled() {
+                    return Err(Failure::new("Lookup cancelled.", 0));
+                }
+                let mut pacing = self.pacing.lock().unwrap_or_else(|e| e.into_inner());
+                if SystemTime::now() < pacing.cooldown {
+                    return Err(Failure {
+                        message: "The provider is busy. Try again later.".into(),
+                        retry_at: pacing.cooldown,
+                    });
+                }
+                if Instant::now() >= pacing.next {
+                    pacing.next = Instant::now() + self.config.interval;
+                    break;
+                }
+                drop(pacing);
+                std::thread::sleep(Duration::from_millis(25));
+            }
         }
         let response = self
             .http
@@ -160,10 +243,17 @@ impl Client {
                     .subsec_nanos() as u64
                     % 750,
             );
-            self.cooldown = SystemTime::now() + delay + jitter;
+            let cooldown = SystemTime::now() + delay + jitter;
+            self.cooldowns.insert(provider, cooldown);
+            if musicbrainz {
+                self.pacing
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .cooldown = cooldown;
+            }
             return Err(Failure {
                 message: "The provider is busy. Try again later.".into(),
-                retry_at: self.cooldown,
+                retry_at: cooldown,
             });
         }
         if response.status() == StatusCode::NOT_FOUND {

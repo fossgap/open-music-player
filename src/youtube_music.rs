@@ -219,6 +219,30 @@ pub fn search(account: Option<&YoutubeAccount>, query: &str) -> Result<Vec<Track
     let songs: Vec<Song> = request(account, json!({"op":"search","query":query}), 90)?;
     songs.into_iter().map(Song::into_track).collect()
 }
+pub fn album(
+    account: Option<&YoutubeAccount>,
+    query: &crate::albums::Query,
+    cancelled: impl Fn() -> bool,
+) -> Result<Vec<Track>, String> {
+    #[derive(Deserialize)]
+    struct AlbumSong {
+        #[serde(flatten)]
+        song: Song,
+        number: u32,
+        album_artist: String,
+    }
+    let songs: Vec<AlbumSong> =
+        request_cancellable(account, json!({"op":"album","album":query}), 90, cancelled)?;
+    songs
+        .into_iter()
+        .map(|s| {
+            let mut track = s.song.into_track()?;
+            track.number = s.number;
+            track.album_artist = s.album_artist;
+            Ok(track)
+        })
+        .collect()
+}
 pub fn resolve(account: Option<&YoutubeAccount>, uri: &str) -> Result<Resolved, String> {
     resolve_cancellable(account, uri, || false)
 }

@@ -1,3 +1,4 @@
+mod albums;
 mod app;
 mod audio;
 mod audio_info;

@@ -15,6 +15,7 @@ const GROUP: &str = "22345678-1234-1234-1234-123456789abc";
 pub(crate) struct Fixture {
     pub url: String,
     pub requests: Arc<Mutex<Vec<String>>>,
+    pub received: Arc<Mutex<Vec<(String, Instant)>>>,
     done: Arc<AtomicBool>,
     worker: Option<thread::JoinHandle<()>>,
 }
@@ -24,9 +25,11 @@ impl Fixture {
         let url = format!("http://{}/", listener.local_addr().unwrap());
         listener.set_nonblocking(true).unwrap();
         let requests = Arc::new(Mutex::new(Vec::new()));
+        let received = Arc::new(Mutex::new(Vec::new()));
         let done = Arc::new(AtomicBool::new(false));
         let worker = {
             let requests = requests.clone();
+            let received = received.clone();
             let done = done.clone();
             thread::spawn(move || {
                 while !done.load(Ordering::Relaxed) {
@@ -47,16 +50,21 @@ impl Fixture {
                         bytes.extend_from_slice(&chunk[..n]);
                     }
                     let request = String::from_utf8_lossy(&bytes).to_string();
-                    let path = request
-                        .split_whitespace()
-                        .nth(1)
-                        .unwrap_or("")
-                        .split('?')
-                        .next()
-                        .unwrap_or("");
+                    let target = request.split_whitespace().nth(1).unwrap_or("");
+                    let url = url::Url::parse(&format!("http://localhost{target}")).unwrap();
+                    let path = url.path();
+                    received.lock().unwrap().push((path.into(), Instant::now()));
                     let (status, headers, body) = routes
                         .iter()
-                        .find(|(p, ..)| p == path)
+                        .find(|(p, ..)| {
+                            if let Some((route, query)) = p.split_once('?') {
+                                route == path
+                                    && url::form_urlencoded::parse(query.as_bytes())
+                                        .all(|pair| url.query_pairs().any(|actual| actual == pair))
+                            } else {
+                                p == path
+                            }
+                        })
                         .map(|(_, status, headers, body)| {
                             (*status, headers.as_str(), body.as_slice())
                         })
@@ -74,6 +82,7 @@ impl Fixture {
         Self {
             url,
             requests,
+            received,
             done,
             worker: Some(worker),
         }
@@ -84,6 +93,8 @@ impl Fixture {
             musicbrainz: format!("{}mb/", self.url),
             covers: format!("{}caa/", self.url),
             lrclib: format!("{}lyrics/", self.url),
+            wikipedia: format!("{}wiki", self.url),
+            wikidata: format!("{}wikidata", self.url),
             interval: Duration::ZERO,
         }
     }

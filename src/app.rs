@@ -9,8 +9,10 @@ use crate::{
 
 mod artwork;
 mod browse;
+mod discography;
 mod downloads;
 mod files;
+mod information;
 mod interactions;
 mod lyrics;
 mod metadata;
@@ -44,6 +46,7 @@ enum Message {
     Youtube(u64, Result<youtube_music::Resolved, String>),
     Prepared((u64, String), Result<crate::audio::NextTrack, String>),
     Music(youtube::Reply),
+    Discography(u64, discography::Provider, Result<Vec<Track>, String>),
     Artwork(String, Result<String, String>),
     SaveError(String),
 }
@@ -76,6 +79,8 @@ pub struct App {
     metadata_last: Cell<Instant>,
     lyrics_key: RefCell<Option<String>>,
     lyrics: lyrics::Controls,
+    information: information::Controls,
+    discography: discography::Controls,
     details_requested: RefCell<HashSet<String>>,
     streaming_service: RefCell<String>,
     radio_results: RefCell<Vec<String>>,
@@ -198,6 +203,8 @@ impl App {
             metadata_last: Cell::new(Instant::now()),
             lyrics_key: RefCell::new(None),
             lyrics: Default::default(),
+            information: Default::default(),
+            discography: Default::default(),
             details_requested: Default::default(),
             streaming_service: RefCell::new("youtube".into()),
             radio_results: RefCell::new(vec![]),
@@ -727,6 +734,7 @@ impl App {
                 if self.visible.borrow().is_empty() {
                     self.navigate("library");
                 } else {
+                    self.cancel_discography();
                     self.state.borrow_mut().queue.clear();
                     self.persist();
                     self.refresh();
@@ -907,6 +915,7 @@ impl App {
     }
 
     pub fn play_track(self: &Rc<Self>, id: &str, resume: Option<f64>) {
+        self.cancel_discography_playback();
         let track = self.state.borrow().track(id).cloned();
         let Some(track) = track else {
             return;
@@ -993,6 +1002,7 @@ impl App {
     }
 
     pub fn toggle_play(self: &Rc<Self>) {
+        self.cancel_discography_playback();
         if self.resolving.get() {
             self.resolve_autoplay.set(!self.resolve_autoplay.get());
         } else if self.audio.borrow().loaded {
@@ -1035,6 +1045,7 @@ impl App {
     }
 
     pub fn stop_playback(&self) {
+        self.cancel_discography_playback();
         self.set_buffering(100);
         self.play_generation.set(self.play_generation.get() + 1);
         self.resolving.set(false);
@@ -1195,6 +1206,7 @@ impl App {
     }
 
     pub fn shutdown(&self) {
+        self.cancel_discography();
         self.files.watcher.stop();
         self.finish_trash();
         self.metadata.borrow().stop();
@@ -1516,6 +1528,9 @@ impl App {
                 }
                 Message::Prepared(key, result) => self.prepared(key, result),
                 Message::Music(reply) => self.handle_youtube(reply),
+                Message::Discography(id, provider, result) => {
+                    self.handle_discography(id, provider, result)
+                }
                 Message::Artwork(uri, result) => {
                     self.artwork_pending.borrow_mut().remove(&uri);
                     let Ok(path) = result else { continue };

@@ -118,7 +118,10 @@ pub fn scan_filtered(
                 .map(|m| m.as_nanos().min(u128::from(u64::MAX)) as u64)
                 .unwrap_or(0);
             if let Some(t) = old.get(uri.as_str()).filter(|t| {
-                t.modified == modified && t.size == meta.len() && t.audio_details.codec.is_some()
+                t.modified == modified
+                    && t.size == meta.len()
+                    && t.audio_details.codec.is_some()
+                    && t.metadata_version == 1
             }) {
                 let mut cached = (*t).clone();
                 refresh_sidecars(&path, &mut cached);
@@ -250,6 +253,8 @@ pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
         Kind::Music,
     );
     t.audio_details = crate::audio_info::Details::from_probe(&data);
+    t.metadata_version = 1;
+    t.title_from_filename = tags.get("title").is_none_or(|s| s.trim().is_empty());
     t.artist = tags.get("artist").cloned().unwrap_or_default();
     t.album = tags.get("album").cloned().unwrap_or_default();
     t.album_artist = tags
@@ -260,6 +265,16 @@ pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
     t.musicbrainz_release_id = tags
         .get("musicbrainz_albumid")
         .or_else(|| tags.get("musicbrainz album id"))
+        .filter(|id| crate::enrichment::valid_mbid(id))
+        .cloned();
+    t.musicbrainz_recording_id = tags
+        .get("musicbrainz_trackid")
+        .or_else(|| tags.get("musicbrainz track id"))
+        .filter(|id| crate::enrichment::valid_mbid(id))
+        .cloned();
+    t.musicbrainz_artist_id = tags
+        .get("musicbrainz_artistid")
+        .or_else(|| tags.get("musicbrainz artist id"))
         .filter(|id| crate::enrichment::valid_mbid(id))
         .cloned();
     t.duration = data["format"]["duration"]

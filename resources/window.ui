@@ -812,13 +812,13 @@
                     </style>
                     <child>
                       <object class="GtkBox">
+                        <property name="spacing">8</property>
                         <child>
-                          <object class="GtkLabel">
-                            <property name="label">Now playing</property>
-                            <property name="xalign">0</property>
+                          <object class="GtkStackSwitcher" id="detail_tabs">
+                            <property name="stack">detail_stack</property>
                             <property name="hexpand">true</property>
                             <style>
-                              <class name="section-title" />
+                              <class name="detail-tabs" />
                             </style>
                           </object>
                         </child>
@@ -826,6 +826,7 @@
                           <object class="GtkButton" id="detail_close">
                             <property name="icon-name">window-close-symbolic</property>
                             <property name="tooltip-text">Close</property>
+                            <property name="valign">center</property>
                             <style>
                               <class name="flat" />
                             </style>
@@ -833,141 +834,652 @@
                         </child>
                       </object>
                     </child>
-                    <child><object class="GtkScrolledWindow" id="detail_scroller">
-                      <property name="vexpand">true</property><property name="hscrollbar-policy">never</property>
-                      <property name="child"><object class="GtkBox">
-                        <property name="orientation">vertical</property><property name="spacing">12</property>
                     <child>
-                      <object class="GtkOverlay">
-                        <property name="child">
-                          <object class="GtkDrawingArea" id="detail_backdrop">
-                            <property name="content-height">200</property>
+                      <object class="GtkStack" id="detail_stack">
+                        <property name="vexpand">true</property>
+                        <property name="hhomogeneous">true</property>
+                        <property name="vhomogeneous">false</property>
+                        <property name="transition-type">crossfade</property>
+                        <property name="transition-duration">120</property>
+                        <child>
+                          <object class="GtkStackPage">
+                            <property name="name">now-playing</property>
+                            <property name="title">Now playing</property>
+                            <property name="child">
+                              <object class="GtkScrolledWindow" id="detail_scroller">
+                                <property name="vexpand">true</property>
+                                <property name="hscrollbar-policy">never</property>
+                                <property name="child">
+                                  <object class="GtkBox">
+                                    <property name="orientation">vertical</property>
+                                    <property name="spacing">12</property>
+                                    <child>
+                                      <object class="GtkOverlay">
+                                        <property name="child">
+                                          <object class="GtkDrawingArea" id="detail_backdrop">
+                                            <property name="content-height">200</property>
+                                          </object>
+                                        </property>
+                                        <child type="overlay">
+                                          <object class="GtkPicture" id="detail_art">
+                                            <property name="content-fit">contain</property>
+                                            <property name="can-shrink">true</property>
+                                            <property name="margin-top">16</property>
+                                            <property name="margin-bottom">16</property>
+                                            <property name="margin-start">16</property>
+                                            <property name="margin-end">16</property>
+                                            <style>
+                                              <class name="cover" />
+                                            </style>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="detail_title">
+                                        <property name="label">Nothing playing</property>
+                                        <property name="wrap">true</property>
+                                        <property name="max-width-chars">28</property>
+                                        <property name="wrap-mode">word-char</property>
+                                        <property name="xalign">0</property>
+                                        <style>
+                                          <class name="section-title" />
+                                        </style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="detail_artist">
+                                        <property name="xalign">0</property>
+                                        <property name="ellipsize">end</property>
+                                        <style>
+                                          <class name="muted" />
+                                        </style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox" id="cover_lookup">
+                                        <property name="spacing">8</property>
+                                        <child>
+                                          <object class="GtkLabel" id="cover_status">
+                                            <property name="wrap">true</property>
+                                            <property name="max-width-chars">26</property>
+                                            <property name="xalign">0</property>
+                                            <property name="hexpand">true</property>
+                                            <style>
+                                              <class name="small" />
+                                              <class name="muted" />
+                                            </style>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkButton" id="cover_retry">
+                                            <property name="icon-name">view-refresh-symbolic</property>
+                                            <property name="tooltip-text">Retry cover lookup</property>
+                                            <property name="valign">center</property>
+                                            <style>
+                                              <class name="flat" />
+                                            </style>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLinkButton" id="cover_source">
+                                        <property name="label">Cover Art Archive</property>
+                                        <property name="uri">https://coverartarchive.org/</property>
+                                        <property name="tooltip-text">View this release on MusicBrainz</property>
+                                        <property name="halign">start</property>
+                                        <property name="visible">false</property>
+                                        <style>
+                                          <class name="metadata-source" />
+                                        </style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkDrawingArea" id="spectrum">
+                                        <property name="content-height">64</property>
+                                        <property name="tooltip-text">Live audio waveform</property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <child>
+                                          <object class="GtkLabel">
+                                            <property name="label">Lyrics</property>
+                                            <property name="xalign">0</property>
+                                            <property name="hexpand">true</property>
+                                            <style>
+                                              <class name="section-title" />
+                                            </style>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkToggleButton" id="lyrics_follow">
+                                            <property name="label">Follow</property>
+                                            <property name="tooltip-text">Follow playback</property>
+                                            <property name="active">true</property>
+                                            <property name="visible">false</property>
+                                            <property name="valign">center</property>
+                                            <style>
+                                              <class name="flat" />
+                                            </style>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkButton" id="lyrics_retry">
+                                            <property name="icon-name">view-refresh-symbolic</property>
+                                            <property name="tooltip-text">Retry lyrics lookup</property>
+                                            <style>
+                                              <class name="flat" />
+                                            </style>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkScrolledWindow" id="lyrics_scroller">
+                                        <property name="visible">false</property>
+                                        <property name="hscrollbar-policy">never</property>
+                                        <property name="min-content-height">180</property>
+                                        <property name="max-content-height">280</property>
+                                        <property name="propagate-natural-height">true</property>
+                                        <property name="child">
+                                          <object class="GtkTextView" id="lyrics_timed">
+                                            <property name="editable">false</property>
+                                            <property name="cursor-visible">false</property>
+                                            <property name="accepts-tab">false</property>
+                                            <property name="wrap-mode">word-char</property>
+                                            <property name="pixels-above-lines">6</property>
+                                            <property name="pixels-below-lines">6</property>
+                                            <style>
+                                              <class name="lyrics" />
+                                              <class name="timed-lyrics" />
+                                            </style>
+                                          </object>
+                                        </property>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="lyrics_text">
+                                        <property name="label">Select a track to see its lyrics.</property>
+                                        <property name="wrap">true</property>
+                                        <property name="wrap-mode">word-char</property>
+                                        <property name="max-width-chars">30</property>
+                                        <property name="xalign">0</property>
+                                        <property name="yalign">0</property>
+                                        <property name="selectable">true</property>
+                                        <style>
+                                          <class name="lyrics" />
+                                        </style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </property>
+                              </object>
+                            </property>
                           </object>
-                        </property>
-                        <child type="overlay">
-                          <object class="GtkPicture" id="detail_art">
-                            <property name="content-fit">contain</property>
-                            <property name="can-shrink">true</property>
-                            <property name="margin-top">16</property>
-                            <property name="margin-bottom">16</property>
-                            <property name="margin-start">16</property>
-                            <property name="margin-end">16</property>
-                            <style>
-                              <class name="cover" />
-                            </style>
+                        </child>
+                        <child>
+                          <object class="GtkStackPage">
+                            <property name="name">information</property>
+                            <property name="title">Artist &amp; album</property>
+                            <property name="child">
+                              <object class="GtkScrolledWindow" id="information_scroller">
+                                <property name="hscrollbar-policy">never</property>
+                                <property name="vexpand">true</property>
+                                <property name="child">
+                                  <object class="GtkBox" id="music_information">
+                                    <property name="margin-end">8</property>
+                                    <property name="orientation">vertical</property>
+                                    <property name="spacing">12</property>
+                                    <child>
+                                      <object class="GtkBox">
+                                        <property name="spacing">8</property>
+                                        <child>
+                                          <object class="GtkLabel" id="info_artist_name">
+                                            <property name="wrap">true</property>
+                                            <property name="wrap-mode">word-char</property>
+                                            <property name="max-width-chars">24</property>
+                                            <property name="hexpand">true</property>
+                                            <property name="xalign">0</property>
+                                            <style>
+                                              <class name="section-title" />
+                                            </style>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkButton" id="information_retry">
+                                            <property name="icon-name">view-refresh-symbolic</property>
+                                            <property name="tooltip-text">Refresh artist and album information</property>
+                                            <property name="valign">start</property>
+                                            <style>
+                                              <class name="flat" />
+                                            </style>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="information_status">
+                                        <property name="wrap">true</property>
+                                        <property name="wrap-mode">word-char</property>
+                                        <property name="max-width-chars">24</property>
+                                        <property name="xalign">0</property>
+                                        <style>
+                                          <class name="muted" />
+                                        </style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox" id="information_content">
+                                        <property name="orientation">vertical</property>
+                                        <property name="spacing">24</property>
+                                        <child>
+                                          <object class="GtkBox" id="info_artist_box">
+                                            <property name="orientation">vertical</property>
+                                            <property name="spacing">8</property>
+                                            <child>
+                                              <object class="GtkLabel" id="info_artist_genres">
+                                                <property name="wrap">true</property>
+                                                <property name="wrap-mode">word-char</property>
+                                                <property name="max-width-chars">24</property>
+                                                <property name="xalign">0</property>
+                                                <style>
+                                                  <class name="small" />
+                                                  <class name="muted" />
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="info_artist_summary">
+                                                <property name="wrap">true</property>
+                                                <property name="wrap-mode">word-char</property>
+                                                <property name="max-width-chars">24</property>
+                                                <property name="xalign">0</property>
+                                                <property name="selectable">true</property>
+                                                <style>
+                                                  <class name="information-summary" />
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkToggleButton" id="info_artist_more">
+                                                <property name="label">Show more</property>
+                                                <property name="halign">start</property>
+                                                <property name="tooltip-text">Expand artist biography</property>
+                                                <style>
+                                                  <class name="flat" />
+                                                  <class name="summary-toggle" />
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkBox" id="info_album_box">
+                                            <property name="orientation">vertical</property>
+                                            <property name="spacing">12</property>
+                                            <child>
+                                              <object class="GtkSeparator">
+                                                <property name="margin-bottom">8</property>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkBox">
+                                                <property name="spacing">12</property>
+                                                <child>
+                                                  <object class="GtkOverlay">
+                                                    <property name="width-request">64</property>
+                                                    <property name="height-request">64</property>
+                                                    <property name="valign">start</property>
+                                                    <property name="child">
+                                                      <object class="GtkImage">
+                                                        <property name="icon-name">media-optical-symbolic</property>
+                                                        <property name="pixel-size">24</property>
+                                                        <style>
+                                                          <class name="cover-placeholder" />
+                                                        </style>
+                                                      </object>
+                                                    </property>
+                                                    <child type="overlay">
+                                                      <object class="GtkPicture" id="info_album_art">
+                                                        <property name="content-fit">cover</property>
+                                                        <property name="can-shrink">true</property>
+                                                        <style>
+                                                          <class name="cover-small" />
+                                                        </style>
+                                                      </object>
+                                                    </child>
+                                                  </object>
+                                                </child>
+                                                <child>
+                                                  <object class="GtkBox">
+                                                    <property name="orientation">vertical</property>
+                                                    <property name="spacing">6</property>
+                                                    <property name="hexpand">true</property>
+                                                    <property name="valign">center</property>
+                                                    <child>
+                                                      <object class="GtkLabel" id="info_album_name">
+                                                        <property name="wrap">true</property>
+                                                        <property name="wrap-mode">word-char</property>
+                                                        <property name="width-chars">1</property>
+                                                        <property name="max-width-chars">18</property>
+                                                        <property name="xalign">0</property>
+                                                        <style>
+                                                          <class name="section-title" />
+                                                        </style>
+                                                      </object>
+                                                    </child>
+                                                    <child>
+                                                      <object class="GtkLabel" id="info_album_date">
+                                                        <property name="wrap">true</property>
+                                                        <property name="wrap-mode">word-char</property>
+                                                        <property name="width-chars">1</property>
+                                                        <property name="max-width-chars">18</property>
+                                                        <property name="xalign">0</property>
+                                                        <style>
+                                                          <class name="small" />
+                                                          <class name="muted" />
+                                                        </style>
+                                                      </object>
+                                                    </child>
+                                                  </object>
+                                                </child>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="info_album_genres">
+                                                <property name="wrap">true</property>
+                                                <property name="wrap-mode">word-char</property>
+                                                <property name="max-width-chars">24</property>
+                                                <property name="xalign">0</property>
+                                                <style>
+                                                  <class name="small" />
+                                                  <class name="muted" />
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="info_album_summary">
+                                                <property name="wrap">true</property>
+                                                <property name="wrap-mode">word-char</property>
+                                                <property name="max-width-chars">24</property>
+                                                <property name="xalign">0</property>
+                                                <property name="selectable">true</property>
+                                                <style>
+                                                  <class name="information-summary" />
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkToggleButton" id="info_album_more">
+                                                <property name="label">Show more</property>
+                                                <property name="halign">start</property>
+                                                <property name="tooltip-text">Expand album description</property>
+                                                <style>
+                                                  <class name="flat" />
+                                                  <class name="summary-toggle" />
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkBox" id="discography_section">
+                                            <property name="orientation">vertical</property>
+                                            <property name="spacing">12</property>
+                                            <child>
+                                              <object class="GtkSeparator">
+                                                <property name="margin-bottom">8</property>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkBox">
+                                                <property name="spacing">8</property>
+                                                <child>
+                                                  <object class="GtkLabel">
+                                                    <property name="label">Discography</property>
+                                                    <property name="xalign">0</property>
+                                                    <property name="hexpand">true</property>
+                                                    <style>
+                                                      <class name="section-title" />
+                                                    </style>
+                                                  </object>
+                                                </child>
+                                                <child>
+                                                  <object class="GtkLabel" id="discography_count">
+                                                    <property name="xalign">1</property>
+                                                    <style>
+                                                      <class name="small" />
+                                                      <class name="muted" />
+                                                    </style>
+                                                  </object>
+                                                </child>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkScrolledWindow" id="discography_scroller">
+                                                <property name="hscrollbar-policy">never</property>
+                                                <property name="min-content-height">64</property>
+                                                <property name="max-content-height">240</property>
+                                                <property name="propagate-natural-height">true</property>
+                                                <property name="child">
+                                                  <object class="GtkListBox" id="discography_list">
+                                                    <property name="selection-mode">single</property>
+                                                    <property name="activate-on-single-click">false</property>
+                                                    <style><class name="discography-list"/></style>
+                                                  </object>
+                                                </property>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="discography_status">
+                                                <property name="wrap">true</property>
+                                                <property name="wrap-mode">word-char</property>
+                                                <property name="max-width-chars">24</property>
+                                                <property name="xalign">0</property>
+                                                <style>
+                                                  <class name="small" />
+                                                  <class name="muted" />
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkButton" id="discography_more">
+                                                <property name="label">Load more releases</property>
+                                                <property name="halign">start</property>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </property>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkStackPage">
+                            <property name="name">audio</property>
+                            <property name="title">Audio details</property>
+                            <property name="child">
+                              <object class="GtkScrolledWindow" id="audio_scroller">
+                                <property name="hscrollbar-policy">never</property>
+                                <property name="vexpand">true</property>
+                                <property name="child">
+                                  <object class="GtkBox">
+                                    <property name="orientation">vertical</property>
+                                    <property name="spacing">24</property>
+                                    <child>
+                                      <object class="GtkLabel" id="audio_empty">
+                                        <property name="label">Play a track to see its audio details.</property>
+                                        <property name="wrap">true</property>
+                                        <property name="wrap-mode">word-char</property>
+                                        <property name="max-width-chars">24</property>
+                                        <property name="xalign">0</property>
+                                        <style>
+                                          <class name="muted" />
+                                        </style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkBox" id="audio_details">
+                                        <property name="orientation">vertical</property>
+                                        <property name="spacing">24</property>
+                                        <child>
+                                          <object class="GtkBox">
+                                            <property name="orientation">vertical</property>
+                                            <property name="spacing">8</property>
+                                            <child>
+                                              <object class="GtkLabel" id="audio_title">
+                                                <property name="wrap">true</property>
+                                                <property name="wrap-mode">word-char</property>
+                                                <property name="max-width-chars">24</property>
+                                                <property name="xalign">0</property>
+                                                <style>
+                                                  <class name="section-title" />
+                                                </style>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="audio_artist">
+                                                <property name="wrap">true</property>
+                                                <property name="wrap-mode">word-char</property>
+                                                <property name="max-width-chars">24</property>
+                                                <property name="xalign">0</property>
+                                                <style>
+                                                  <class name="muted" />
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="GtkSeparator" />
+                                        </child>
+                                        <child>
+                                          <object class="GtkGrid">
+                                            <property name="column-spacing">12</property>
+                                            <property name="row-spacing">20</property>
+                                            <property name="margin-top">8</property>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label">Codec</property>
+                                                <property name="xalign">0</property>
+                                                <style>
+                                                  <class name="muted" />
+                                                </style>
+                                                <layout>
+                                                  <property name="column">0</property>
+                                                  <property name="row">0</property>
+                                                </layout>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="detail_codec">
+                                                <property name="xalign">1</property>
+                                                <property name="hexpand">true</property>
+                                                <property name="ellipsize">end</property>
+                                                <property name="max-width-chars">18</property>
+                                                <property name="selectable">true</property>
+                                                <layout>
+                                                  <property name="column">1</property>
+                                                  <property name="row">0</property>
+                                                </layout>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label">Bitrate</property>
+                                                <property name="xalign">0</property>
+                                                <style>
+                                                  <class name="muted" />
+                                                </style>
+                                                <layout>
+                                                  <property name="column">0</property>
+                                                  <property name="row">1</property>
+                                                </layout>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="detail_bitrate">
+                                                <property name="xalign">1</property>
+                                                <property name="hexpand">true</property>
+                                                <property name="ellipsize">end</property>
+                                                <property name="max-width-chars">18</property>
+                                                <property name="selectable">true</property>
+                                                <layout>
+                                                  <property name="column">1</property>
+                                                  <property name="row">1</property>
+                                                </layout>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label">Sample rate</property>
+                                                <property name="xalign">0</property>
+                                                <style>
+                                                  <class name="muted" />
+                                                </style>
+                                                <layout>
+                                                  <property name="column">0</property>
+                                                  <property name="row">2</property>
+                                                </layout>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="detail_sample_rate">
+                                                <property name="xalign">1</property>
+                                                <property name="hexpand">true</property>
+                                                <property name="ellipsize">end</property>
+                                                <property name="max-width-chars">18</property>
+                                                <property name="selectable">true</property>
+                                                <layout>
+                                                  <property name="column">1</property>
+                                                  <property name="row">2</property>
+                                                </layout>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel">
+                                                <property name="label">Bit depth</property>
+                                                <property name="xalign">0</property>
+                                                <style>
+                                                  <class name="muted" />
+                                                </style>
+                                                <layout>
+                                                  <property name="column">0</property>
+                                                  <property name="row">3</property>
+                                                </layout>
+                                              </object>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="detail_bit_depth">
+                                                <property name="xalign">1</property>
+                                                <property name="hexpand">true</property>
+                                                <property name="ellipsize">end</property>
+                                                <property name="max-width-chars">18</property>
+                                                <property name="selectable">true</property>
+                                                <layout>
+                                                  <property name="column">1</property>
+                                                  <property name="row">3</property>
+                                                </layout>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </property>
+                              </object>
+                            </property>
                           </object>
                         </child>
                       </object>
                     </child>
-                    <child>
-                      <object class="GtkLabel" id="detail_title">
-                        <property name="label">Nothing playing</property>
-                        <property name="wrap">true</property>
-                        <property name="max-width-chars">28</property>
-                        <property name="wrap-mode">word-char</property>
-                        <property name="xalign">0</property>
-                        <style>
-                          <class name="section-title" />
-                        </style>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLabel" id="detail_artist">
-                        <property name="xalign">0</property>
-                        <property name="ellipsize">end</property>
-                        <style>
-                          <class name="muted" />
-                        </style>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkBox" id="cover_lookup">
-                        <property name="spacing">8</property>
-                        <child><object class="GtkLabel" id="cover_status">
-                          <property name="wrap">true</property><property name="max-width-chars">26</property>
-                          <property name="xalign">0</property><property name="hexpand">true</property>
-                          <style><class name="small"/><class name="muted"/></style>
-                        </object></child>
-                        <child><object class="GtkButton" id="cover_retry">
-                          <property name="icon-name">view-refresh-symbolic</property>
-                          <property name="tooltip-text">Retry cover lookup</property><property name="valign">center</property>
-                          <style><class name="flat"/></style>
-                        </object></child>
-                      </object>
-                    </child>
-                    <child><object class="GtkLinkButton" id="cover_source">
-                      <property name="label">Cover Art Archive</property>
-                      <property name="uri">https://coverartarchive.org/</property>
-                      <property name="tooltip-text">View this release on MusicBrainz</property>
-                      <property name="halign">start</property><property name="visible">false</property>
-                      <style><class name="metadata-source"/></style>
-                    </object></child>
-                    <child><object class="GtkExpander" id="audio_details">
-                      <property name="label">Audio details</property><property name="expanded">false</property><property name="visible">false</property>
-                      <property name="child"><object class="GtkGrid">
-                        <property name="column-spacing">12</property><property name="row-spacing">6</property><property name="margin-top">8</property>
-                        <child><object class="GtkLabel"><property name="label">Codec</property><property name="xalign">0</property><style><class name="small"/><class name="muted"/></style><layout><property name="column">0</property><property name="row">0</property></layout></object></child>
-                        <child><object class="GtkLabel" id="detail_codec"><property name="xalign">1</property><property name="hexpand">true</property><property name="ellipsize">end</property><property name="max-width-chars">18</property><property name="selectable">true</property><style><class name="small"/></style><layout><property name="column">1</property><property name="row">0</property></layout></object></child>
-                        <child><object class="GtkLabel"><property name="label">Bitrate</property><property name="xalign">0</property><style><class name="small"/><class name="muted"/></style><layout><property name="column">0</property><property name="row">1</property></layout></object></child>
-                        <child><object class="GtkLabel" id="detail_bitrate"><property name="xalign">1</property><property name="hexpand">true</property><property name="ellipsize">end</property><property name="max-width-chars">18</property><property name="selectable">true</property><style><class name="small"/></style><layout><property name="column">1</property><property name="row">1</property></layout></object></child>
-                        <child><object class="GtkLabel"><property name="label">Sample rate</property><property name="xalign">0</property><style><class name="small"/><class name="muted"/></style><layout><property name="column">0</property><property name="row">2</property></layout></object></child>
-                        <child><object class="GtkLabel" id="detail_sample_rate"><property name="xalign">1</property><property name="hexpand">true</property><property name="ellipsize">end</property><property name="max-width-chars">18</property><property name="selectable">true</property><style><class name="small"/></style><layout><property name="column">1</property><property name="row">2</property></layout></object></child>
-                        <child><object class="GtkLabel"><property name="label">Bit depth</property><property name="xalign">0</property><style><class name="small"/><class name="muted"/></style><layout><property name="column">0</property><property name="row">3</property></layout></object></child>
-                        <child><object class="GtkLabel" id="detail_bit_depth"><property name="xalign">1</property><property name="hexpand">true</property><property name="ellipsize">end</property><property name="max-width-chars">18</property><property name="selectable">true</property><style><class name="small"/></style><layout><property name="column">1</property><property name="row">3</property></layout></object></child>
-                      </object></property>
-                    </object></child>
-                    <child>
-                      <object class="GtkDrawingArea" id="spectrum">
-                        <property name="content-height">64</property>
-                        <property name="tooltip-text">Live audio waveform</property>
-                      </object>
-                    </child>
-                    <child><object class="GtkBox">
-                      <child><object class="GtkLabel">
-                        <property name="label">Lyrics</property><property name="xalign">0</property>
-                        <property name="hexpand">true</property><style><class name="section-title"/></style>
-                      </object></child>
-                      <child><object class="GtkToggleButton" id="lyrics_follow"><property name="label">Follow</property><property name="tooltip-text">Follow playback</property><property name="active">true</property><property name="visible">false</property><property name="valign">center</property><style><class name="flat"/></style></object></child>
-                      <child><object class="GtkButton" id="lyrics_retry">
-                        <property name="icon-name">view-refresh-symbolic</property>
-                        <property name="tooltip-text">Retry lyrics lookup</property>
-                        <style><class name="flat"/></style>
-                      </object></child>
-                    </object></child>
-                    <child>
-                      <object class="GtkLinkButton" id="lyrics_source">
-                        <property name="label">Lyrics from LRCLIB</property>
-                        <property name="uri">https://lrclib.net/</property>
-                        <property name="halign">start</property>
-                        <property name="visible">false</property>
-                        <style><class name="metadata-source"/></style>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkScrolledWindow" id="lyrics_scroller">
-                        <property name="visible">false</property><property name="hscrollbar-policy">never</property>
-                        <property name="min-content-height">180</property><property name="max-content-height">280</property><property name="propagate-natural-height">true</property>
-                        <property name="child"><object class="GtkTextView" id="lyrics_timed">
-                          <property name="editable">false</property><property name="cursor-visible">false</property><property name="accepts-tab">false</property>
-                          <property name="wrap-mode">word-char</property><property name="pixels-above-lines">6</property><property name="pixels-below-lines">6</property>
-                          <style><class name="lyrics"/><class name="timed-lyrics"/></style>
-                        </object></property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLabel" id="lyrics_text">
-                        <property name="label">Select a track to see its lyrics.</property>
-                        <property name="wrap">true</property>
-                        <property name="wrap-mode">word-char</property>
-                        <property name="max-width-chars">30</property>
-                        <property name="xalign">0</property>
-                        <property name="yalign">0</property>
-                        <property name="selectable">true</property>
-                        <style><class name="lyrics"/></style>
-                      </object>
-                    </child>
-                      </object></property>
-                    </object></child>
                   </object>
                 </property>
               </object>
@@ -982,7 +1494,7 @@
             </style>
             <child>
               <object class="GtkButton" id="art_button">
-                <property name="tooltip-text">Now playing and lyrics</property>
+                <property name="tooltip-text">Playback details</property>
                 <style>
                   <class name="flat" />
                   <class name="art-button" />

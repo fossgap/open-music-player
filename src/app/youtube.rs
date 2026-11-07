@@ -429,6 +429,7 @@ impl App {
     }
 
     fn invalidate_youtube_session(&self) {
+        self.cancel_discography();
         self.youtube
             .generation
             .set(self.youtube.generation.get() + 1);

@@ -28,6 +28,7 @@ pub enum Command {
     Restore(String),
     Disconnect,
     Search(u64, String),
+    Album(u64, crate::albums::Query, Arc<AtomicU64>),
     Sync(Vec<LocalPlaylist>, Vec<String>),
     Publish(LocalPlaylist),
     Reload(LocalPlaylist),
@@ -38,6 +39,7 @@ pub enum Reply {
     Connected(Result<Box<(SpotifyAccount, playback::Playback)>, String>),
     Disconnected(Result<(), String>),
     Search(u64, Result<Vec<crate::model::Track>, String>),
+    Album(u64, Result<Vec<crate::model::Track>, String>),
     Synced(String, Vec<LocalPlaylist>, Result<SyncResult, String>),
 }
 pub struct Service {
@@ -230,6 +232,22 @@ fn worker(commands: mpsc::Receiver<(Job, Command)>, replies: mpsc::Sender<(u64, 
                     .ok_or_else(|| "Connect your Spotify account first.".into())
                     .and_then(|(api, _)| api.search(&query, &job)),
             ),
+            Command::Album(generation, query, current) => {
+                if current.load(Ordering::SeqCst) != generation {
+                    continue;
+                }
+                Reply::Album(
+                    generation,
+                    active
+                        .as_mut()
+                        .ok_or_else(|| "Connect your Spotify account first.".into())
+                        .and_then(|(api, _)| {
+                            api.album(&query, &job, || {
+                                current.load(Ordering::SeqCst) != generation
+                            })
+                        }),
+                )
+            }
             Command::Sync(before, ignored) => {
                 let account = active
                     .as_ref()

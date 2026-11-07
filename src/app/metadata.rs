@@ -3,8 +3,74 @@ use enrichment::{Field, Query, Status};
 
 impl App {
     pub(super) fn setup_metadata(self: &Rc<Self>) {
+        let stack: gtk::Stack = object(&self.ui, "detail_stack");
+        for (name, title) in [
+            ("now-playing", "Now playing"),
+            ("information", "Artist & album"),
+            ("audio", "Audio details"),
+        ] {
+            stack
+                .page(&stack.child_by_name(name).unwrap())
+                .set_title(&self.tr(title));
+        }
+        // Native tab semantics, with wrapping labels that also fit the compact panel.
+        let tabs: gtk::StackSwitcher = object(&self.ui, "detail_tabs");
+        let mut child = tabs.first_child();
+        while let Some(widget) = child {
+            child = widget.next_sibling();
+            if let Some(label) = widget
+                .downcast_ref::<gtk::ToggleButton>()
+                .and_then(|button| button.child())
+                .and_downcast::<gtk::Label>()
+            {
+                widget.set_tooltip_text(Some(&label.text()));
+                label.set_wrap(true);
+                label.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+                label.set_width_chars(1);
+                label.set_max_width_chars(10);
+                label.set_justify(gtk::Justification::Center);
+            }
+        }
+        self.string_action("play-release", |app, id| {
+            app.activate_discography(id, super::discography::Action::Play)
+        });
+        self.string_action("queue-release", |app, id| {
+            app.activate_discography(id, super::discography::Action::Queue)
+        });
+        let weak = Rc::downgrade(self);
+        object::<gtk::ListBox>(&self.ui, "discography_list").connect_row_selected(move |_, row| {
+            if let Some(app) = weak.upgrade() {
+                if !app.discography.rendering.get() {
+                    *app.discography.selected.borrow_mut() =
+                        row.map(|r| r.widget_name().to_string());
+                }
+            }
+        });
+        self.string_action("metadata-source", |app, uri| {
+            if services::http_url(uri).is_ok() {
+                if let Err(error) =
+                    gio::AppInfo::launch_default_for_uri(uri, None::<&gio::AppLaunchContext>)
+                {
+                    app.notice(&error.to_string(), true, false);
+                }
+            }
+        });
+        for prefix in ["info_artist", "info_album"] {
+            let weak = Rc::downgrade(self);
+            object::<gtk::ToggleButton>(&self.ui, &format!("{prefix}_more")).connect_toggled(
+                move |_| {
+                    if let Some(app) = weak.upgrade() {
+                        app.render_information_summary(prefix);
+                    }
+                },
+            );
+        }
         self.on("cover_retry", |a| a.retry_metadata(Field::Cover));
         self.on("lyrics_retry", |a| a.retry_metadata(Field::Lyrics));
+        self.on("information_retry", |a| {
+            a.retry_metadata(Field::Information)
+        });
+        self.on("discography_more", |a| a.retry_metadata(Field::Discography));
     }
 
     fn retry_metadata(&self, field: Field) {
@@ -14,7 +80,7 @@ impl App {
         }
         let query = state
             .current_track()
-            .filter(|t| enrichment::missing(t, field))
+            .filter(|t| field == Field::Information || enrichment::missing(t, field))
             .and_then(|t| Query::for_track(t, field));
         drop(state);
         if let Some(query) = query {
@@ -24,6 +90,7 @@ impl App {
     }
 
     pub(super) fn schedule_metadata(&self) {
+        self.schedule_information();
         let state = self.state.borrow();
         if let Some(track) = state
             .current_track()
@@ -168,17 +235,14 @@ impl App {
                 !matches!(status, Some(Status::Pending))
                     && !matches!(status, Some(Status::Failed(e)) if !e.retryable()),
             );
-            let source = track.and_then(|t| {
-                if field == Field::Cover {
-                    t.artwork_source.as_deref()
-                } else {
-                    t.lyrics_source.as_deref()
-                }
-            });
-            let link: gtk::LinkButton = object(&self.ui, &format!("{prefix}_source"));
-            let source = source.filter(|url| services::http_url(url).is_ok());
-            link.set_visible(source.is_some() && !missing);
-            link.set_uri(source.unwrap_or("https://lrclib.net/"));
+            if field == Field::Cover {
+                let source = track
+                    .and_then(|t| t.artwork_source.as_deref())
+                    .filter(|url| services::http_url(url).is_ok());
+                let link: gtk::LinkButton = object(&self.ui, "cover_source");
+                link.set_visible(source.is_some() && !missing);
+                link.set_uri(source.unwrap_or("https://coverartarchive.org/"));
+            }
             let text = if field == Field::Lyrics && track.is_some_and(|t| t.instrumental) {
                 self.tr("Instrumental — no lyrics.")
             } else if field == Field::Lyrics && !missing && track.is_some() {
@@ -233,12 +297,19 @@ impl App {
             }
         }
         self.update_audio_details();
+        self.update_information();
     }
 
     fn update_audio_details(&self) {
         let state = self.state.borrow();
         let track = state.current_track();
-        object::<gtk::Expander>(&self.ui, "audio_details").set_visible(track.is_some());
+        object::<gtk::Box>(&self.ui, "audio_details").set_visible(track.is_some());
+        object::<gtk::Label>(&self.ui, "audio_empty").set_visible(track.is_none());
+        self.label("audio_title", track.map(|t| t.title.as_str()).unwrap_or(""));
+        self.label(
+            "audio_artist",
+            &track.map(|t| self.artist(t)).unwrap_or_default(),
+        );
         let mut details = track.map(|t| t.audio_details.clone()).unwrap_or_default();
         details.fill_missing(&self.audio.borrow().details());
         for (id, value) in [
@@ -287,6 +358,7 @@ impl App {
         for (id, field) in [
             ("fetch_covers", Field::Cover),
             ("fetch_lyrics", Field::Lyrics),
+            ("fetch_information", Field::Information),
         ] {
             let switch: gtk::Switch = object(ui, id);
             switch.set_active(enabled(&self.state.borrow(), field));
@@ -298,10 +370,16 @@ impl App {
                         match field {
                             Field::Cover => state.fetch_covers = switch.is_active(),
                             Field::Lyrics => state.fetch_lyrics = switch.is_active(),
+                            Field::Information | Field::Discography => {
+                                state.fetch_information = switch.is_active()
+                            }
                         }
                     }
                     if !switch.is_active() {
                         app.metadata.borrow_mut().cancel(field);
+                        if field == Field::Information {
+                            app.metadata.borrow_mut().cancel(Field::Discography);
+                        }
                     }
                     app.schedule_metadata();
                     app.update_metadata();
@@ -316,5 +394,6 @@ fn enabled(state: &State, field: Field) -> bool {
     match field {
         Field::Cover => state.fetch_covers,
         Field::Lyrics => state.fetch_lyrics,
+        Field::Information | Field::Discography => state.fetch_information,
     }
 }

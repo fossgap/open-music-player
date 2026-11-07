@@ -143,10 +143,24 @@ impl Api {
         maximum: usize,
         job: &auth::Job,
     ) -> Result<Vec<Value>, String> {
+        self.pages_cancellable(path, root, maximum, job, &|| false)
+    }
+
+    fn pages_cancellable(
+        &mut self,
+        path: &str,
+        root: Option<&str>,
+        maximum: usize,
+        job: &auth::Job,
+        cancelled: &impl Fn() -> bool,
+    ) -> Result<Vec<Value>, String> {
         let mut next = Some(path.to_string());
         let mut visited = HashSet::new();
         let mut items = Vec::new();
         while let Some(path) = next {
+            if cancelled() {
+                return Err("Cancelled".into());
+            }
             if !visited.insert(path.clone()) {
                 return Err("Spotify returned a repeating pagination link.".into());
             }
@@ -179,6 +193,90 @@ impl Api {
             .ok_or("Spotify did not return search results.")?;
         Ok(items.iter().filter_map(parse_track).collect())
     }
+    pub fn album(
+        &mut self,
+        query: &crate::albums::Query,
+        job: &auth::Job,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<Vec<Track>, String> {
+        if cancelled() {
+            return Err("Cancelled".into());
+        }
+        let mut url = api_url("search")?;
+        let search = format!(
+            "album:\"{}\" artist:\"{}\"",
+            query.title.replace('"', " "),
+            query.artist.replace('"', " ")
+        );
+        url.query_pairs_mut().extend_pairs([
+            ("q", search.as_str()),
+            ("type", "album"),
+            ("limit", "10"),
+            ("market", "from_token"),
+        ]);
+        let response = self.request(Method::GET, url.as_str(), None, job)?;
+        let items = response["albums"]["items"]
+            .as_array()
+            .ok_or("Spotify did not return search results.")?;
+        let mut albums: Vec<_> = items
+            .iter()
+            .filter(|a| {
+                a["id"].as_str().is_some_and(valid_id)
+                    && query.matches(
+                        a["name"].as_str().unwrap_or(""),
+                        a["artists"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|a| a["name"].as_str()),
+                    )
+            })
+            .collect();
+        albums.sort_by_key(|a| {
+            !query.date.get(..4).is_some_and(|year| {
+                a["release_date"]
+                    .as_str()
+                    .is_some_and(|date| date.starts_with(year))
+            })
+        });
+        for album in albums.into_iter().take(3) {
+            let id = album["id"].as_str().unwrap();
+            let mut items = self.pages_cancellable(
+                &format!("albums/{id}/tracks?limit=50&market=from_token"),
+                None,
+                1000,
+                job,
+                &cancelled,
+            )?;
+            items.sort_by_key(|v| {
+                (
+                    v["disc_number"].as_u64().unwrap_or(1),
+                    v["track_number"].as_u64().unwrap_or(0),
+                )
+            });
+            let album_artist = album["artists"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|a| a["name"].as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let tracks: Vec<_> = items
+                .into_iter()
+                .filter_map(|mut item| {
+                    item["album"] = album.clone();
+                    let mut track = parse_track(&item)?;
+                    track.album_artist.clone_from(&album_artist);
+                    Some(track)
+                })
+                .collect();
+            if !tracks.is_empty() {
+                return Ok(tracks);
+            }
+        }
+        Ok(vec![])
+    }
+
     pub fn playlist(&mut self, id: &str, job: &auth::Job) -> Result<RemotePlaylist, String> {
         if !valid_id(id) {
             return Err("Invalid Spotify playlist ID.".into());
@@ -760,6 +858,58 @@ mod tests {
         let requests = server.requests.join().unwrap();
         assert!(requests[1].0.contains("/v1/me/playlists?offset=50"));
         assert!(requests[3].0.contains("q=a+%26+b&type=track&limit=10"));
+    }
+    #[test]
+    fn albums_match_artist_and_title_and_load_every_disc_in_order() {
+        let second = "5uLU6hMCjMI75M1A2tKUQC";
+        let wrong = "6uLU6hMCjMI75M1A2tKUQC";
+        let (mut api, job, server) = fixture(vec![
+            (
+                200,
+                json!({"albums":{"items":[
+                    {"id":wrong,"name":"Small Hours","artists":[{"name":"Someone else"}]},
+                    {"id":ID,"name":"Small Hours","artists":[{"name":"Ensemble"}],"release_date":"2020-01-01","images":[{"url":"https://example.org/cover.png"}]}
+                ]}}),
+            ),
+            (
+                200,
+                json!({"items":[{"id":ID,"type":"track","name":"Disc two","artists":[{"name":"Guest"}],"disc_number":2,"track_number":1}],"next":format!("https://api.spotify.com/v1/albums/{ID}/tracks?offset=50")}),
+            ),
+            (
+                200,
+                json!({"items":[{"id":second,"type":"track","name":"Disc one","artists":[{"name":"Ensemble"}],"disc_number":1,"track_number":1},{"id":wrong,"type":"track","name":"Unavailable","is_playable":false}],"next":null}),
+            ),
+            (
+                200,
+                json!({"albums":{"items":[{"id":ID,"name":"Small Hours Live","artists":[{"name":"Ensemble"}]}]}}),
+            ),
+        ]);
+        let query = crate::albums::Query {
+            id: "group".into(),
+            artist_id: String::new(),
+            artist: "Ensemble".into(),
+            title: "Small Hours".into(),
+            date: "2020".into(),
+        };
+        let tracks = api.album(&query, &job, || false).unwrap();
+        assert_eq!(
+            tracks.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(),
+            vec!["Disc one", "Disc two"]
+        );
+        assert!(tracks.iter().all(|t| t.kind == Kind::Spotify
+            && t.album == "Small Hours"
+            && t.album_artist == "Ensemble"
+            && t.artwork.is_some()));
+        assert!(api.album(&query, &job, || false).unwrap().is_empty());
+        let requests = server.requests.join().unwrap();
+        assert!(requests[0].0.contains("type=album"));
+        assert!(requests[1].0.contains(&format!("/albums/{ID}/tracks")));
+        assert!(requests[2].0.contains("offset=50"));
+        assert_eq!(
+            requests.len(),
+            4,
+            "Non-matching albums must never be fetched"
+        );
     }
     #[test]
     fn uploads_batch_without_losing_order_and_refuse_changed_revisions() {

@@ -1,8 +1,12 @@
-//! Missing cover and lyric lookup. All network/cache I/O runs off the GTK thread.
+//! Online music metadata. All network/cache I/O runs off the GTK thread.
+mod information;
+#[cfg(test)]
+pub(crate) mod information_tests;
 mod providers;
 #[cfg(test)]
 pub(crate) mod tests;
 use crate::model::{Kind, Track, stable_id};
+pub use information::{Discography, Entity, Information, Release, Summary};
 pub use providers::Config;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -20,6 +24,8 @@ use std::{
 pub enum Field {
     Cover,
     Lyrics,
+    Information,
+    Discography,
 }
 #[derive(Clone, Debug)]
 pub struct Query {
@@ -30,6 +36,11 @@ pub struct Query {
     pub album: String,
     pub duration: f64,
     pub release_id: Option<String>,
+    pub recording_id: Option<String>,
+    pub artist_id: Option<String>,
+    pub album_artist: String,
+    pub title_from_filename: bool,
+    pub offset: u32,
 }
 impl Query {
     pub fn for_track(track: &Track, field: Field) -> Option<Self> {
@@ -49,13 +60,43 @@ impl Query {
             .musicbrainz_release_id
             .clone()
             .filter(|s| valid_mbid(s));
-        if field == Field::Cover {
-            if release_id.is_none()
-                && (normalize(&artist).is_empty() || normalize(&album).is_empty())
-            {
+        let recording_id = track
+            .musicbrainz_recording_id
+            .clone()
+            .filter(|s| valid_mbid(s));
+        let mut artist_id = track
+            .musicbrainz_artist_id
+            .clone()
+            .filter(|s| valid_mbid(s));
+        let mut offset = 0;
+        if field == Field::Discography {
+            let info = track.music_info.as_ref()?;
+            if !info.discography.has_more() {
                 return None;
             }
-        } else if normalize(&artist).is_empty() || normalize(&title).is_empty() {
+            artist_id = Some(info.artist.as_ref()?.id.clone());
+            offset = info.discography.next_offset;
+        }
+        let insufficient = match field {
+            Field::Cover => {
+                release_id.is_none()
+                    && (normalize(&artist).is_empty() || normalize(&album).is_empty())
+            }
+            Field::Lyrics => normalize(&artist).is_empty() || normalize(&title).is_empty(),
+            Field::Information => {
+                release_id.is_none()
+                    && recording_id.is_none()
+                    && artist_id.is_none()
+                    && artist.is_empty()
+                    && track.album_artist.trim().is_empty()
+                    && (album.is_empty()
+                        || title.is_empty()
+                        || track.title_from_filename
+                        || track.duration <= 0.0)
+            }
+            Field::Discography => false,
+        };
+        if insufficient {
             return None;
         }
         let duration = if track.duration.is_finite() {
@@ -75,6 +116,19 @@ impl Query {
                 normalize(&album),
                 duration
             ),
+            Field::Information => format!(
+                "information-v1:{}\0{}\0{}\0{}\0{:.0}\0{:?}\0{:?}\0{:?}\0{}",
+                normalize(&artist),
+                normalize(&title),
+                normalize(&album),
+                normalize(&track.album_artist),
+                duration,
+                release_id,
+                recording_id,
+                artist_id,
+                track.title_from_filename
+            ),
+            Field::Discography => format!("discography-v1:{}:{offset}", artist_id.as_deref()?),
         };
         Some(Self {
             field,
@@ -84,6 +138,11 @@ impl Query {
             album,
             duration,
             release_id,
+            recording_id,
+            artist_id,
+            album_artist: track.album_artist.trim().to_string(),
+            title_from_filename: track.title_from_filename,
+            offset,
         })
     }
 }
@@ -111,12 +170,26 @@ pub fn missing(track: &Track, field: Field) -> bool {
         Field::Lyrics => {
             !track.instrumental && track.lyrics.as_ref().is_none_or(|s| s.trim().is_empty())
         }
+        Field::Information => track
+            .music_info
+            .as_ref()
+            .is_none_or(|info| Query::for_track(track, field).is_none_or(|q| q.key != info.key)),
+        Field::Discography => Query::for_track(track, field).is_some(),
     }
 }
 
 pub fn needs_lookup(track: &Track, field: Field) -> bool {
     missing(track, field)
         || (field == Field::Lyrics && track.lyrics_source.is_some() && !track.lyrics_timing_checked)
+        || (field == Field::Information
+            && track.music_info.as_ref().is_some_and(|i| {
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+                    .saturating_sub(i.checked)
+                    >= 30 * 86400
+            }))
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Found {
@@ -130,24 +203,29 @@ pub enum Found {
         source: String,
         instrumental: bool,
     },
+    Information(Box<Information>),
+    Discography(Discography),
 }
 impl Found {
     pub fn field(&self) -> Field {
         match self {
             Self::Cover { .. } => Field::Cover,
             Self::Lyrics { .. } => Field::Lyrics,
+            Self::Information(_) => Field::Information,
+            Self::Discography(_) => Field::Discography,
         }
     }
     pub fn available(&self) -> bool {
         match self {
             Self::Cover { path, .. } => Path::new(path).is_file(),
-            Self::Lyrics { .. } => true,
+            Self::Lyrics { .. } | Self::Information(_) | Self::Discography(_) => true,
         }
     }
 }
 pub fn apply(track: &mut Track, key: &str, found: &Found) -> bool {
     let field = found.field();
-    if !needs_lookup(track, field) || !Query::for_track(track, field).is_some_and(|q| q.key == key)
+    if (field != Field::Information && !needs_lookup(track, field))
+        || !Query::for_track(track, field).is_some_and(|q| q.key == key)
     {
         return false;
     }
@@ -168,11 +246,18 @@ pub fn apply(track: &mut Track, key: &str, found: &Found) -> bool {
             track.lyrics_source = Some(source.clone());
             track.instrumental = *instrumental;
         }
+        Found::Information(info) => information::apply_information(track, info),
+        Found::Discography(page) => {
+            if let Some(info) = &mut track.music_info {
+                info.discography.append(page);
+            }
+        }
     }
     true
 }
 /// A metadata refresh may replace provider content, but must keep matching downloaded fallbacks.
 pub fn preserve_downloaded(old: &Track, new: &mut Track) {
+    information::preserve_information(old, new);
     for field in [Field::Cover, Field::Lyrics] {
         if !missing(new, field)
             || Query::for_track(old, field)
@@ -234,8 +319,10 @@ struct Job {
 pub struct Service {
     cover: mpsc::SyncSender<Job>,
     lyrics: mpsc::SyncSender<Job>,
+    information: mpsc::SyncSender<Job>,
+    discography: mpsc::SyncSender<Job>,
     rx: mpsc::Receiver<Reply>,
-    epochs: [Arc<AtomicU64>; 2],
+    epochs: [Arc<AtomicU64>; 4],
     alive: Arc<AtomicBool>,
     pub status: HashMap<String, Status>,
     pending: HashMap<String, Field>,
@@ -244,15 +331,17 @@ impl Service {
     pub fn new(config: Config) -> Self {
         let (tx, rx) = mpsc::channel();
         let alive = Arc::new(AtomicBool::new(true));
-        let epochs = [Arc::new(AtomicU64::new(0)), Arc::new(AtomicU64::new(0))];
+        let epochs: [_; 4] = std::array::from_fn(|_| Arc::new(AtomicU64::new(0)));
+        let pacing = Arc::new(std::sync::Mutex::new(providers::Pacing::default()));
         let start = |field: Field| {
             let (jobs, receiver) = mpsc::sync_channel::<Job>(8);
             let replies = tx.clone();
             let alive = alive.clone();
             let epoch = epochs[index(field)].clone();
             let config = config.clone();
+            let pacing = pacing.clone();
             std::thread::spawn(move || {
-                let mut client = providers::Client::new(config);
+                let mut client = providers::Client::with_pacing(config, pacing);
                 while let Ok(job) = receiver.recv() {
                     if !alive.load(Ordering::Relaxed) {
                         break;
@@ -277,9 +366,13 @@ impl Service {
         };
         let cover = start(Field::Cover);
         let lyrics = start(Field::Lyrics);
+        let information = start(Field::Information);
+        let discography = start(Field::Discography);
         Self {
             cover,
             lyrics,
+            information,
+            discography,
             rx,
             epochs,
             alive,
@@ -299,10 +392,11 @@ impl Service {
         let epoch = self.epochs[index(query.field)].load(Ordering::Relaxed);
         let key = query.key.clone();
         let field = query.field;
-        let tx = if query.field == Field::Cover {
-            &self.cover
-        } else {
-            &self.lyrics
+        let tx = match query.field {
+            Field::Cover => &self.cover,
+            Field::Lyrics => &self.lyrics,
+            Field::Information => &self.information,
+            Field::Discography => &self.discography,
         };
         if tx
             .try_send(Job {
@@ -359,5 +453,10 @@ impl Drop for Service {
     }
 }
 fn index(field: Field) -> usize {
-    if field == Field::Cover { 0 } else { 1 }
+    match field {
+        Field::Cover => 0,
+        Field::Lyrics => 1,
+        Field::Information => 2,
+        Field::Discography => 3,
+    }
 }

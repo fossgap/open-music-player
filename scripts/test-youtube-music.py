@@ -73,6 +73,50 @@ def sync(client, playlists=(), ignored=()):
 
 
 class BridgeTests(unittest.TestCase):
+    def test_album_search_checks_identity_and_preserves_available_track_order(self):
+        class Albums:
+            def search(self, query, **kwargs):
+                self.kwargs = kwargs
+                return [
+                    {"title": "Small Hours", "artists": [{"name": "Unrelated"}], "browseId": "wrong"},
+                    {"title": "Small Hours Live", "artists": [{"name": "Ensemble"}], "browseId": "live"},
+                    {"title": "Small Hours", "artists": [{"name": "Ensemble"}], "browseId": "album"},
+                ]
+
+            def get_album(self, album_id):
+                self.album_id = album_id
+                return {"title": "Small Hours", "artists": [{"name": "Ensemble"}], "trackCount": 3,
+                        "thumbnails": [{"url": "https://example.org/cover.png"}], "tracks": [
+                            {"videoId": B, "title": "First", "album": "Small Hours"},
+                            {"videoId": "12345678901", "isAvailable": False},
+                            {"videoId": A, "title": "Last", "artists": [{"name": "Guest"}]}]}
+        client = Albums()
+        with patch.object(bridge, "music_client", return_value=client):
+            result = bridge.dispatch({"op": "album", "album": {"artist": "Ensemble", "title": "Small Hours", "date": "2020"}})
+        self.assertEqual(client.kwargs, {"filter": "albums", "limit": 20, "ignore_spelling": True})
+        self.assertEqual(client.album_id, "album")
+        self.assertEqual([t["video_id"] for t in result], [B, A])
+        self.assertEqual([t["number"] for t in result], [1, 3])
+        self.assertEqual(result[0]["artist"], "Ensemble")
+        self.assertEqual(result[1]["artist"], "Guest")
+        self.assertTrue(all(t["album"] == "Small Hours" and t["album_artist"] == "Ensemble" for t in result))
+        self.assertTrue(all(t["artwork"] == "https://example.org/cover.png" for t in result))
+
+    def test_album_lookup_refuses_changed_identity_and_incomplete_lists(self):
+        class Albums:
+            def search(self, *args, **kwargs):
+                return [{"title": "Small Hours", "artists": [{"name": "Ensemble"}], "browseId": "album"}]
+
+            def get_album(self, album_id):
+                return self.data
+        client = Albums()
+        query = {"album": {"artist": "Ensemble", "title": "Small Hours"}}
+        client.data = {"title": "Different album", "artists": [{"name": "Ensemble"}]}
+        self.assertEqual(bridge.album_tracks(client, query), [])
+        client.data = {"title": "Small Hours", "artists": [{"name": "Ensemble"}], "trackCount": 2, "tracks": [{"videoId": A}]}
+        with self.assertRaises(bridge.BridgeError):
+            bridge.album_tracks(client, query)
+
     def test_search_only_requests_songs_and_deduplicates(self):
         class Search:
             def search(self, query, **kwargs):
