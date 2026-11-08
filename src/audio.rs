@@ -293,10 +293,10 @@ impl Audio {
         if let Some(spotify) = &self.spotify {
             spotify.set_visualization_enabled(false);
         }
-        if self.spotify_active {
-            if let Some(spotify) = self.spotify.as_mut() {
-                spotify.stop();
-            }
+        if self.spotify_active
+            && let Some(spotify) = self.spotify.as_mut()
+        {
+            spotify.stop();
         }
         self.spotify_active = false;
         self.standby.take();
@@ -387,15 +387,14 @@ impl Audio {
             self.stop();
             return events;
         }
-        if let Some(standby) = self.standby.as_mut() {
-            if standby
+        if let Some(standby) = self.standby.as_mut()
+            && standby
                 .poll(false)
                 .iter()
                 .any(|e| matches!(e, Event::End | Event::Error(_)))
-            {
-                self.failed_preload = standby.current.as_ref().map(|t| t.id.clone());
-                self.standby.take();
-            }
+        {
+            self.failed_preload = standby.current.as_ref().map(|t| t.id.clone());
+            self.standby.take();
         }
         let remaining = (self.duration() - self.position()).max(0.0);
         if self.playing

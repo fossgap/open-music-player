@@ -38,20 +38,18 @@ impl App {
         });
         let weak = Rc::downgrade(self);
         object::<gtk::ListBox>(&self.ui, "discography_list").connect_row_selected(move |_, row| {
-            if let Some(app) = weak.upgrade() {
-                if !app.discography.rendering.get() {
-                    *app.discography.selected.borrow_mut() =
-                        row.map(|r| r.widget_name().to_string());
-                }
+            if let Some(app) = weak.upgrade()
+                && !app.discography.rendering.get()
+            {
+                *app.discography.selected.borrow_mut() = row.map(|r| r.widget_name().to_string());
             }
         });
         self.string_action("metadata-source", |app, uri| {
-            if services::http_url(uri).is_ok() {
-                if let Err(error) =
+            if services::http_url(uri).is_ok()
+                && let Err(error) =
                     gio::AppInfo::launch_default_for_uri(uri, None::<&gio::AppLaunchContext>)
-                {
-                    app.notice(&error.to_string(), true, false);
-                }
+            {
+                app.notice(&error.to_string(), true, false);
             }
         });
         for prefix in ["info_artist", "info_album"] {
@@ -94,25 +92,22 @@ impl App {
         if let Some(track) = state
             .current_track()
             .filter(|t| t.audio_details.codec.is_none())
+            && let Some(path) = library::local_path(&track.uri)
+            && self
+                .details_requested
+                .borrow_mut()
+                .insert(track.uri.clone())
         {
-            if let Some(path) = library::local_path(&track.uri) {
-                if self
-                    .details_requested
-                    .borrow_mut()
-                    .insert(track.uri.clone())
-                {
-                    let tx = self.tx.clone();
-                    let id = track.id.clone();
-                    let uri = track.uri.clone();
-                    std::thread::spawn(move || {
-                        let _ = tx.send(Message::AudioDetails(
-                            id,
-                            uri,
-                            library::audio_details(&path),
-                        ));
-                    });
-                }
-            }
+            let tx = self.tx.clone();
+            let id = track.id.clone();
+            let uri = track.uri.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(Message::AudioDetails(
+                    id,
+                    uri,
+                    library::audio_details(&path),
+                ));
+            });
         }
         let mut service = self.metadata.borrow_mut();
         let lyrics = state

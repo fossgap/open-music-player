@@ -112,10 +112,9 @@ impl App {
             if let Err(error) = gio::AppInfo::launch_default_for_uri(
                 "https://music.youtube.com/",
                 None::<&gio::AppLaunchContext>,
-            ) {
-                if let Some(app) = weak.upgrade() {
-                    app.notice(&error.to_string(), true, false);
-                }
+            ) && let Some(app) = weak.upgrade()
+            {
+                app.notice(&error.to_string(), true, false);
             }
         });
         content.append(&open);
@@ -158,13 +157,12 @@ impl App {
             let chosen = chosen.clone();
             let file_label = filename_label.clone();
             chooser.connect_response(move |dialog, response| {
-                if response == gtk::ResponseType::Accept {
-                    if let Some(path) = dialog.file().and_then(|f| f.path()) {
-                        file_label
-                            .set_label(&path.file_name().unwrap_or_default().to_string_lossy());
-                        file_label.set_visible(true);
-                        *chosen.borrow_mut() = Some(path.to_string_lossy().into_owned());
-                    }
+                if response == gtk::ResponseType::Accept
+                    && let Some(path) = dialog.file().and_then(|f| f.path())
+                {
+                    file_label.set_label(&path.file_name().unwrap_or_default().to_string_lossy());
+                    file_label.set_visible(true);
+                    *chosen.borrow_mut() = Some(path.to_string_lossy().into_owned());
                 }
                 dialog.destroy();
             });
@@ -218,14 +216,12 @@ impl App {
             confirmation.add_button(&app.tr("Disconnect"), gtk::ResponseType::Accept);
             let weak = Rc::downgrade(&app);
             confirmation.connect_response(move |dialog, response| {
-                if response == gtk::ResponseType::Accept {
-                    if let Some(app) = weak.upgrade() {
-                        if !app.youtube.busy.replace(true) {
+                if response == gtk::ResponseType::Accept
+                    && let Some(app) = weak.upgrade()
+                        && !app.youtube.busy.replace(true) {
                             app.youtube_dialog_status(&app.tr("Disconnecting…")); app.refresh();
                             let tx = app.tx.clone(); std::thread::spawn(move || { let _ = tx.send(Message::Music(Reply::Disconnected(youtube_music::disconnect()))); });
                         }
-                    }
-                }
                 dialog.close();
             }); confirmation.present();
         });
@@ -391,36 +387,33 @@ impl App {
         dialog.add_button(&self.tr("Replace local copy"), gtk::ResponseType::Accept);
         let weak = Rc::downgrade(self);
         dialog.connect_response(move |dialog, response| {
-            if response == gtk::ResponseType::Accept {
-                if let Some(app) = weak.upgrade() {
-                    if !app.youtube.busy.replace(true) {
-                        let account = account.clone();
-                        let before =
-                            youtube_music::local_playlist(&app.state.borrow(), &playlist.local_id);
-                        if let Some(before) = before {
-                            app.notice(
-                                &app.tr("Synchronizing YouTube Music playlists…"),
-                                false,
-                                true,
-                            );
-                            app.refresh();
-                            let tx = app.tx.clone();
-                            std::thread::spawn(move || {
-                                let result =
-                                    youtube_music::reload(&account, &before).map(|p| SyncResult {
-                                        playlists: vec![p],
-                                        ..SyncResult::default()
-                                    });
-                                let _ = tx.send(Message::Music(Reply::Synced(
-                                    account.id,
-                                    vec![before],
-                                    result,
-                                )));
-                            });
-                        } else {
-                            app.youtube.busy.set(false);
-                        }
-                    }
+            if response == gtk::ResponseType::Accept
+                && let Some(app) = weak.upgrade()
+                && !app.youtube.busy.replace(true)
+            {
+                let account = account.clone();
+                let before = youtube_music::local_playlist(&app.state.borrow(), &playlist.local_id);
+                if let Some(before) = before {
+                    app.notice(
+                        &app.tr("Synchronizing YouTube Music playlists…"),
+                        false,
+                        true,
+                    );
+                    app.refresh();
+                    let tx = app.tx.clone();
+                    std::thread::spawn(move || {
+                        let result = youtube_music::reload(&account, &before).map(|p| SyncResult {
+                            playlists: vec![p],
+                            ..SyncResult::default()
+                        });
+                        let _ = tx.send(Message::Music(Reply::Synced(
+                            account.id,
+                            vec![before],
+                            result,
+                        )));
+                    });
+                } else {
+                    app.youtube.busy.set(false);
                 }
             }
             dialog.close();

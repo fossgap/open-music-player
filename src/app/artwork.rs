@@ -138,16 +138,15 @@ impl Images {
                 },
                 color,
             };
-            if cache.images.len() >= 256 {
-                if let Some(oldest) = cache
+            if cache.images.len() >= 256
+                && let Some(oldest) = cache
                     .images
                     .iter()
                     .filter(|(key, _)| Some(*key) != cache.pinned.as_ref())
                     .min_by_key(|(_, (_, used))| used)
                     .map(|(key, _)| key.clone())
-                {
-                    cache.images.remove(&oldest);
-                }
+            {
+                cache.images.remove(&oldest);
             }
             cache.clock += 1;
             let clock = cache.clock;

@@ -55,10 +55,10 @@ impl App {
             let weak_item = item.downgrade();
             let weak_app = Rc::downgrade(&app);
             object::<gtk::Button>(&ui, "favorite").connect_clicked(move |_| {
-                if let (Some(app), Some(item)) = (weak_app.upgrade(), weak_item.upgrade()) {
-                    if let Some(value) = item.item().and_downcast::<gtk::StringObject>() {
-                        app.favorite(&value.string());
-                    }
+                if let (Some(app), Some(item)) = (weak_app.upgrade(), weak_item.upgrade())
+                    && let Some(value) = item.item().and_downcast::<gtk::StringObject>()
+                {
+                    app.favorite(&value.string());
                 }
             });
             app.track_rows
@@ -93,10 +93,10 @@ impl App {
         view.set_model(Some(&selection));
         let weak = Rc::downgrade(self);
         selection.connect_selection_changed(move |_, _, _| {
-            if let Some(app) = weak.upgrade() {
-                if !app.selection_syncing.get() {
-                    app.update_selection();
-                }
+            if let Some(app) = weak.upgrade()
+                && !app.selection_syncing.get()
+            {
+                app.update_selection();
             }
         });
         view.set_factory(Some(&factory));
@@ -243,10 +243,10 @@ impl App {
                 let weak_item = item.downgrade();
                 let weak_app = Rc::downgrade(&app);
                 object::<gtk::Button>(&ui, "subscribe").connect_clicked(move |_| {
-                    if let (Some(app), Some(item)) = (weak_app.upgrade(), weak_item.upgrade()) {
-                        if let Some(id) = item.item().and_downcast::<gtk::StringObject>() {
-                            app.subscribe_show(&id.string());
-                        }
+                    if let (Some(app), Some(item)) = (weak_app.upgrade(), weak_item.upgrade())
+                        && let Some(id) = item.item().and_downcast::<gtk::StringObject>()
+                    {
+                        app.subscribe_show(&id.string());
                     }
                 });
             }
@@ -254,10 +254,10 @@ impl App {
                 let weak_item = item.downgrade();
                 let weak_app = Rc::downgrade(&app);
                 object::<gtk::Button>(&ui, "card_play").connect_clicked(move |_| {
-                    if let (Some(app), Some(item)) = (weak_app.upgrade(), weak_item.upgrade()) {
-                        if let Some(id) = item.item().and_downcast::<gtk::StringObject>() {
-                            app.play_card(kind, &id.string());
-                        }
+                    if let (Some(app), Some(item)) = (weak_app.upgrade(), weak_item.upgrade())
+                        && let Some(id) = item.item().and_downcast::<gtk::StringObject>()
+                    {
+                        app.play_card(kind, &id.string());
                     }
                 });
             }
@@ -509,10 +509,10 @@ impl App {
             .set_model(Some(&gtk::StringList::new(&["Apple Podcasts", "gPodder"])));
         let weak = Rc::downgrade(self);
         object::<gtk::DropDown>(&self.ui, "podcast_provider").connect_selected_notify(move |_| {
-            if let Some(a) = weak.upgrade() {
-                if a.podcast_discovery.get() {
-                    a.discover_podcasts();
-                }
+            if let Some(a) = weak.upgrade()
+                && a.podcast_discovery.get()
+            {
+                a.discover_podcasts();
             }
         });
         let weak = Rc::downgrade(self);
@@ -1211,12 +1211,11 @@ impl App {
         dialog.add_filter(&filter);
         let weak = Rc::downgrade(self);
         dialog.connect_response(move |dialog, response| {
-            if response == gtk::ResponseType::Accept {
-                if let (Some(app), Some(path)) =
+            if response == gtk::ResponseType::Accept
+                && let (Some(app), Some(path)) =
                     (weak.upgrade(), dialog.file().and_then(|f| f.path()))
-                {
-                    app.import_playlist(path);
-                }
+            {
+                app.import_playlist(path);
             }
             dialog.destroy();
         });
@@ -1268,10 +1267,10 @@ impl App {
         window.set_title(Some(&title));
         object::<gtk::Label>(&ui, "title").set_label(&title);
         let entry: gtk::Entry = object(&ui, "name");
-        if let Some(id) = &rename {
-            if let Some(p) = self.state.borrow().playlist(id) {
-                entry.set_text(&p.name);
-            }
+        if let Some(id) = &rename
+            && let Some(p) = self.state.borrow().playlist(id)
+        {
+            entry.set_text(&p.name);
         }
         let lists: Vec<(String, String)> = self
             .state
@@ -1335,10 +1334,10 @@ impl App {
                 .cloned()
                 .collect();
             for track in &valid {
-                if let Some(list) = state.playlists.iter_mut().find(|p| p.id == id) {
-                    if !list.tracks.contains(track) {
-                        list.tracks.push(track.clone());
-                    }
+                if let Some(list) = state.playlists.iter_mut().find(|p| p.id == id)
+                    && !list.tracks.contains(track)
+                {
+                    list.tracks.push(track.clone());
                 }
             }
             drop(state);
@@ -1379,29 +1378,29 @@ impl App {
         let id = id.to_string();
         let weak = Rc::downgrade(self);
         dialog.connect_response(move |dialog, response| {
-            if response == gtk::ResponseType::Accept {
-                if let Some(app) = weak.upgrade() {
-                    let mut state = app.state.borrow_mut();
-                    if let Some(link) = state.playlist(&id).and_then(|p| p.youtube.clone()) {
-                        if !state.youtube_ignored_playlists.contains(&link.id) {
-                            state.youtube_ignored_playlists.push(link.id);
-                        }
-                    }
-                    if let Some(link) = state.playlist(&id).and_then(|p| p.spotify.clone()) {
-                        if !state.spotify_ignored_playlists.contains(&link.id) {
-                            state.spotify_ignored_playlists.push(link.id);
-                        }
-                    }
-                    state.playlists.retain(|p| p.id != id);
-                    drop(state);
-                    let current = app.playlist.borrow().as_deref() == Some(&id);
-                    if current {
-                        app.browse_back();
-                    } else {
-                        app.refresh();
-                    }
-                    app.persist();
+            if response == gtk::ResponseType::Accept
+                && let Some(app) = weak.upgrade()
+            {
+                let mut state = app.state.borrow_mut();
+                if let Some(link) = state.playlist(&id).and_then(|p| p.youtube.clone())
+                    && !state.youtube_ignored_playlists.contains(&link.id)
+                {
+                    state.youtube_ignored_playlists.push(link.id);
                 }
+                if let Some(link) = state.playlist(&id).and_then(|p| p.spotify.clone())
+                    && !state.spotify_ignored_playlists.contains(&link.id)
+                {
+                    state.spotify_ignored_playlists.push(link.id);
+                }
+                state.playlists.retain(|p| p.id != id);
+                drop(state);
+                let current = app.playlist.borrow().as_deref() == Some(&id);
+                if current {
+                    app.browse_back();
+                } else {
+                    app.refresh();
+                }
+                app.persist();
             }
             dialog.close();
         });

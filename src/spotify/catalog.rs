@@ -608,10 +608,10 @@ pub fn apply_sync(
     before: &[LocalPlaylist],
     result: SyncResult,
 ) -> (usize, usize, usize) {
-    if !state
+    if state
         .spotify_account
         .as_ref()
-        .is_some_and(|a| a.id == account)
+        .is_none_or(|a| a.id != account)
     {
         return (0, 0, 0);
     }

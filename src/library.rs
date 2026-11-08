@@ -375,15 +375,15 @@ pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
 pub(crate) fn refresh_sidecars(path: &Path, t: &mut Track) {
     for ext in ["lrc", "txt"] {
         let sidecar = path.with_extension(ext);
-        if sidecar.metadata().is_ok_and(|m| m.len() < 512_000) {
-            if let Ok(text) = fs::read_to_string(sidecar) {
-                t.lyrics = Some(text);
-                t.synced_lyrics = None;
-                t.lyrics_timing_checked = true;
-                t.lyrics_source = None;
-                t.instrumental = false;
-                break;
-            }
+        if sidecar.metadata().is_ok_and(|m| m.len() < 512_000)
+            && let Ok(text) = fs::read_to_string(sidecar)
+        {
+            t.lyrics = Some(text);
+            t.synced_lyrics = None;
+            t.lyrics_timing_checked = true;
+            t.lyrics_source = None;
+            t.instrumental = false;
+            break;
         }
     }
     let parent = path.parent().unwrap_or(Path::new(""));

@@ -104,17 +104,18 @@ pub(super) fn apply_information(track: &mut Track, information: &Information) {
             .filter(|s| *s == &track.album)
             .cloned();
     }
-    if info.partial {
-        if let Some(old) = &track.music_info {
-            for (new, previous) in [
-                (&mut info.artist, &old.artist),
-                (&mut info.album, &old.album),
-            ] {
-                if let (Some(new), Some(previous)) = (new, previous) {
-                    if new.id == previous.id && new.summary.is_none() {
-                        new.summary.clone_from(&previous.summary);
-                    }
-                }
+    if info.partial
+        && let Some(old) = &track.music_info
+    {
+        for (new, previous) in [
+            (&mut info.artist, &old.artist),
+            (&mut info.album, &old.album),
+        ] {
+            if let (Some(new), Some(previous)) = (new, previous)
+                && new.id == previous.id
+                && new.summary.is_none()
+            {
+                new.summary.clone_from(&previous.summary);
             }
         }
     }

@@ -10,7 +10,7 @@
 
 ## Build, Test, and Development Commands
 
-Install Rust 1.85+, GTK 4.8+, GStreamer development libraries/plugins, and FFmpeg; see `README.md` for distribution dependencies.
+Install Rust 1.89+, GTK 4.8+, GStreamer development libraries/plugins, and FFmpeg; see `README.md` for distribution dependencies.
 
 - `make run`: build and launch the development application.
 - `make build`: produce the release binary in `target/release/`.

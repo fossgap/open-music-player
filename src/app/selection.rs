@@ -160,13 +160,11 @@ impl App {
         self.string_action("row-remove", |app, position| {
             if let Ok((page, playlist, id, position)) =
                 serde_json::from_str::<(String, Option<String>, String, usize)>(position)
+                && page == *app.page.borrow()
+                && playlist == *app.playlist.borrow()
+                && app.tracks_model.string(position as u32).as_deref() == Some(&id)
             {
-                if page == *app.page.borrow()
-                    && playlist == *app.playlist.borrow()
-                    && app.tracks_model.string(position as u32).as_deref() == Some(&id)
-                {
-                    app.remove_rows(&[position]);
-                }
+                app.remove_rows(&[position]);
             }
         });
         let menu = gio::Menu::new();

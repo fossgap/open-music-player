@@ -32,25 +32,25 @@ impl Default for Artwork {
 impl Artwork {
     fn advance(&mut self, dt: f64, enabled: bool, energy: f64, animated: bool) -> bool {
         let target = self.target.as_ref().filter(|_| enabled);
-        if let Some(art) = target {
-            if !self.layers.iter().any(|layer| &layer.art == art) {
-                // Bound history even when a user rapidly skips through many covers.
-                if self.layers.len() == 8 {
-                    let oldest = self
-                        .layers
-                        .iter()
-                        .enumerate()
-                        .min_by(|(_, a), (_, b)| a.weight.total_cmp(&b.weight))
-                        .map(|(i, _)| i)
-                        .unwrap();
-                    self.layers.remove(oldest);
-                }
-                self.layers.push(Layer {
-                    art: art.clone(),
-                    texture: gdk::Texture::for_pixbuf(art),
-                    weight: 0.0,
-                });
+        if let Some(art) = target
+            && !self.layers.iter().any(|layer| &layer.art == art)
+        {
+            // Bound history even when a user rapidly skips through many covers.
+            if self.layers.len() == 8 {
+                let oldest = self
+                    .layers
+                    .iter()
+                    .enumerate()
+                    .min_by(|(_, a), (_, b)| a.weight.total_cmp(&b.weight))
+                    .map(|(i, _)| i)
+                    .unwrap();
+                self.layers.remove(oldest);
             }
+            self.layers.push(Layer {
+                art: art.clone(),
+                texture: gdk::Texture::for_pixbuf(art),
+                weight: 0.0,
+            });
         }
         let blend = 1.0 - (-dt / if animated { 0.35 } else { 0.7 }).exp();
         let mut changed = false;

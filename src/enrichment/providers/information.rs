@@ -19,22 +19,21 @@ impl Client {
             .config
             .cache
             .join(format!("entity-{}.json", stable_id(url.as_str())));
-        if !self.refresh_information {
-            if let Ok(bytes) = fs::read(&path) {
-                if let Ok(cached) = serde_json::from_slice::<CachedJson>(&bytes) {
-                    // Short-lived search caches must not extend the seven-day
-                    // negative-result cache through otherwise valid empty JSON.
-                    let search = url.query_pairs().any(|(key, _)| key == "query");
-                    if now().saturating_sub(cached.checked)
-                        < if cached.value.is_some() && !search {
-                            30 * 86400
-                        } else {
-                            7 * 86400
-                        }
-                    {
-                        return Ok(cached.value);
-                    }
+        if !self.refresh_information
+            && let Ok(bytes) = fs::read(&path)
+            && let Ok(cached) = serde_json::from_slice::<CachedJson>(&bytes)
+        {
+            // Short-lived search caches must not extend the seven-day
+            // negative-result cache through otherwise valid empty JSON.
+            let search = url.query_pairs().any(|(key, _)| key == "query");
+            if now().saturating_sub(cached.checked)
+                < if cached.value.is_some() && !search {
+                    30 * 86400
+                } else {
+                    7 * 86400
                 }
+            {
+                return Ok(cached.value);
             }
         }
         let value = self.json(url.clone(), cancelled)?;
@@ -153,29 +152,29 @@ impl Client {
 
         // Recording search/lookup can embed a truncated release list. Never infer
         // an album until a complete browse page confirms a unique release group.
-        if query.album.is_empty() && release.is_none() {
-            if let Some(recording) = &mut recording {
-                if let Some(id) = mbid(recording) {
-                    let releases = self.mb(
-                        "release/",
-                        &[
-                            ("recording", &id),
-                            ("inc", "release-groups"),
-                            ("limit", "100"),
-                        ],
-                        cancelled,
-                    )?;
-                    let complete = releases.as_ref().filter(|v| {
-                        v["releases"]
-                            .as_array()
-                            .zip(v["release-count"].as_u64())
-                            .is_some_and(|(items, count)| items.len() as u64 >= count)
-                    });
-                    recording["releases"] = complete
-                        .map(|v| v["releases"].clone())
-                        .unwrap_or_else(|| Value::Array(vec![]));
-                }
-            }
+        if query.album.is_empty()
+            && release.is_none()
+            && let Some(recording) = &mut recording
+            && let Some(id) = mbid(recording)
+        {
+            let releases = self.mb(
+                "release/",
+                &[
+                    ("recording", &id),
+                    ("inc", "release-groups"),
+                    ("limit", "100"),
+                ],
+                cancelled,
+            )?;
+            let complete = releases.as_ref().filter(|v| {
+                v["releases"]
+                    .as_array()
+                    .zip(v["release-count"].as_u64())
+                    .is_some_and(|(items, count)| items.len() as u64 >= count)
+            });
+            recording["releases"] = complete
+                .map(|v| v["releases"].clone())
+                .unwrap_or_else(|| Value::Array(vec![]));
         }
         if query.artist.is_empty() {
             info.filled_artist = recording.as_ref().map(credit).filter(|s| !s.is_empty());
@@ -184,14 +183,13 @@ impl Client {
             info.filled_album = release.as_ref().and_then(|r| text(r, "title"));
         }
         let mut group_id = release.as_ref().and_then(|r| mbid(&r["release-group"]));
-        if group_id.is_none() {
-            if let Some(recording) = &recording {
-                if let Some(release) = unique_recording_release(query, recording) {
-                    group_id = mbid(&release["release-group"]);
-                    if query.album.is_empty() {
-                        info.filled_album = text(&release, "title");
-                    }
-                }
+        if group_id.is_none()
+            && let Some(recording) = &recording
+            && let Some(release) = unique_recording_release(query, recording)
+        {
+            group_id = mbid(&release["release-group"]);
+            if query.album.is_empty() {
+                info.filled_album = text(&release, "title");
             }
         }
         let artist_name = if !query.artist.is_empty() {
@@ -232,10 +230,11 @@ impl Client {
         } else {
             None
         };
-        if query.album.is_empty() && query.release_id.is_none() {
-            if let Some(group) = &group {
-                info.filled_album = text(group, "title");
-            }
+        if query.album.is_empty()
+            && query.release_id.is_none()
+            && let Some(group) = &group
+        {
+            info.filled_album = text(group, "title");
         }
         let mut artist_id = query.artist_id.clone();
         if artist_id.is_none() {
@@ -257,40 +256,39 @@ impl Client {
                 .and_then(|v| mbid(&v));
             }
         }
-        if let Some(group) = group {
-            if let Some(id) = mbid(&group) {
-                let summary = self.summary(&group, cancelled);
-                info.partial |= summary.is_err();
-                info.album = Some(Entity {
-                    id,
-                    name: text(&group, "title").unwrap_or_default(),
-                    date: text(&group, "first-release-date").unwrap_or_default(),
-                    summary: summary.ok().flatten(),
-                    genres: genres(&group),
-                });
-            }
+        if let Some(group) = group
+            && let Some(id) = mbid(&group)
+        {
+            let summary = self.summary(&group, cancelled);
+            info.partial |= summary.is_err();
+            info.album = Some(Entity {
+                id,
+                name: text(&group, "title").unwrap_or_default(),
+                date: text(&group, "first-release-date").unwrap_or_default(),
+                summary: summary.ok().flatten(),
+                genres: genres(&group),
+            });
         }
-        if let Some(id) = artist_id {
-            if let Some(artist) = self.mb(
+        if let Some(id) = artist_id
+            && let Some(artist) = self.mb(
                 &format!("artist/{id}"),
                 &[("inc", "url-rels+genres")],
                 cancelled,
-            )? {
-                if mbid(&artist).is_some() {
-                    let summary = self.summary(&artist, cancelled);
-                    info.partial |= summary.is_err();
-                    info.artist = Some(Entity {
-                        id: id.clone(),
-                        name: text(&artist, "name").unwrap_or_default(),
-                        summary: summary.ok().flatten(),
-                        genres: genres(&artist),
-                        ..Default::default()
-                    });
-                    match self.discography(&id, 0, cancelled) {
-                        Ok(page) => info.discography = page,
-                        Err(_) => info.partial = true,
-                    }
-                }
+            )?
+            && mbid(&artist).is_some()
+        {
+            let summary = self.summary(&artist, cancelled);
+            info.partial |= summary.is_err();
+            info.artist = Some(Entity {
+                id: id.clone(),
+                name: text(&artist, "name").unwrap_or_default(),
+                summary: summary.ok().flatten(),
+                genres: genres(&artist),
+                ..Default::default()
+            });
+            match self.discography(&id, 0, cancelled) {
+                Ok(page) => info.discography = page,
+                Err(_) => info.partial = true,
             }
         }
         if cancelled() {
@@ -391,32 +389,31 @@ impl Client {
                 .host_str()
                 .is_some_and(|s| s == "www.wikidata.org" || s == "wikidata.org")
                 && relation["type"] == "wikidata"
-            {
-                if let Some(id) = link.path().strip_prefix("/wiki/").filter(|id| {
+                && let Some(id) = link.path().strip_prefix("/wiki/").filter(|id| {
                     id.starts_with('Q')
                         && id.len() > 1
                         && id[1..].bytes().all(|c| c.is_ascii_digit())
-                }) {
-                    wikidata = Some(id.to_string());
-                }
+                })
+            {
+                wikidata = Some(id.to_string());
             }
         }
-        if title.is_none() {
-            if let Some(id) = wikidata {
-                let mut url = crate::services::http_url(&self.config.wikidata)
-                    .map_err(|_| Failure::new("Invalid metadata provider URL.", 60))?;
-                url.query_pairs_mut().extend_pairs([
-                    ("action", "wbgetentities"),
-                    ("format", "json"),
-                    ("ids", &id),
-                    ("props", "sitelinks"),
-                    ("sitefilter", "enwiki"),
-                ]);
-                if let Some(data) = self.information_json(url, cancelled)? {
-                    title = data["entities"][&id]["sitelinks"]["enwiki"]["title"]
-                        .as_str()
-                        .map(str::to_string);
-                }
+        if title.is_none()
+            && let Some(id) = wikidata
+        {
+            let mut url = crate::services::http_url(&self.config.wikidata)
+                .map_err(|_| Failure::new("Invalid metadata provider URL.", 60))?;
+            url.query_pairs_mut().extend_pairs([
+                ("action", "wbgetentities"),
+                ("format", "json"),
+                ("ids", &id),
+                ("props", "sitelinks"),
+                ("sitefilter", "enwiki"),
+            ]);
+            if let Some(data) = self.information_json(url, cancelled)? {
+                title = data["entities"][&id]["sitelinks"]["enwiki"]["title"]
+                    .as_str()
+                    .map(str::to_string);
             }
         }
         let Some(title) = title.filter(|s| !s.is_empty()) else {

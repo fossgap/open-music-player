@@ -300,10 +300,10 @@ impl App {
             .map(|t| t.id.clone())
             .collect();
         for path in &paths {
-            if let Ok(uri) = url::Url::from_file_path(path) {
-                if !state.ignored_local.contains(&uri.to_string()) {
-                    state.ignored_local.push(uri.to_string());
-                }
+            if let Ok(uri) = url::Url::from_file_path(path)
+                && !state.ignored_local.contains(&uri.to_string())
+            {
+                state.ignored_local.push(uri.to_string());
             }
         }
         state.forget_many(ids.iter().map(String::as_str));
@@ -408,10 +408,10 @@ impl App {
                     4000,
                     None::<&gio::Cancellable>,
                     move |result| {
-                        if result.is_err() {
-                            if let Some(app) = weak.upgrade() {
-                                app.open_directory(&parent);
-                            }
+                        if result.is_err()
+                            && let Some(app) = weak.upgrade()
+                        {
+                            app.open_directory(&parent);
                         }
                     },
                 );

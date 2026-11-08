@@ -100,21 +100,20 @@ impl Client {
         cancelled: &impl Fn() -> bool,
     ) -> Result<Option<Found>, Failure> {
         let path = self.config.cache.join(format!("{}.json", query.key));
-        if !force {
-            if let Ok(bytes) = fs::read(&path) {
-                if let Ok(cached) = serde_json::from_slice::<Cached>(&bytes) {
-                    let age = now().saturating_sub(cached.checked);
-                    if cached.version == 1
-                        && cached.value.as_ref().map_or(age < 7 * 86400, |v| {
-                            v.field() == query.field
-                                && v.available()
-                                && (!matches!(query.field, Field::Information | Field::Discography)
-                                    || age < 30 * 86400)
-                        })
-                    {
-                        return Ok(cached.value);
-                    }
-                }
+        if !force
+            && let Ok(bytes) = fs::read(&path)
+            && let Ok(cached) = serde_json::from_slice::<Cached>(&bytes)
+        {
+            let age = now().saturating_sub(cached.checked);
+            if cached.version == 1
+                && cached.value.as_ref().map_or(age < 7 * 86400, |v| {
+                    v.field() == query.field
+                        && v.available()
+                        && (!matches!(query.field, Field::Information | Field::Discography)
+                            || age < 30 * 86400)
+                })
+            {
+                return Ok(cached.value);
             }
         }
         self.refresh_information = force;
@@ -370,10 +369,10 @@ impl Client {
             url.query_pairs_mut()
                 .append_pair("duration", &query.duration.to_string());
         }
-        if let Some(value) = self.json(url, cancelled)? {
-            if let Some(found) = matching_lyrics(query, &value) {
-                return Ok(Some(found));
-            }
+        if let Some(value) = self.json(url, cancelled)?
+            && let Some(found) = matching_lyrics(query, &value)
+        {
+            return Ok(Some(found));
         }
         let mut url = endpoint(&self.config.lrclib, "search")?;
         url.query_pairs_mut()
@@ -454,15 +453,15 @@ fn release_candidates(
         if r["status"].as_str().is_some_and(|s| s != "Official") {
             continue;
         }
-        if let Some(id) = r["id"].as_str().filter(|s| valid_mbid(s)) {
-            if !candidates.iter().any(|(_, c)| c == id) {
-                candidates.push(("release", id.to_string()));
-            }
+        if let Some(id) = r["id"].as_str().filter(|s| valid_mbid(s))
+            && !candidates.iter().any(|(_, c)| c == id)
+        {
+            candidates.push(("release", id.to_string()));
         }
-        if let Some(id) = r["release-group"]["id"].as_str().filter(|s| valid_mbid(s)) {
-            if !groups.iter().any(|(_, c)| c == id) {
-                groups.push(("release-group", id.to_string()));
-            }
+        if let Some(id) = r["release-group"]["id"].as_str().filter(|s| valid_mbid(s))
+            && !groups.iter().any(|(_, c)| c == id)
+        {
+            groups.push(("release-group", id.to_string()));
         }
     }
     candidates.truncate(3);

@@ -184,10 +184,11 @@ impl App {
         } else {
             Some(source(&track))
         };
-        if fade == 0.0 && self.state.borrow().playback.gapless {
-            if let Some(next) = next.as_mut() {
-                next.following = continuations(&self.state.borrow(), &track);
-            }
+        if fade == 0.0
+            && self.state.borrow().playback.gapless
+            && let Some(next) = next.as_mut()
+        {
+            next.following = continuations(&self.state.borrow(), &track);
         }
         (next, fade)
     }

@@ -54,43 +54,43 @@ impl I18n {
     }
     pub fn builder(&self, builder: &gtk::Builder) {
         for object in builder.objects() {
-            if let Some(window) = object.downcast_ref::<gtk::Window>() {
-                if let Some(title) = window.title() {
-                    window.set_title(Some(&self.text(&title)));
-                }
+            if let Some(window) = object.downcast_ref::<gtk::Window>()
+                && let Some(title) = window.title()
+            {
+                window.set_title(Some(&self.text(&title)));
             }
             if let Some(label) = object.downcast_ref::<gtk::Label>() {
                 label.set_label(&self.text(&label.label()));
             }
-            if let Some(button) = object.downcast_ref::<gtk::Button>() {
-                if let Some(label) = button.label() {
-                    button.set_label(&self.text(&label));
-                }
+            if let Some(button) = object.downcast_ref::<gtk::Button>()
+                && let Some(label) = button.label()
+            {
+                button.set_label(&self.text(&label));
             }
-            if let Some(button) = object.downcast_ref::<gtk::CheckButton>() {
-                if let Some(label) = button.label() {
-                    button.set_label(Some(&self.text(&label)));
-                }
+            if let Some(button) = object.downcast_ref::<gtk::CheckButton>()
+                && let Some(label) = button.label()
+            {
+                button.set_label(Some(&self.text(&label)));
             }
-            if let Some(page) = object.downcast_ref::<gtk::StackPage>() {
-                if let Some(title) = page.title() {
-                    page.set_title(&self.text(&title));
-                }
+            if let Some(page) = object.downcast_ref::<gtk::StackPage>()
+                && let Some(title) = page.title()
+            {
+                page.set_title(&self.text(&title));
             }
-            if let Some(entry) = object.downcast_ref::<gtk::Entry>() {
-                if let Some(text) = entry.placeholder_text() {
-                    entry.set_placeholder_text(Some(&self.text(&text)));
-                }
+            if let Some(entry) = object.downcast_ref::<gtk::Entry>()
+                && let Some(text) = entry.placeholder_text()
+            {
+                entry.set_placeholder_text(Some(&self.text(&text)));
             }
-            if let Some(entry) = object.downcast_ref::<gtk::SearchEntry>() {
-                if let Some(text) = entry.placeholder_text() {
-                    entry.set_placeholder_text(Some(&self.text(&text)));
-                }
+            if let Some(entry) = object.downcast_ref::<gtk::SearchEntry>()
+                && let Some(text) = entry.placeholder_text()
+            {
+                entry.set_placeholder_text(Some(&self.text(&text)));
             }
-            if let Some(widget) = object.downcast_ref::<gtk::Widget>() {
-                if let Some(text) = widget.tooltip_text() {
-                    widget.set_tooltip_text(Some(&self.text(&text)));
-                }
+            if let Some(widget) = object.downcast_ref::<gtk::Widget>()
+                && let Some(text) = widget.tooltip_text()
+            {
+                widget.set_tooltip_text(Some(&self.text(&text)));
             }
         }
     }

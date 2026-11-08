@@ -20,10 +20,10 @@ impl App {
         let follow: gtk::ToggleButton = object(&self.ui, "lyrics_follow");
         let weak = Rc::downgrade(self);
         follow.connect_toggled(move |button| {
-            if button.is_active() {
-                if let Some(app) = weak.upgrade() {
-                    app.sync_lyrics(true);
-                }
+            if button.is_active()
+                && let Some(app) = weak.upgrade()
+            {
+                app.sync_lyrics(true);
             }
         });
         let wheel = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);

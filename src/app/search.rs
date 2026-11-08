@@ -182,10 +182,10 @@ impl App {
                 let weak = Rc::downgrade(&app);
                 let row = item.downgrade();
                 object::<gtk::Button>(&ui, id).connect_clicked(move |_| {
-                    if let (Some(app), Some(item)) = (weak.upgrade(), row.upgrade()) {
-                        if let Some(key) = item.item().and_downcast::<gtk::StringObject>() {
-                            app.act_global(&key.string(), action);
-                        }
+                    if let (Some(app), Some(item)) = (weak.upgrade(), row.upgrade())
+                        && let Some(key) = item.item().and_downcast::<gtk::StringObject>()
+                    {
+                        app.act_global(&key.string(), action);
                     }
                 });
             }
@@ -213,10 +213,10 @@ impl App {
         list.set_factory(Some(&factory));
         let weak = Rc::downgrade(self);
         list.connect_activate(move |_, position| {
-            if let Some(app) = weak.upgrade() {
-                if let Some(key) = app.search.model.string(position) {
-                    app.act_global(&key, 2);
-                }
+            if let Some(app) = weak.upgrade()
+                && let Some(key) = app.search.model.string(position)
+            {
+                app.act_global(&key, 2);
             }
         });
     }
@@ -406,14 +406,13 @@ impl App {
             .spotify_account
             .as_ref()
             .map(|a| a.id.clone());
-        if let Some(section) = self.search.sections.borrow_mut().get_mut(&Group::Spotify) {
-            if matches!(section.status, Status::Loading)
-                && (account != *self.search.spotify_account.borrow()
-                    || !self.audio.borrow().spotify_ready() && !self.spotify.busy.get())
-            {
-                section.status = Status::Disconnected;
-                changed = true;
-            }
+        if let Some(section) = self.search.sections.borrow_mut().get_mut(&Group::Spotify)
+            && matches!(section.status, Status::Loading)
+            && (account != *self.search.spotify_account.borrow()
+                || !self.audio.borrow().spotify_ready() && !self.spotify.busy.get())
+        {
+            section.status = Status::Disconnected;
+            changed = true;
         }
         if changed {
             self.render_global_search();
@@ -907,17 +906,17 @@ impl App {
         }
         let ids = match &document.target {
             Target::Track(id) => {
-                if self.state.borrow().track(id).is_none() {
-                    if let Some(mut track) = self.search.tracks.borrow().get(id).cloned() {
-                        if let Some(art) = track
-                            .artwork
-                            .as_ref()
-                            .and_then(|p| self.search.artwork.borrow().get(p).cloned())
-                        {
-                            track.artwork = Some(art);
-                        }
-                        self.state.borrow_mut().merge(vec![track]);
+                if self.state.borrow().track(id).is_none()
+                    && let Some(mut track) = self.search.tracks.borrow().get(id).cloned()
+                {
+                    if let Some(art) = track
+                        .artwork
+                        .as_ref()
+                        .and_then(|p| self.search.artwork.borrow().get(p).cloned())
+                    {
+                        track.artwork = Some(art);
                     }
+                    self.state.borrow_mut().merge(vec![track]);
                 }
                 if self.state.borrow().track(id).is_none() {
                     return;

@@ -8,13 +8,14 @@ pub(super) async fn download(
 ) -> Result<Option<(NamedTempFile, String)>, String> {
     let mut partial = task.partial.lock().unwrap().take();
     let result = transfer(task, resolved, progress, &mut partial).await;
-    if result.is_err() && task.control.value() != DISCARD {
-        if let Some(partial) = partial.filter(|p| p.bytes > 0) {
-            let _ = progress
-                .tx
-                .send((task.id, Update::Progress(partial.bytes, partial.total, 0.0)));
-            *task.partial.lock().unwrap() = Some(partial);
-        }
+    if result.is_err()
+        && task.control.value() != DISCARD
+        && let Some(partial) = partial.filter(|p| p.bytes > 0)
+    {
+        let _ = progress
+            .tx
+            .send((task.id, Update::Progress(partial.bytes, partial.total, 0.0)));
+        *task.partial.lock().unwrap() = Some(partial);
     }
     result
 }

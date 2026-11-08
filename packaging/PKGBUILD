@@ -3,8 +3,9 @@ pkgver=0.1.0
 pkgrel=1
 pkgdesc='A native home for music, podcasts, and radio'
 arch=('x86_64' 'aarch64')
-license=('LicenseRef-Unspecified')
-depends=('dbus' 'gtk4' 'gstreamer' 'gst-plugins-base' 'gst-plugins-good' 'ffmpeg' 'ca-certificates')
+url='https://github.com/fossgap/open-music-player'
+license=('GPL-3.0-only')
+depends=('dbus' 'gtk4>=4.8' 'gstreamer' 'gst-plugins-base' 'gst-plugins-good' 'ffmpeg' 'ca-certificates' 'adwaita-icon-theme' 'glib-networking')
 optdepends=('gst-libav: additional audio codecs' 'gst-plugins-bad: additional streams' 'python: YouTube Music support' 'python-pip: YouTube Music setup' 'libsecret: YouTube Music account storage' 'deno: YouTube Music playback')
 makedepends=('rust' 'pkgconf')
 source=("$pkgname-$pkgver.tar.gz")

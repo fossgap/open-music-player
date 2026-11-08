@@ -25,10 +25,11 @@ mod imp {
     impl WidgetImpl for RenderArea {
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
             let area = self.obj();
-            if area.width() > 0 && area.height() > 0 {
-                if let Some(draw) = self.draw.borrow().as_ref() {
-                    draw(snapshot, area.width(), area.height());
-                }
+            if area.width() > 0
+                && area.height() > 0
+                && let Some(draw) = self.draw.borrow().as_ref()
+            {
+                draw(snapshot, area.width(), area.height());
             }
         }
     }

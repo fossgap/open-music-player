@@ -24,10 +24,9 @@ impl App {
         if state
             .current_track()
             .is_some_and(|t| enrichment::needs_lookup(t, Field::Information))
+            && let Some(query) = query
         {
-            if let Some(query) = query {
-                service.request(query, false);
-            }
+            service.request(query, false);
         }
     }
 

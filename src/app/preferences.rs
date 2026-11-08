@@ -84,14 +84,12 @@ impl App {
                 move |signal| {
                     if let Some((_, key, value)) =
                         signal.parameters.get::<(String, String, glib::Variant)>()
+                        && key == "color-scheme"
+                        && let Some(value) = value.get::<u32>()
                     {
-                        if key == "color-scheme" {
-                            if let Some(value) = value.get::<u32>() {
-                                changed.set(true);
-                                if let Some(app) = subscriber.upgrade() {
-                                    app.theme.borrow_mut().system_scheme(value);
-                                }
-                            }
+                        changed.set(true);
+                        if let Some(app) = subscriber.upgrade() {
+                            app.theme.borrow_mut().system_scheme(value);
                         }
                     }
                 },
@@ -112,18 +110,17 @@ impl App {
                     2000,
                 )
                 .await;
-            if !observed.get() {
-                if let (Some(app), Ok(reply)) = (weak.upgrade(), result) {
-                    type Namespaces = HashMap<String, HashMap<String, glib::Variant>>;
-                    if let Some((values,)) = reply.get::<(Namespaces,)>() {
-                        if let Some(value) = values
-                            .get(APPEARANCE)
-                            .and_then(|settings| settings.get("color-scheme"))
-                            .and_then(|value| value.get::<u32>())
-                        {
-                            app.theme.borrow_mut().system_scheme(value);
-                        }
-                    }
+            if !observed.get()
+                && let (Some(app), Ok(reply)) = (weak.upgrade(), result)
+            {
+                type Namespaces = HashMap<String, HashMap<String, glib::Variant>>;
+                if let Some((values,)) = reply.get::<(Namespaces,)>()
+                    && let Some(value) = values
+                        .get(APPEARANCE)
+                        .and_then(|settings| settings.get("color-scheme"))
+                        .and_then(|value| value.get::<u32>())
+                {
+                    app.theme.borrow_mut().system_scheme(value);
                 }
             }
         });

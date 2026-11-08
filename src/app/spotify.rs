@@ -41,13 +41,12 @@ impl App {
                 .map(|l| l.id.clone());
             if let Some(id) =
                 remote.filter(|id| id.len() == 22 && id.bytes().all(|b| b.is_ascii_alphanumeric()))
-            {
-                if let Err(e) = gio::AppInfo::launch_default_for_uri(
+                && let Err(e) = gio::AppInfo::launch_default_for_uri(
                     &format!("https://open.spotify.com/playlist/{id}"),
                     None::<&gio::AppLaunchContext>,
-                ) {
-                    a.notice(&e.to_string(), true, false);
-                }
+                )
+            {
+                a.notice(&e.to_string(), true, false);
             }
         });
         self.string_action("spotify-open", |a, id| {
@@ -56,22 +55,22 @@ impl App {
                 .borrow()
                 .track(id)
                 .and_then(|t| crate::spotify::track_url(&t.uri));
-            if let Some(url) = url {
-                if let Err(e) =
+            if let Some(url) = url
+                && let Err(e) =
                     gio::AppInfo::launch_default_for_uri(&url, None::<&gio::AppLaunchContext>)
-                {
-                    a.notice(&e.to_string(), true, false);
-                }
+            {
+                a.notice(&e.to_string(), true, false);
             }
         });
         for page in ["youtube", "spotify", "streams"] {
             let weak = Rc::downgrade(self);
             object::<gtk::ToggleButton>(&self.ui, &format!("service_{page}")).connect_toggled(
                 move |button| {
-                    if let Some(app) = weak.upgrade() {
-                        if button.is_active() && !app.updating.get() {
-                            app.navigate(page);
-                        }
+                    if let Some(app) = weak.upgrade()
+                        && button.is_active()
+                        && !app.updating.get()
+                    {
+                        app.navigate(page);
                     }
                 },
             );
@@ -192,12 +191,12 @@ impl App {
                 .secondary_text(app.tr("This removes Spotify sign-in, tracks and linked playlists from this computer. Your online library stays unchanged.")).build();
             dialog.add_button(&app.tr("Cancel"), gtk::ResponseType::Cancel); dialog.add_button(&app.tr("Disconnect"), gtk::ResponseType::Accept);
             let weak = Rc::downgrade(&app);
-            dialog.connect_response(move |dialog, response| { if response == gtk::ResponseType::Accept { if let Some(app) = weak.upgrade() {
+            dialog.connect_response(move |dialog, response| { if response == gtk::ResponseType::Accept && let Some(app) = weak.upgrade() {
                 app.spotify.busy.set(true); app.spotify.pending_play.set(None);
                 if app.state.borrow().current_track().is_some_and(|t| t.kind == Kind::Spotify) { app.stop_playback(); }
                 app.audio.borrow_mut().detach_spotify();
                 app.spotify.service.send(Command::Disconnect); app.spotify_dialog_status(&app.tr("Disconnecting…")); app.refresh();
-            } } dialog.close(); }); dialog.present();
+            } dialog.close(); }); dialog.present();
         } });
         window.set_child(Some(&content));
         let weak = Rc::downgrade(self);
@@ -357,21 +356,20 @@ impl App {
         let weak = Rc::downgrade(self);
         let id = id.to_string();
         dialog.connect_response(move |dialog, response| {
-            if response == gtk::ResponseType::Accept {
-                if let Some(app) = weak.upgrade() {
-                    if !app.spotify.busy.replace(true) {
-                        if let Some(local) = catalog::local_playlist(&app.state.borrow(), &id) {
-                            app.spotify.service.send(if reload {
-                                Command::Reload(local)
-                            } else {
-                                Command::Publish(local)
-                            });
-                            app.notice(&app.tr("Synchronizing Spotify playlists…"), false, true);
-                            app.refresh();
-                        } else {
-                            app.spotify.busy.set(false);
-                        }
-                    }
+            if response == gtk::ResponseType::Accept
+                && let Some(app) = weak.upgrade()
+                && !app.spotify.busy.replace(true)
+            {
+                if let Some(local) = catalog::local_playlist(&app.state.borrow(), &id) {
+                    app.spotify.service.send(if reload {
+                        Command::Reload(local)
+                    } else {
+                        Command::Publish(local)
+                    });
+                    app.notice(&app.tr("Synchronizing Spotify playlists…"), false, true);
+                    app.refresh();
+                } else {
+                    app.spotify.busy.set(false);
                 }
             }
             dialog.close();

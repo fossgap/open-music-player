@@ -221,10 +221,10 @@ impl Playback {
         if transition.next == next {
             return;
         }
-        if let Some(next) = next.as_ref() {
-            if let Ok(uri) = SpotifyUri::from_uri(&next.uri) {
-                self.player.preload(uri);
-            }
+        if let Some(next) = next.as_ref()
+            && let Ok(uri) = SpotifyUri::from_uri(&next.uri)
+        {
+            self.player.preload(uri);
         }
         transition.next = next;
     }
@@ -540,10 +540,10 @@ async fn forward_events(
                     break;
                 }
                 player.load(uri, state.playing, 0);
-                if let Some(next) = state.next.as_ref() {
-                    if let Ok(uri) = SpotifyUri::from_uri(&next.uri) {
-                        player.preload(uri);
-                    }
+                if let Some(next) = state.next.as_ref()
+                    && let Ok(uri) = SpotifyUri::from_uri(&next.uri)
+                {
+                    player.preload(uri);
                 }
             }
         } else if tx.send(Feedback::Native(event)).is_err() {

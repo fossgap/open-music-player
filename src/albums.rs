@@ -32,24 +32,22 @@ impl Query {
                 if t.kind != Kind::Music || crate::library::local_path(&t.uri).is_none() {
                     return false;
                 }
-                if let Some(album) = t.music_info.as_ref().and_then(|i| i.album.as_ref()) {
-                    if !album.id.is_empty() {
-                        return album.id == self.id;
-                    }
+                if let Some(album) = t.music_info.as_ref().and_then(|i| i.album.as_ref())
+                    && !album.id.is_empty()
+                {
+                    return album.id == self.id;
                 }
                 let artist = if t.album_artist.is_empty() {
                     &t.artist
                 } else {
                     &t.album_artist
                 };
-                if let Some(id) = &t.musicbrainz_artist_id {
-                    if !self.artist_id.is_empty()
-                        && (t.album_artist.is_empty()
-                            || normalize(&t.album_artist) == normalize(&t.artist))
-                    {
-                        return id == &self.artist_id
-                            && normalize(&t.album) == normalize(&self.title);
-                    }
+                if let Some(id) = &t.musicbrainz_artist_id
+                    && !self.artist_id.is_empty()
+                    && (t.album_artist.is_empty()
+                        || normalize(&t.album_artist) == normalize(&t.artist))
+                {
+                    return id == &self.artist_id && normalize(&t.album) == normalize(&self.title);
                 }
                 self.matches(&t.album, [artist])
             })

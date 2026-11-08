@@ -172,19 +172,19 @@ impl App {
         result: Result<(), glib::Error>,
     ) {
         self.downloads.deleting.borrow_mut().remove(&saved.id);
-        if let Err(error) = result {
-            if !error.matches(gio::IOErrorEnum::NotFound) {
-                self.notice(
-                    &format!(
-                        "{} {error}",
-                        self.tr("Could not move the download to Trash.")
-                    ),
-                    true,
-                    false,
-                );
-                self.render_downloads();
-                return;
-            }
+        if let Err(error) = result
+            && !error.matches(gio::IOErrorEnum::NotFound)
+        {
+            self.notice(
+                &format!(
+                    "{} {error}",
+                    self.tr("Could not move the download to Trash.")
+                ),
+                true,
+                false,
+            );
+            self.render_downloads();
+            return;
         }
         let uri = gio::File::for_path(&saved.path).uri();
         let current_uses_file = self
@@ -413,10 +413,10 @@ impl App {
         }
         let mut state = self.state.borrow_mut();
         for item in complete {
-            if item.mode == Mode::Download {
-                if let Some(track) = state.tracks.iter_mut().find(|t| t.id == item.track.id) {
-                    track.download_path = Some(item.path.clone());
-                }
+            if item.mode == Mode::Download
+                && let Some(track) = state.tracks.iter_mut().find(|t| t.id == item.track.id)
+            {
+                track.download_path = Some(item.path.clone());
             }
             state.saved_audio.push(model::SavedAudio {
                 id: item.id.to_string(),
@@ -610,14 +610,13 @@ impl App {
             let weak = Rc::downgrade(&app);
             let label = label.clone();
             dialog.connect_response(move |dialog, response| {
-                if response == gtk::ResponseType::Accept {
-                    if let (Some(app), Some(path)) =
+                if response == gtk::ResponseType::Accept
+                    && let (Some(app), Some(path)) =
                         (weak.upgrade(), dialog.file().and_then(|f| f.path()))
-                    {
-                        label.set_label(&path.to_string_lossy());
-                        app.state.borrow_mut().download_directory = Some(path);
-                        app.persist();
-                    }
+                {
+                    label.set_label(&path.to_string_lossy());
+                    app.state.borrow_mut().download_directory = Some(path);
+                    app.persist();
                 }
                 dialog.destroy();
             });

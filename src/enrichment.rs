@@ -231,7 +231,7 @@ impl Found {
 pub fn apply(track: &mut Track, key: &str, found: &Found) -> bool {
     let field = found.field();
     if (field != Field::Information && !needs_lookup(track, field))
-        || !Query::for_track(track, field).is_some_and(|q| q.key == key)
+        || Query::for_track(track, field).is_none_or(|q| q.key != key)
     {
         return false;
     }
@@ -387,13 +387,12 @@ impl Service {
         }
     }
     pub fn request(&mut self, query: Query, force: bool) -> bool {
-        if let Some(status) = self.status.get(&query.key) {
-            if (!force && !matches!(status, Status::Found))
+        if let Some(status) = self.status.get(&query.key)
+            && ((!force && !matches!(status, Status::Found))
                 || matches!(status, Status::Pending)
-                || matches!(status, Status::Failed(e) if !e.retryable())
-            {
-                return false;
-            }
+                || matches!(status, Status::Failed(e) if !e.retryable()))
+        {
+            return false;
         }
         let epoch = self.epochs[index(query.field)].load(Ordering::Relaxed);
         let key = query.key.clone();

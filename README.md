@@ -1,62 +1,87 @@
-<div align="center">
-  <img src="resources/io.github.openmusic.Player.svg" width="72" alt="Open Music Player icon">
-  <h1>Open Music Player</h1>
-  <p>A native Linux home for your music, podcasts, and radio.</p>
-  <p><strong>Rust · GTK 4 · GStreamer</strong></p>
-</div>
+<p align="center">
+  <img src="resources/io.github.openmusic.Player.svg" width="128" height="128" alt="Open Music Player icon">
+</p>
 
-Open Music keeps a local library, internet audio, and desktop playback controls in one quiet interface. Choose your music folders, put something on, and keep listening in the mini player or system tray.
+<h1 align="center">Open Music Player</h1>
+
+[![Test CI](https://github.com/fossgap/open-music-player/actions/workflows/test-ci.yml/badge.svg)](https://github.com/fossgap/open-music-player/actions/workflows/test-ci.yml)
+[![Release CI](https://github.com/fossgap/open-music-player/actions/workflows/release-ci.yml/badge.svg)](https://github.com/fossgap/open-music-player/actions/workflows/release-ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/fossgap/open-music-player)](https://github.com/fossgap/open-music-player/releases)
+[![Downloads](https://img.shields.io/github/downloads/fossgap/open-music-player/total)](https://github.com/fossgap/open-music-player/releases)
+[![License: GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-blue.svg)](LICENSE)
+[![Rust 2024](https://img.shields.io/badge/Rust-2024-orange.svg)](Cargo.toml)
+[![GTK 4.8+](https://img.shields.io/badge/GTK-4.8%2B-blue.svg)](Cargo.toml)
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-lightgrey.svg)](docs/packaging.md)
+
+> A native Linux home for your music, podcasts, and radio. Built with Rust, GTK 4, and GStreamer, part of [FOSS Gap](https://github.com/fossgap).
+
+Open Music Player brings your local library, internet audio, and desktop playback controls into one interface. Choose your music folders, put something on, and keep listening in the mini player or system tray.
+
+[Features](#features) · [User guide](docs/wiki/README.md) · [Installation](#installation) · [Data privacy](docs/wiki/data-privacy.md) · [Building from source](#building-from-source)
 
 ![Open Music Player with generated demonstration music](docs/player.png)
 
-*The screenshot uses original, generated test tones and geometric artwork. No commercial music is bundled.*
+*The screenshot uses original test tones and generated artwork. No commercial music is bundled.*
 
-[Get started](#get-started) · [Listening](#listening) · [Development](#development) · [Packaging](#packaging) · [Project layout](#project-layout)
+## Features
 
-## What works
+- Local music folders with recursive watching, drag and drop, search, album-artist grouping, and duplicate detection
+- Favorites, playlists, queue, multi-selection, drag/keyboard ordering, and M3U/M3U8/PLS/XSPF playlist import
+- Single/bulk tag editing, with library-only overrides or reviewed writes to audio files
+- Gapless playback, optional crossfade and ReplayGain, shuffle/repeat, seeking, and 0.5–2× playback speed
+- Podcast discovery through Apple Podcasts and gPodder, RSS/Atom subscriptions, and per-episode resume
+- Internet radio through Radio Browser, direct HTTP(S) streams, downloads, and recordings
+- YouTube Music search/playback and optional account connection; Spotify playback with Premium
+- Two-way playlist synchronization and private playlist publishing for connected music services
+- Embedded, local, and online artwork/lyrics; synchronized lyrics, artist biographies, album information, and discographies
+- Waveform, spectrum, audio-reactive scenes, and album-art visualization
+- MPRIS desktop controls, system tray, mini player, background playback, and remembered sessions
+- Ten interface languages: English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, and Korean
 
-| Area | Included |
-| --- | --- |
-| Local library | Recursive folder discovery and watching, file/folder drag and drop, Open location, metadata, search, album-artist grouping, disc/track ordering, single/bulk tag editing, configurable automatic refresh, duplicate detection |
-| Collections | Multi-selection and bulk actions, drag/keyboard reordering, favorites, playlist artwork grid, hover/focus Play all, create/rename/delete playlists, M3U/M3U8/PLS/XSPF import, queue, shuffle, repeat one/all |
-| Playback | GStreamer audio, play/pause, previous/next, seeking, 0.5–2× playback speed, elapsed/remaining time, volume, mute, automatic next track, gapless, optional crossfade and ReplayGain |
-| Podcasts | Apple Podcasts/iTunes and gPodder search/discovery, subscribe/unsubscribe toggles, RSS/Atom subscriptions, feed refresh, per-episode resume positions |
-| Internet radio | Search and discovery through Radio Browser, station artwork, favorites, playback |
-| Streaming | One view for YouTube Music, Spotify and direct HTTP(S) audio |
-| Global search | Saved music, albums, playlists, episodes, stations and stream URLs, plus online discovery across the existing services |
-| YouTube Music | Song search, personal browser-session connection, native playback, two-way playlist sync and private playlist publishing |
-| Spotify | Browser sign-in, librespot playback (Premium), track search, two-way playlist sync and private playlist publishing |
-| Desktop | MPRIS controls and metadata, StatusNotifierItem tray menu, background playback, mini player |
-| Artwork and lyrics | Embedded/folder/service covers, missing-cover lookup through MusicBrainz and Cover Art Archive, embedded/sidecar lyrics and LRCLIB lookup, local caching, artwork backdrop |
-| Visualization | Live waveform, spectrum bars, audio-reactive mood scenes, and album-art visualization |
-| Persistence | Library, sources, playlists, queue, track, position, volume, repeat, shuffle, window size/maximized state, and preferences |
-| Languages | English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean; new service copy falls back to English where untranslated |
+YouTube Music uses the unofficial ytmusicapi/yt-dlp libraries; Spotify uses librespot and its Web API. Service availability, account restrictions, and provider changes apply. See [service requirements](docs/wiki/services.md) and [streaming setup](docs/wiki/streaming.md).
 
-**Service boundaries:** Spotify uses [librespot](https://github.com/librespot-org/librespot) and requires Premium. Search and playlist operations use Spotify’s Web API, whose account/app restrictions still apply. YouTube Music uses the unofficial `ytmusicapi` and `yt-dlp` libraries, with no API key or Premium subscription requirement in Open Music Player. Availability depends on your account, region and YouTube; sessions can expire and provider changes can require dependency updates. This is an initial implementation, not a published stable release.
+## Installation
 
+Release builds target **Linux x86_64**: Debian/Ubuntu/Kali (`.deb`), Fedora (`.rpm`), Arch (`.pkg.tar.zst`), and AppImage. See [GitHub Releases](https://github.com/fossgap/open-music-player/releases) for published artifacts. If no release is available yet, [build from source](#building-from-source).
 
-### Provider access
+[Verify the download](docs/wiki/installation.md#verify-a-download) with the release's `SHA256SUMS`, then run the command for your system in the download directory:
 
-These requirements apply to the features implemented in Open Music Player. Anonymous access means no user account, API key, or saved sign-in is needed.
+```sh
+# Debian / Ubuntu / Kali
+sudo apt install ./open-music-player_*_amd64.deb
 
-| Provider | Anonymous access | Account requirements |
-| --- | --- | --- |
-| [Apple Podcasts / iTunes](https://performance-partners.apple.com/search-api) | Yes: podcast search and discovery | None |
-| [gPodder directory](https://gpoddernet.readthedocs.io/en/latest/api/reference/directory.html) | Yes: podcast search and top lists | None; subscriptions are stored locally |
-| [Radio Browser](https://api.radio-browser.info/) | Yes: station search and discovery | None |
-| [MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API) / [Cover Art Archive](https://musicbrainz.org/doc/Cover_Art_Archive/API) | Yes: metadata lookups and cover retrieval | None |
-| [LRCLIB](https://lrclib.net/docs) | Yes: lyrics retrieval | None; developer registration is optional |
-| [YouTube Music](https://ytmusicapi.readthedocs.io/en/stable/usage.html) | Partial: public search and eligible public-track playback | Personal playlist synchronization and publishing require a signed-in Google account |
-| [Spotify](https://developer.spotify.com/documentation/web-api/concepts/authorization) | No: the integration requires sign-in | [Premium is required for librespot playback](https://github.com/librespot-org/librespot) |
-| Direct RSS/Atom feeds and HTTP(S) audio streams | Yes, when the host serves them publicly | Host-dependent; authenticated feed login is not implemented |
+# Fedora
+sudo dnf install ./open-music-player-[0-9]*.x86_64.rpm
 
-YouTube playback uses [yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies); restricted content or service checks can require sign-in. Public podcast directory access does not unlock a publisher's paid or private episodes.
+# Arch Linux
+sudo pacman -U ./open-music-player-[0-9]*-x86_64.pkg.tar.zst
 
-## Get started
+# AppImage — use the filename you downloaded
+chmod +x OpenMusicPlayer-0.1.0-x86_64.AppImage
+./OpenMusicPlayer-0.1.0-x86_64.AppImage
+```
 
-Requires Linux, **Rust 1.85+**, **GTK 4.8+**, GStreamer with its base/good plugins, and FFmpeg. Audio format support depends on the installed GStreamer codecs. The development container supplies the native dependencies.
+The build baseline is Debian 12 (glibc 2.36, GTK 4.8). Native packages declare their runtime dependencies; the AppImage bundles GTK, GStreamer, and FFmpeg. Optional YouTube support needs Python, a JavaScript runtime, and the [setup helper](docs/wiki/streaming.md#youtube-music). Account connections need an unlocked desktop keyring. See [installation and updates](docs/wiki/installation.md) for details and running AppImage without FUSE.
 
-On Debian 12 / Ubuntu 24.04 or newer:
+## Usage
+
+1. Select **Add music** and choose a folder, or drop audio files/folders onto the window.
+2. Double-click a track to play it. Use its menu to queue it, add it to a playlist, edit tags, or save a favorite.
+3. Open **Podcasts**, **Live radio**, or **Streaming** to explore online audio.
+4. Click the current cover for artwork, lyrics, visualizations, and **Artist & album** information.
+5. Use **Settings** for playback, music/download folders, language, theme, and privacy controls.
+
+**Ctrl + K** opens global search; **Ctrl + Space** toggles playback; **Ctrl + M** opens the mini player. Closing a window keeps the app running by default; **Ctrl + Q** quits. The [user guide](docs/wiki/README.md) covers playlists, downloads, account sync, and all shortcuts.
+
+## Data privacy
+
+There is no application analytics or crash upload. **Automatic cover, lyrics, and artist/album lookups are on by default** and can send music metadata to MusicBrainz, Cover Art Archive, LRCLIB, Wikidata, and Wikipedia, even for local files. Online searches, feeds, images, and playback contact their respective providers. A saved Spotify account reconnects at startup; enabled automatic refresh can upload playlist edits.
+
+Read the [data privacy wiki](docs/wiki/data-privacy.md) for each recipient, the information sent, request triggers, local storage, and steps to limit network access. Settings has independent controls for the three metadata lookups; automatic source refresh is off by default.
+
+## Building from source
+
+Requires Rust 1.89+, GTK 4.8+, GStreamer, FFmpeg, and the native development libraries. On Debian/Ubuntu:
 
 ```sh
 sudo apt install build-essential pkg-config libdbus-1-dev libgtk-4-dev \
@@ -64,340 +89,41 @@ sudo apt install build-essential pkg-config libdbus-1-dev libgtk-4-dev \
   gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
   gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
   gstreamer1.0-libav gstreamer1.0-pulseaudio ffmpeg
-```
 
-With a current Rust toolchain installed:
-
-```sh
+git clone https://github.com/fossgap/open-music-player.git
+cd open-music-player
 cargo run --locked
 ```
 
-Or build an optimized binary:
+With rustfmt and Clippy installed:
 
 ```sh
-cargo build --release --locked
-./target/release/open-music-player
+make check                 # Formatting, strict Clippy, translations
+make test                  # Rust and Python bridge tests
+make ui-test               # GTK regressions under Xvfb
+make smoke                 # Offline application/playback integration
+make build                 # Optimized binary
+make deb                   # Also rpm, arch, appimage; see packaging guide
 ```
 
-To add a folder at launch:
+The [Docker environment](Dockerfile) supplies development and test dependencies:
 
 ```sh
-cargo run --locked -- --import "$HOME/Music"
+bash scripts/ci.sh check
 ```
 
-### Enable YouTube Music
+See [development](docs/development.md), [packaging](docs/packaging.md), [CI and releases](docs/ci-release.md), and the [repository guidelines](AGENTS.md). Report problems through [GitHub Issues](https://github.com/fossgap/open-music-player/issues) with your distribution, version, and reproduction steps; remove private data from logs.
 
-Install Python 3.10+ with venv support, `secret-tool` and a running desktop Secret Service keyring (GNOME Keyring or compatible). On Debian/Ubuntu:
+## Powered by
 
-```sh
-sudo apt install python3-venv libsecret-tools
-./scripts/setup-youtube-music.sh
-```
+- [GTK](https://www.gtk.org/) and [gtk-rs](https://gtk-rs.org/) — native desktop interface
+- [GStreamer](https://gstreamer.freedesktop.org/) and [FFmpeg](https://ffmpeg.org/) — playback, metadata, downloads, and recording
+- [Lofty](https://github.com/Serial-ATA/lofty-rs) — audio tags
+- [librespot](https://github.com/librespot-org/librespot) — Spotify playback
+- [ytmusicapi](https://github.com/sigma67/ytmusicapi) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) — optional YouTube Music support
+- [MusicBrainz](https://musicbrainz.org/), [Cover Art Archive](https://coverartarchive.org/), [LRCLIB](https://lrclib.net/), [Wikidata](https://www.wikidata.org/), and [Wikipedia](https://en.wikipedia.org/) — music information, artwork, and lyrics
+- [Radio Browser](https://www.radio-browser.info/), [Apple Podcasts](https://podcasts.apple.com/), and [gPodder](https://gpodder.net/) — audio discovery
 
-Packaged installations include `open-music-setup-youtube`. Run it again to update the optional dependencies. It installs `ytmusicapi` and `yt-dlp[default]` into a private virtual environment beside your library; it does not change system Python. Playback also needs **Deno 2.3+** (preferred) or **Node.js 22+** on `PATH`, as described in [yt-dlp’s runtime setup](https://github.com/yt-dlp/yt-dlp/wiki/EJS). The helper enables whichever is available.
+## License
 
-1. Open **Streaming → YouTube Music**, search for a song or artist and press Enter. Double-click a result to play it through GStreamer; queue, favorites, pause, seek and next/previous work as usual. Public search does not need an account.
-2. Select **Connect account**, open YouTube Music in your browser and sign in there. Choose that browser in Open Music Player and connect. An optional profile path selects a nondefault profile. A Netscape-format cookie file is an alternative when the browser profile cannot be read. Close the browser before importing if its cookie database is locked.
-3. Open **Your playlists → Sync playlists**. Online playlists appear in an artwork grid. Open one to browse or play its tracks. The global **Playlists** view also includes these linked collections.
-4. Edit a linked playlist locally, then sync to upload its name and track changes. Online-only changes download on the next sync. Editing a read-only playlist or changing the same playlist on both sides produces a conflict and preserves both versions. Use **Replace local copy from YouTube Music** in its menu to explicitly accept the online version.
-5. To publish a new local collection, add only YouTube Music tracks and choose **Publish privately to YouTube Music** from its card menu. It creates a private online playlist and links it for later sync. Local audio files cannot be uploaded through this feature.
-
-Connection uses the first signed-in account in the selected browser profile; use a separate profile to select a different account. Google passwords are never entered into this app. Only YouTube-domain cookies are retained, in your desktop keyring. The library stores the account label, catalog metadata and playlist links; expiring audio URLs and credentials are not saved there. Imported cookie files are left untouched; protect or remove your export after connecting.
-
-Sync runs when requested. Order and repeated tracks are preserved. Unavailable entries are reported, and incomplete playlists are left unchanged; the current safety limits are 250 playlists and 5,000 entries per playlist. Uploads add replacement entries before removing old ones, but network failures can leave a partial online update: check the online copy and refresh before retrying. Removing a linked playlist locally stops syncing it without deleting it online. **Account → Disconnect** clears the saved session and removes the local YouTube Music tracks and linked playlists; your online library is unchanged. Reconnect and sync to restore a removed local copy.
-
-The embedded Python helper uses argument vectors and JSON pipes, never a shell. It resolves audio when playback or a download starts; Open Music Player transfers the resolved audio stream. `OPEN_MUSIC_PYTHON` can select an existing interpreter containing both libraries instead of the managed environment.
-
-### Connect Spotify
-
-1. Open **Streaming → Spotify → Connect account → Connect with Spotify**. A **Spotify Premium** account and an unlocked desktop Secret Service keyring (such as GNOME Keyring) are required. Spotify support is compiled into the application; no separate librespot executable, Python package or setup script is needed.
-2. Sign in and approve access in your browser. The app uses authorization-code **PKCE**, a random state check, a loopback-only callback on `http://127.0.0.1:5588/login`, a three-minute deadline and a cancel button. No Spotify password is entered or stored in Open Music Player. The refresh token stays in the desktop keyring; only account labels, catalog metadata and playlist links go in `library.json`.
-3. Search for a song or artist and press Enter. Double-click a track to play. librespot decodes the audio and sends PCM to GStreamer, keeping volume, waveform, queue, shuffle/repeat, mini player and MPRIS controls shared with other sources. Search currently displays up to ten results. Track and linked-playlist menus include **Open in Spotify**.
-4. Select **Your playlists → Sync playlists** to import accessible playlists. Edit a linked playlist locally and sync to upload track order and name changes. Online-only changes download; conflicting changes and local edits made during a sync are preserved. **Replace local copy from Spotify** explicitly discards local edits. Use **Publish privately to Spotify** on a local playlist containing only Spotify tracks to create an online copy.
-
-Uploads are restricted to owned playlists containing only available Spotify tracks. Local files and podcast episodes cannot be uploaded; skipped entries are reported and make the imported playlist read-only for uploading. Sync fetches complete paginated collections, up to 500 playlists and 5,000 entries per playlist, preserving order and repeats. Large uploads use Spotify’s 100-item batches; an interrupted upload can leave a partial online update while keeping the local copy. Inspect the online copy before retrying. Removing a linked playlist locally stops its synchronization without deleting it online; disconnect and reconnect to import it again.
-
-**Account → Disconnect** removes saved sign-in, Spotify tracks and linked playlists from this computer. Existing sign-in is restored in the background at startup, without starting playback. Search and sync show connection, permission and rate-limit failures instead of treating failed requests as empty collections.
-
-By default, sign-in uses librespot’s public OAuth client. If Spotify denies catalog or playlist access, **Advanced connection options** accepts a Spotify developer Client ID (`OPEN_MUSIC_SPOTIFY_CLIENT_ID` can prefill it). Register the exact callback above; no client secret is needed. Spotify’s [current development-mode rules](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide) limit apps/users and may restrict playlist contents to owned or collaborative playlists. A custom Client ID does not bypass those limits. Spotify can also change unofficial-client access.
-
-Offline tests cover authentication callback validation, playlist conflicts, stale responses, PCM output and the GTK flows. A real Premium account is still needed to verify end-to-end browser sign-in, live Spotify playback and online playlist writes; these have not been validated with a live account in this implementation session.
-
-## Listening
-
-1. Select **Add music** and choose a folder, or drop local audio files/folders onto the window. Dropped folders are added to your music folders; individual files import only the selected files. Scanning runs in the background; additional folders are managed in **Settings**.
-2. Single-click to select a track or album. Double-click a track to play, or double-click an album to open its tracks. Use **Back** to return to the album grid. Playback keeps the list's scroll position; playing a track from a filtered queue preserves the whole queue.
-3. Use the star to save a favorite. The track menu adds to the queue or a playlist. **Remove from library** leaves the audio file on disk and keeps it excluded from future folder scans. Import the file or its folder again to restore it.
-4. Select **Podcasts → Discover podcasts**. Choose **Apple Podcasts** (the iTunes directory) or **gPodder**, search by title, topic, or creator, then select **Subscribe**. The same button changes to **Unsubscribe**; unsubscribing retains indexed episodes and ignores any feed refresh still in flight. **Your episodes** lists subscribed episodes. You can also add any RSS or Atom feed URL. Use **Refresh** to fetch new episodes. Removing a subscription stops refreshes and retains previously indexed episodes.
-5. Select **Live radio → Discover radio**, or type a station name and press Enter. Radio results are provided by the community-maintained [Radio Browser directory](https://www.radio-browser.info/).
-6. Select **Streaming** for YouTube Music and Spotify. **Streaming → Internet streams → Add stream** accepts an HTTP(S) audio address or station URL. The sidebar remembers the last streaming service you used.
-
-Use **Ctrl + click** for separate tracks or **Shift + click** for a range. The selection bar plays the selection, adds it to the queue or a playlist, changes favorites, or removes entries. Removing from a playlist/queue affects that collection; removing from Favorites only unstars tracks. Library removal removes index entries and their collection references, leaving files on disk. **Move file to Trash** (or **Move files to Trash** for a selection) also moves the audio files to the system Trash. Failed moves keep the affected entries; successful moves clear their queue/playlist references and saved-download links. To restore a trashed track, restore its file and import it again. Artwork and lyric sidecars are left in place. A local track's options menu includes **Open location**, which reveals the file in your file manager or opens its containing folder.
-
-**Settings → Music folders → Watch music folders for changes** is on by default. Additions, metadata/sidecar changes and removals are detected recursively in the background; bursts of file operations are grouped before scanning. A startup scan catches changes made while the app was closed. Unavailable folders retain their indexed tracks. Symbolic links inside watched trees are not followed. Individual dropped files outside configured music folders are imported once; add their folder to watch future changes. Removing a folder in Settings stops watching it without deleting files or existing library entries.
-
-Click the current cover to open the artwork, audio visualization, and lyrics panel. Click the live visualization (or focus it and press Space/Enter) to cycle through **Waveform → Spectrum → Mood → Album art**. Your choice is remembered. The spectrum displays 32 logarithmic frequency bands.
-
-**Settings → Theme** defaults to **Sage**, the original green-tinted dark skin. Choose **System** to follow your desktop's light/dark appearance, colors, and font. Theme changes apply immediately to all windows and are saved.
-
-**In Sage, Mood and Album art change the entire app skin**: sidebar, library, playback bar, controls, selections, lyrics, menus, dialogs, and mini player. Mood shifts from cool, quiet colors toward warmer, stronger colors with measured energy, bass and treble; this is a local audio heuristic, not emotion recognition. Album art derives the skin from the current cover, adapting automatically as tracks and artwork change. It also places a faint, softened cover watermark beneath the interface and mini player, fading between covers with a gentle energy-driven intensity. Controls remain readable and interactive; reduced motion keeps watermark intensity steady. Colors fade gradually while text remains readable, even with the details panel closed. Waveform and Spectrum restore the original Sage skin. Missing covers also restore the original skin in Album art mode. The matching visual scenes reuse the cover area to preserve space for lyrics. System keeps the desktop palette and disables the whole-app watermark while retaining the visualizations in Now playing.
-
-All modes follow decoded audio; silence, pause and buffering settle the display. Reduced-motion settings keep the new scenes spatially still while allowing their colors to adapt. The visualizations run locally and reuse the existing artwork cache. The spectrum uses GStreamer’s `spectrum` plugin, included in the good plugins; if missing, the cycle skips Spectrum and the other modes use the waveform signal. Put `cover.jpg`, `cover.png`, `folder.jpg`, or `folder.png` beside an album, or use embedded artwork. A lyrics sidecar must share the audio filename: `Song.flac` and `Song.lrc`. Folder watching picks up new sidecars; use **Refresh** if watching is off. Timed LRC lyrics highlight the current line and scroll with playback, including pause, seeking and speed changes. The parser supports fractional timestamps, repeated timestamps and LRC offsets. Scrolling the lyrics manually pauses automatic following; **Follow** resumes it. Untimed lyrics remain readable as plain text.
-
-Missing covers and lyrics are fetched automatically in the background for local music, Spotify and YouTube Music. Existing embedded, sidecar and service-provided content takes priority. Podcasts, radio and generic streams are excluded from these metadata searches.
-
-| Provider | What it adds | Matching |
-|---|---|---|
-| [MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API) + [Cover Art Archive](https://musicbrainz.org/doc/Cover_Art_Archive/API) | Album covers for the current track and visible tracks/albums/playlists | Tagged MusicBrainz release ID when available; otherwise album artist (or track artist) and album, with alternate editions tried when artwork is absent |
-| [LRCLIB](https://lrclib.net/docs) | Lyrics for the current track, including a restored session | Artist, title and duration within two seconds; album required when duration is unknown |
-
-Neither lookup needs an account or API key. **Settings → Online artwork and lyrics** has independent switches, enabled by default. Disabling a lookup keeps previously downloaded content. Artist/album/title and, for lyrics, duration are sent to the corresponding provider; audio files are not uploaded. Requests identify Open Music Player with its version and [project repository](https://github.com/fossgap/open-music-player).
-
-The detail panel links to the matched source and offers **Retry cover lookup** / **Retry lyrics lookup** for missing results or errors. Instrumental recordings are identified explicitly. Downloads and misses are cached under `metadata/` beside `library.json`; misses expire after seven days, and manual retry bypasses a cached miss. Temporary failures are not saved as misses. Requests are paced and respect provider backoff. Network failures do not stop playback. Downloaded synchronized lyrics retain their timestamps in the library and cache. Previously cached provider lyrics are upgraded with their available timing data without replacing local lyrics.
-
-
-The playback bar shows codec and bitrate above sample rate and source bit depth, beneath the volume controls. Hover over this compact summary for the full labelled values. Local files use FFprobe metadata; playing GStreamer sources also report their stream tags and native sample rate. Container-derived bitrates are marked **≈**. Unreported properties are omitted from the bar and display **-** in the tooltip; decoded floating-point output is never presented as the original bit depth. Spotify currently exposes its native PCM sample rate through the playback backend, but does not report the selected encoded codec, bitrate or source bit depth.
-
-Select the **Artist & album** tab in the playback panel for artist biographies, album descriptions, first release dates, genres, and a discography. [MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API) supplies identities and release information; linked Wikidata entities lead to English Wikipedia summaries, with article links and **CC BY-SA 4.0** attribution. No account or API key is required. **Load more releases** retrieves further discography pages. Click a discography row to select it. Its **Play** button replaces the queue and starts the album; **Add album to queue** appends its missing tracks without changing the current track or playing/paused state. Both actions use matching local tracks first. Otherwise, Open Music Player finds the album in the current track’s streaming service (or the selected service for local music), falling back to the other available service: connected Spotify or YouTube Music (which also supports anonymous lookup). Artist and album names must match; unavailable or unrelated results never replace the queue. Queued albums retain their track order; Play follows the shuffle setting. Click the stop icon on a searching action to cancel it. Changing playback cancels pending Play requests; queued album lookups continue in the background and append to the latest queue. Clearing the queue cancels pending album additions. Dates describe the album’s first release, not necessarily your file’s edition. Artist and album summaries have **Show more / Show less** controls; album art and a dated release list make the view easier to browse. Wikipedia attribution and article/license links remain available in each summary’s tooltip and right-click menu. **Now playing** keeps artwork, the waveform, and lyrics together. Each tab retains its own scroll position.
-
-**Settings → Artist and album information** controls automatic lookup for the current local, Spotify or YouTube Music track. It is on by default; disabling it cancels pending work and retains cached information. Tags and embedded MusicBrainz identifiers are sent for matching, never audio. Lookups run in the background, share MusicBrainz’s rate limit with cover requests, and cache entity responses for 30 days (missing results for seven days). The refresh button retries missing/partial information and bypasses caches. Ambiguous names and recordings are left unmatched; Wikipedia pages are followed only through verified MusicBrainz relationships, not guessed from names.
-
-Missing artist or album names are filled **in the library only**, using embedded MusicBrainz recording/release IDs or exact, unambiguous title/artist/album matches with duration checks. Filename-only titles are not used for recording searches. Existing file/service tags take priority; automatic lookups never rewrite audio files, and matching library fallbacks survive folder rescans. Completely untagged files without identifiers cannot be identified automatically; acoustic fingerprinting is not implemented.
-
-Scroll over the volume control to adjust volume by **5 percentage points** per wheel step. Scroll over the seek bar to move **5 seconds** per step. Up/right increases volume or moves forward; down/left decreases volume or moves backward. Seeking is disabled for sources without a known duration, and both controls clamp to their limits.
-
-**Settings → Automatic refresh (minutes)** accepts **0–1440** minutes; **0** (the default) disables scheduled refresh, independently of local folder watching. A positive interval refreshes all saved music folders, podcast subscriptions, connected YouTube Music/Spotify playlists, and the open podcast/radio/streaming search view. Linked streaming playlists use their existing **two-way synchronization**, including eligible local edits and conflict handling. In-progress work is not duplicated; missing or expired streaming sign-ins never open an unattended login dialog. Changing the interval restarts the timer. Generic Internet stream URLs have no directory to refresh.
-
-The session is restored without automatically starting audio. Press Play to continue. Podcast episodes also retain individual positions.
-
-**Settings** has two independent background controls:
-
-- **Start in background** (off by default): launch with the window hidden. This changes how the app opens; it does not add login autostart.
-- **Keep running when the window closes** (on by default): closing the main or mini window hides the app even while paused or stopped. Turn it off to quit on close.
-
-Open the app again from your launcher, or choose **Open Music Player** in its tray menu, to bring it back. Background mode also works without a tray. **Quit** always exits, regardless of these settings.
-
-The main window remembers its size and whether it was maximized across restarts. Restoring a maximized window also preserves its previous normal size. The mini player has its own fixed layout.
-
-### Global search
-
-Open **Search** in the sidebar, use the search button in the title bar, or press **Ctrl + K**. Typing searches your saved collection by title, artist, album, playlist, tags or source; accents and capitalization do not need to match. The audio-type filter narrows the results. Saved playlists include synchronized YouTube Music and Spotify playlists.
-
-Press **Enter** or click **Search online** to search Apple Podcasts, gPodder, Radio Browser, YouTube Music and your connected Spotify account. Each provider loads independently, with cancellation and individual retries. Existing account and playback requirements still apply. Albums, playlists and direct stream URLs are searched in your saved collection.
-
-Single-click selects a result. Double-click plays a track or opens an album, playlist or podcast. The **Play** and **Add to queue** buttons act directly; playing an album or playlist replaces the queue, while adding to the queue preserves playback. You can preview a podcast’s episodes before subscribing. Online results enter the saved collection only when played, queued or subscribed to.
-
-Click a group header to collapse or expand its results, or focus the header with Tab and press Space/Enter. Counts and retry controls stay visible. Collapsed groups stay collapsed across searches, filters and result updates until reopened or the app restarts.
-
-### Local tags
-
-Choose **Edit tags** from a local track’s menu or the selection actions menu. Edit one track or select several with Ctrl/Shift for a bulk edit. The editor has **Tags**, **Artwork**, and **Lyrics** tabs. Bulk edits change only checked fields; unchecked mixed values are preserved. Clear a checked field to remove its value. **Review changes** shows before/after values and the affected files before saving.
-
-Tags include title, artists, album, album artists, track/disc numbers and totals, date/year, genres, and composers. Separate multiple artists, genres, or composers with `;`. Album cards group by album artist, falling back to track artist, and albums play in disc-then-track order. This keeps compilations and multi-disc releases together. Search also matches album artists, dates, genres, and composers.
-
-- **Library only** is the default. Changes survive rescans and restarts without altering audio files. The **Reload file tags** button removes these overrides and reads the files again; it does not undo tags already written to disk.
-- **Audio files** writes the checked fields using Lofty, without re-encoding audio. Supported containers include MP3, FLAC, Ogg/Vorbis, Opus, M4A/MP4, WAV, AIFF, AAC, and APE. Other imported formats remain editable in the library. Unsupported fields or values produce a per-file error instead of replacing the original.
-- **Artwork** accepts a local PNG/JPEG up to 20 MB. **Lyrics** accepts plain text or timed LRC; timestamps are stored as text in the file’s lyrics tag and drive synchronized scrolling in Open Music Player. Shared folder covers and existing lyric sidecars are left untouched; explicit artwork/lyrics choices take priority until you reload file tags.
-
-Saving runs in the background with progress and **Cancel remaining**. File edits are prepared in a temporary copy, checked, and atomically replace one original at a time. Failed or cancelled files keep their originals; already completed edits remain saved. Read-only files and files changed since scanning report errors. Failed tracks remain in the editor for correction and retry. Editing preserves track identity, favorites, playlists, queue order, and playing/paused state.
-
-### Downloads and recordings
-
-Open an online track’s **options menu**, or use the **save button to the right of the playback controls**, to save audio. The player button adapts to the current source: download finite audio, record radio/live streams or Spotify, cancel a transfer, stop and save a recording, resume a cancelled download, or show its saved copy. Local files keep this button disabled. The **Downloads** sidebar shows progress, size, completed files and errors; completed entries offer **Play saved audio** and **Open location**.
-
-- **Podcasts and YouTube Music:** **Download audio** saves a complete file, preserving the source format where available. Playback of that track then prefers the downloaded copy; if the file is moved or deleted, ordinary playback falls back to the online source.
-- **Radio:** **Record stream** records independently of the player, so listening, pausing or changing tracks does not interrupt it. **Stop and save** finalizes a FLAC file. FLAC preserves the captured audio without adding another lossy encoding step; it cannot improve the source quality.
-- **Direct streams:** choose **Download audio** for a finite file or **Record stream** for a live broadcast. HLS/DASH audio downloads are decoded to FLAC; a live manifest runs until cancelled.
-- **Spotify:** **Play and record** captures decoded playback into FLAC using the connected Premium account. This is a playback recording, not Spotify’s offline-download feature. Pausing pauses capture; manual track changes stop it, while natural gapless transitions can continue the same recording. Speed and volume controls do not alter the captured source PCM.
-
-**Settings → Download folder** chooses where new jobs save files; by default this is `Downloads/Open Music Player` under your user directory. Existing files stay in place. Up to three network jobs run at once, with playback recording handled separately. Unknown-length sources show indeterminate progress. **Cancel download** keeps a partial file for **Resume** during this session. Resume continues from the saved bytes when the server supports byte ranges with a matching strong ETag; otherwise it safely starts again. HLS/DASH downloads restart. **Delete download** cancels and discards unfinished transfers, or moves a completed file to the system Trash and removes its entry and offline playback link. Trash failures leave the item intact. **Cancel and discard** deletes an unfinished recording; **Stop and save** keeps it. Live recordings cannot resume missed audio. Quitting discards unfinished transfers. Transfers do not resume across restarts; completed history and file locations persist. Existing filenames are never overwritten. A recording stays separate from the original station or track.
-
-Use the **speed button to the left of the playback controls** for 0.5–2× playback, with pitch preserved. Seekable GStreamer sources use `scaletempo`; Spotify uses the optional GStreamer SoundTouch `pitch` plugin. Unsupported/live streams play at normal speed. Non-default speeds use ordinary track transitions instead of gapless/crossfade. Click the **time to the left of the seek bar** to switch elapsed/remaining time; unknown remaining duration displays `—:—`. Both preferences persist and speed is also exposed through MPRIS.
-
-### Playback settings
-
-**Settings → Playback** saves these preferences between sessions:
-
-| Option | Default | Behavior |
-|---|---|---|
-| Gapless playback | On | Prepares the next queued song without restarting the audio output. Works between GStreamer music sources and between Spotify tracks; changing playback backends uses a normal transition. |
-| Crossfade | Off (0 seconds) | Overlaps music for 1–12 seconds, with shorter fades for short songs. Applies to local music, YouTube Music and finite direct music streams. Podcasts, radio and repeat-one playback never crossfade. Spotify crossfade is not implemented. |
-| ReplayGain | Off | Track gain evens out tagged tracks; Album gain preserves an album's relative levels and falls back to track gain when album tags are missing. Existing ReplayGain tags are read during playback, with peak protection when peak tags are present. Untagged audio is unchanged; no analysis or file rewriting takes place. Spotify uses librespot's own loudness data, with changes applied on the next track. |
-
-Crossfade takes precedence over gapless for eligible transitions. Manual next/previous starts the selected song immediately; seeking ends any active overlap. Pause, mute and volume affect both songs during a fade. Queue edits, shuffle and repeat determine the prepared successor. If a speculative preload fails, ordinary next-track playback retries it.
-
-YouTube Music resolves the next playback URL shortly before the transition, retaining its request headers. Network delays, expiring URLs and missing loudness tags can limit streaming transitions or normalization. These features add no provider accounts, subscriptions or API keys.
-
-### Playlists
-
-**Playlists** opens a grid of your collections, showing a member's artwork and the playlist name. Hover over an album or nonempty playlist card to reveal **Play all**; keyboard focus reveals the same button. It queues the whole collection and starts playback without opening or leaving the grid. Playlist order is retained unless shuffle is enabled. Click a playlist to see its tracks; double-click a track to play it. Use **New playlist** to create a collection and a track's options menu to add it. Rename or delete a playlist from its card menu or while viewing its tracks. In a compact window, these actions move into **Playlist options** beside the heading. Deletion asks for confirmation and retains the music files, library, and playing queue.
-
-The **Import playlist** button beside **New playlist** accepts UTF-8 `.m3u`, `.m3u8`, `.pls`, and `.xspf` files. Relative paths resolve beside the playlist file; absolute paths, `file://` URLs, and HTTP(S) audio links are supported. Imports preserve order and existing track metadata and favorites. Missing, unsupported, and duplicate entries are skipped with a count. An imported name that already exists gets a numbered suffix. Importing creates a playlist without starting playback.
-
-In a playlist or **Play queue**, drag a row's grip to reorder it. Select several tracks first to move them together; an insertion line marks the destination. The selection bar also provides up/down buttons and **Move to top/bottom** actions. Clear search before reordering. Reordering preserves the current playback; repeated tracks are separate entries for moving/removing. Edits to linked streaming playlists follow their existing synchronization and upload restrictions.
-
-Apple discovery uses an initial podcast search; gPodder uses its public top list. Both support anonymous access without an account or API key. Results and feed availability depend on those services. A failed directory request offers connection and provider recovery; direct RSS subscription remains available.
-
-Closing either player window follows **Settings → Keep running when the window closes**, regardless of playback or tray availability. On GNOME, a StatusNotifier/AppIndicator extension is needed for tray integration; MPRIS, background mode and the mini player work independently of the tray. Choose **Quit** to stop playback and exit explicitly.
-
-### Keyboard shortcuts
-
-| Shortcut | Action |
-| --- | --- |
-| Ctrl + Space | Play / pause |
-| Alt + Left / Right | Previous / next |
-| Alt + Up | Back to the album or playlist grid |
-| Ctrl / Shift + click | Select separate tracks / a range |
-| Ctrl + A | Select all tracks in the focused list |
-| Escape | Clear track selection; close a settings or playlist dialog |
-| Delete | Remove selected entries from the focused track list; keep files |
-| Ctrl + Shift + Up / Down | Move selected playlist/queue entries one position |
-| Ctrl + Shift + Home / End | Move selected playlist/queue entries to the top/bottom |
-| Ctrl + O | Add a music folder |
-| Ctrl + F | Focus search |
-| Ctrl + K | Open global search |
-| Ctrl + R | Refresh the current source |
-| Ctrl + L | Artwork and lyrics |
-| Ctrl + M | Mini player |
-| Ctrl + , | Settings |
-| Ctrl + Q | Quit |
-
-### Your data
-
-The library is stored in `$XDG_DATA_HOME/open-music-player/library.json`, defaulting to `~/.local/share/open-music-player/library.json`. Cached service artwork lives in `artwork/` beside it; fetched covers, lyrics and lookup results live in `metadata/`. Saves use a temporary file, synchronization, and atomic replacement. A corrupt or unsupported library is reported and left untouched.
-
-`OPEN_MUSIC_DATA_DIR=/some/directory` selects an isolated library, useful for testing. The app makes no directory or feed requests on first launch. Network requests begin when you explicitly discover/search podcasts or radio, subscribe/refresh a feed, or play an online source. With automatic lookups enabled, browsing saved music can fetch missing covers and selecting/restoring the current track can fetch missing lyrics. Searches go to the selected directory; result artwork may be fetched from its image hosts. If you enable automatic refresh, source updates and linked playlist synchronization run at that interval. Saved Spotify accounts also reconnect in the background at startup. There is no analytics collection. Existing playlists receive persistent identifiers automatically when an older library is loaded.
-
-## Development
-
-```sh
-cargo fmt --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked
-python3 scripts/test-youtube-music.py
-python3 scripts/check-locales.py
-```
-
-Install the Rust `rustfmt` and `clippy` components if your toolchain does not include them. GTK layouts are in `resources/*.ui`; behavior is in Rust and styling in `resources/style.css`. Layouts and translation catalogues are embedded in the binary, so changes require a rebuild.
-
-### Test the actual application
-
-Install `xvfb`, `xauth`, `dbus-x11`, `libglib2.0-bin` (for `gdbus`), `xdotool`, Python 3, and ImageMagick, then:
-
-```sh
-make smoke
-make ui-test
-```
-
-For window-manager checks, also install `xfwm4` and `xprop`, build with `cargo build --locked`, then run `xvfb-run -a dbus-run-session -- python3 scripts/window-state-test.py`. This verifies resize/maximize restoration, quitting from the mini player, and hidden startup with temporary application and window-manager preferences.
-
-The integration test generates original audio, starts local feed and podcast-directory fixtures, and drives the real application over D-Bus and keyboard input. It checks library and playlist import, metadata, artwork, playback, seek, pause, favorites, queue, playlist creation/renaming, both podcast directories, subscription toggles, empty/error states, MPRIS, mini mode, dialogs, compact layouts, and session restoration. The GTK regression test checks card Play all, wheel volume/seek limits, refresh scheduling, unsubscribe races, and artwork/lyrics against local provider fixtures, settings switches, attribution, retries, and compact detail-panel scrolling. It checks multi-selection, bulk playlist actions, typed file/track drops, duplicate-entry removal, file-manager requests, and live folder changes. It also scrolls long lists and checks that activation preserves scroll and selection, album browsing does not start playback, filtered queue playback retains its members, and playlist deletion respects cancellation. All library and audio data are temporary. External services and real audio hardware are not required.
-
-The unit suite includes offline cover/lyric matching, positive/negative caching, invalid/oversized images, rate-limit backoff, cancellation, and Spotify authentication, catalog, sync and PCM-output checks. Tag regressions verify decoded-audio preservation across formats, unrelated metadata, artwork/lyrics round trips, failed/cancelled writes, and overrides surviving rescans. The GTK suite also exercises single/bulk tag editing, review, read-only errors, both themes, and compact layouts. The display-dependent GTK regression runs separately through `make ui-test`. CI targets the Rust 1.85/GTK 4.8 Debian development container; native Linux checks include strict Clippy validation. The same integration suite can exercise native, release, and AppImage builds. The Arch recipe has not been built on Arch.
-
-For review screenshots:
-
-```sh
-cargo build --locked
-OPEN_MUSIC_SCREENSHOTS=/tmp/open-music-screens make smoke
-```
-
-Set `OPEN_MUSIC_BINARY` to an absolute binary path to run the same checks against a release build or AppImage. Use `APPIMAGE_EXTRACT_AND_RUN=1` when FUSE is unavailable; this keeps the AppImage runtime's library and plugin environment intact.
-
-`OPEN_MUSIC_ITUNES_API`, `OPEN_MUSIC_GPODDER_API` and `OPEN_MUSIC_RADIO_API` optionally replace the respective API base URLs for a private mirror or offline test server. The optional `OPEN_MUSIC_MUSICBRAINZ_API`, `OPEN_MUSIC_COVER_ART_API`, and `OPEN_MUSIC_LRCLIB_API` variables similarly replace metadata API bases. Normal use needs none of these settings.
-
-To explore with a separate demonstration library:
-
-```sh
-python3 scripts/create-demo.py /tmp/open-music-demo-music
-OPEN_MUSIC_DATA_DIR=/tmp/open-music-demo-state \
-  cargo run --locked -- --import /tmp/open-music-demo-music
-```
-
-### Docker and devcontainer
-
-```sh
-docker build -t open-music-player-dev .
-docker run --rm open-music-player-dev
-```
-
-The default container command runs formatting, lint, unit, translation, and virtual-display integration checks. Open the repository in a Dev Containers compatible editor to use `.devcontainer/devcontainer.json`. The container is configured for headless testing; interactive windows and real audio require explicitly forwarding your display and audio session. Run natively for ordinary desktop listening.
-
-### Translations
-
-`locales/en.json` is the source catalogue; the other nine files use the same English keys. `scripts/check-locales.py` checks parity and literal UI coverage. Missing keys fall back to English. The system language is the default, or select a language in Settings and restart. Technical errors from external libraries and operating-system dialogs can remain in their own language.
-
-## Packaging
-
-Packaging recipes are supplied for all four requested formats. Build on the oldest distribution you intend to support: native library and glibc compatibility follow the build environment.
-
-```sh
-make deb       # requires dpkg-deb; writes a .deb to dist/
-make rpm       # requires rpmbuild; writes an RPM to dist/
-make arch      # writes a source archive and PKGBUILD to dist/
-# On Arch Linux:
-cd dist && makepkg -si
-```
-
-For AppImage, provide [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy), its [GTK plugin](https://github.com/linuxdeploy/linuxdeploy-plugin-gtk), and its [GStreamer plugin](https://github.com/linuxdeploy/linuxdeploy-plugin-gstreamer). Install `patchelf`, `file`, `adwaita-icon-theme`, `glib-networking`, and the librsvg/GObject Introspection development packages (`librsvg2-dev libgirepository1.0-dev` on Debian). Put the two plugin executables on `PATH` (their `.sh` filenames are also accepted):
-
-```sh
-LINUXDEPLOY=/absolute/path/to/linuxdeploy-x86_64.AppImage make appimage
-```
-
-The recipe includes the application, GTK runtime via the plugin, Adwaita icons, FFmpeg, GIO's HTTPS module, and the build host's GStreamer plugins and their dependent libraries. `yt-dlp` remains an optional host dependency. Test an AppImage on a clean target system before distributing it. Arch packages and cross-distribution compatibility have not been release-qualified.
-
-For a local installation:
-
-```sh
-make build
-sudo make install
-# Remove the installed binary and desktop assets; listening data is retained:
-sudo make uninstall
-```
-
-A project distribution license has not yet been selected; package metadata intentionally does not invent one. Select a license and review bundled dependencies before publishing releases.
-
-## Project layout
-
-```text
-src/
-  app.rs         GTK controllers, playback, background work
-  app/browse.rs  Track/album views, playlist management, podcast browser
-  app/files.rs   Local file drops, folder watching controls, file manager
-  app/selection.rs Multi-selection, bulk actions, playlist/queue reordering
-  app/tags.rs    Single/bulk tag editor, review, progress and failure handling
-  app/search.rs  Global search view, result actions and podcast previews
-  app/tests.rs   GTK scroll, selection, collection and streaming regressions
-  app/spotify.rs Spotify account and playlist interface
-  app/youtube.rs YouTube Music account and playlist interface
-  audio.rs       Playback routing, next-track preparation and crossfades
-  audio/         Gapless GStreamer decks, ReplayGain and PCM regression tests
-  desktop.rs     MPRIS, StatusNotifierItem, and tray menu
-  i18n.rs        Embedded translation catalogues
-  enrichment.rs  Background cover/lyric jobs, cancellation, metadata matching
-  enrichment/    MusicBrainz, Cover Art Archive, LRCLIB clients, cache and tests
-  library.rs     Folder scanning, FFmpeg metadata, artwork, lyrics
-  tags.rs        Structured tag fields, validation and library-only overrides
-  tags/          Native tag reading/writing, safe replacement and regression tests
-  watch.rs       Recursive native GIO folder monitors on a worker thread
-  collections.rs Occurrence-aware collection ordering and removal
-  model.rs       Tracks, collections, queue, persisted session
-  search.rs      Ranked collection search with background indexing
-  search/        Independent provider workers and search regression tests
-  playlists.rs   M3U/M3U8, PLS, and XSPF parsing and import
-  process.rs     Bounded subprocess execution without a shell
-  services.rs    Podcast directories/feeds, Radio Browser and artwork
-  spotify.rs     Background Spotify account/catalog service
-  spotify/       PKCE, Web API catalog/sync and librespot PCM playback
-  youtube_music.rs YouTube Music helper bridge and sync merge
-  storage.rs     XDG data location and atomic state storage
-resources/       GtkBuilder layouts, D-Bus interfaces, CSS, icon
-locales/         Ten translation catalogues
-packaging/       Desktop entry, AppStream metadata, RPM, Arch
-scripts/         Packaging, fixtures, checks, integration tests
-```
-
-The [original product brief](docs/brief.md), including the Rhythmbox and Clementine references, is preserved.
-
-Implementation references: [GTK list factories](https://gtk-rs.org/gtk4-rs/stable/0.10/docs/gtk4/struct.ListItemFactory.html), [GStreamer playbin](https://gstreamer.freedesktop.org/documentation/playback/playbin.html), [MPRIS specification](https://specifications.freedesktop.org/mpris/latest/Player_Interface.html), [Apple Search API](https://performance-partners.apple.com/search-api), [gPodder API](https://gpoddernet.readthedocs.io/en/latest/api/), and [Radio Browser API](https://docs.radio-browser.info/).
+Open Music Player is licensed under [GPL-3.0-only](LICENSE). Dependencies, runtime components, and retrieved media retain their respective licenses. Wikipedia summaries include their source and CC BY-SA attribution in the application.

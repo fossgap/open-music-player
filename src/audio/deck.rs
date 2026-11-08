@@ -278,10 +278,8 @@ impl Deck {
         };
         // A queue edit can arrive after about-to-finish has committed its URI.
         // Reload at the current position to cancel it instead of playing a removed track.
-        if restart {
-            if let Some(current) = self.current.clone() {
-                self.load(current, self.position(), playing, next, false)?;
-            }
+        if restart && let Some(current) = self.current.clone() {
+            self.load(current, self.position(), playing, next, false)?;
         }
         Ok(())
     }
@@ -372,10 +370,10 @@ impl Deck {
             .map_or(0.0, |t| t.nseconds() as f64 / 1e9)
     }
     pub fn seek(&mut self, seconds: f64, playing: bool) -> Result<(), String> {
-        if !self.queue.lock().unwrap().committed.is_empty() {
-            if let Some(current) = self.current.clone() {
-                return self.load(current, seconds, playing, None, false);
-            }
+        if !self.queue.lock().unwrap().committed.is_empty()
+            && let Some(current) = self.current.clone()
+        {
+            return self.load(current, seconds, playing, None, false);
         }
         self.rate_seek(seconds)
             .map_err(|_| "This stream cannot seek".to_string())?;

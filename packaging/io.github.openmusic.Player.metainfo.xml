@@ -2,10 +2,14 @@
 <component type="desktop-application">
   <id>io.github.openmusic.Player</id>
   <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
   <name>Open Music Player</name>
   <summary>A native home for music, podcasts, and radio</summary>
   <description><p>Listen to local music, subscribe to podcasts, discover internet radio, and keep your queue close with a compact player and desktop media controls.</p></description>
   <launchable type="desktop-id">io.github.openmusic.Player.desktop</launchable>
   <provides><binary>open-music-player</binary></provides>
+  <url type="homepage">https://github.com/fossgap/open-music-player</url>
+  <url type="bugtracker">https://github.com/fossgap/open-music-player/issues</url>
+  <url type="help">https://github.com/fossgap/open-music-player/blob/main/docs/wiki/README.md</url>
   <content_rating type="oars-1.1"/>
 </component>

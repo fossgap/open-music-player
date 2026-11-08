@@ -275,10 +275,9 @@ impl Manager {
             .jobs
             .iter_mut()
             .find(|j| j.id == id && j.status.active())
+            && job.control.request(CANCEL)
         {
-            if job.control.request(CANCEL) {
-                job.status = Status::Cancelled;
-            }
+            job.status = Status::Cancelled;
         }
         self.pending.retain(|t| t.id != id);
     }

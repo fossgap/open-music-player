@@ -546,18 +546,18 @@ impl App {
         }
         let weak = Rc::downgrade(self);
         object::<gtk::ToggleButton>(&self.ui, "shuffle").connect_toggled(move |button| {
-            if let Some(a) = weak.upgrade() {
-                if !a.updating.get() {
-                    a.set_shuffle(button.is_active());
-                }
+            if let Some(a) = weak.upgrade()
+                && !a.updating.get()
+            {
+                a.set_shuffle(button.is_active());
             }
         });
         let weak = Rc::downgrade(self);
         object::<gtk::Scale>(&self.ui, "volume").connect_value_changed(move |scale| {
-            if let Some(a) = weak.upgrade() {
-                if !a.updating.get() {
-                    a.set_volume(scale.value());
-                }
+            if let Some(a) = weak.upgrade()
+                && !a.updating.get()
+            {
+                a.set_volume(scale.value());
             }
         });
         let weak = Rc::downgrade(self);
@@ -801,17 +801,16 @@ impl App {
         );
         let weak = Rc::downgrade(self);
         dialog.connect_response(move |dialog, response| {
-            if response == gtk::ResponseType::Accept {
-                if let (Some(app), Some(path)) =
+            if response == gtk::ResponseType::Accept
+                && let (Some(app), Some(path)) =
                     (weak.upgrade(), dialog.file().and_then(|f| f.path()))
-                {
-                    let path = std::fs::canonicalize(&path).unwrap_or(path);
-                    let mut folders = app.state.borrow().folders.clone();
-                    if !folders.contains(&path) {
-                        folders.push(path);
-                    }
-                    app.scan(folders);
+            {
+                let path = std::fs::canonicalize(&path).unwrap_or(path);
+                let mut folders = app.state.borrow().folders.clone();
+                if !folders.contains(&path) {
+                    folders.push(path);
                 }
+                app.scan(folders);
             }
             dialog.destroy();
         });
@@ -1722,12 +1721,12 @@ impl App {
         let weak = Rc::downgrade(self);
         let note: gtk::Label = object(&ui, "restart_note");
         language.connect_selected_notify(move |picker| {
-            if let Some(a) = weak.upgrade() {
-                if let Some((code, _)) = crate::i18n::LANGUAGES.get(picker.selected() as usize) {
-                    a.state.borrow_mut().language = (*code).into();
-                    a.persist();
-                    note.set_visible(true);
-                }
+            if let Some(a) = weak.upgrade()
+                && let Some((code, _)) = crate::i18n::LANGUAGES.get(picker.selected() as usize)
+            {
+                a.state.borrow_mut().language = (*code).into();
+                a.persist();
+                note.set_visible(true);
             }
         });
         let background: gtk::Switch = object(&ui, "background");

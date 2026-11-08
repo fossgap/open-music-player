@@ -119,10 +119,9 @@ pub fn read(path: &Path, track: &mut Track, cache: &Path) -> Result<(), String> 
     if let Some(picture) = tag
         .get_picture_type(PictureType::CoverFront)
         .or_else(|| tag.pictures().first())
+        && picture.data().len() <= 20_000_000
     {
-        if picture.data().len() <= 20_000_000 {
-            track.artwork = Some(cache_picture(picture, cache)?);
-        }
+        track.artwork = Some(cache_picture(picture, cache)?);
     }
     Ok(())
 }

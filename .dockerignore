@@ -3,3 +3,10 @@ dist
 .git
 .worktrees
 .impeccable
+.agents
+.codex
+.aws
+docs/audits
+TODO.md
+**/__pycache__
+**/*.pyc

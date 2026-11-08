@@ -2,9 +2,11 @@
 name = "open-music-player"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.89"
 description = "A native Linux home for music, podcasts, and radio"
 homepage = "https://github.com/fossgap/open-music-player"
+repository = "https://github.com/fossgap/open-music-player"
+license = "GPL-3.0-only"
 
 [dependencies]
 gtk = { package = "gtk4", version = "0.10.3", features = ["v4_8"] }

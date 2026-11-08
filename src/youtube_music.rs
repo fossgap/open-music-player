@@ -325,10 +325,10 @@ pub fn apply_sync(
         uploaded: result.uploaded,
         ..Applied::default()
     };
-    if !state
+    if state
         .youtube_account
         .as_ref()
-        .is_some_and(|a| a.id == account_id)
+        .is_none_or(|a| a.id != account_id)
     {
         return applied;
     }
@@ -360,7 +360,7 @@ pub fn apply_sync(
             .as_ref()
             .zip(captured)
             .is_some_and(|(now, old)| now.snapshot != old.snapshot);
-        if edited_in_flight && !captured.is_some_and(|old| old.snapshot == remote.snapshot) {
+        if edited_in_flight && captured.is_none_or(|old| old.snapshot != remote.snapshot) {
             applied.conflicts += 1;
             continue;
         }

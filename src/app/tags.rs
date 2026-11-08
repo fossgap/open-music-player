@@ -362,16 +362,14 @@ impl App {
         chooser.add_filter(&filter);
         let weak = Rc::downgrade(self);
         chooser.connect_response(move |dialog, response| {
-            if response == gtk::ResponseType::Accept {
-                if let (Some(app), Some(path)) =
+            if response == gtk::ResponseType::Accept
+                && let (Some(app), Some(path)) =
                     (weak.upgrade(), dialog.file().and_then(|f| f.path()))
-                {
-                    if let Some(e) = app.tags.editor.borrow().clone() {
-                        *e.cover.borrow_mut() = path.to_string_lossy().into_owned();
-                        object::<gtk::CheckButton>(&e.ui, "apply_cover").set_active(true);
-                        app.tag_cover_preview();
-                    }
-                }
+                && let Some(e) = app.tags.editor.borrow().clone()
+            {
+                *e.cover.borrow_mut() = path.to_string_lossy().into_owned();
+                object::<gtk::CheckButton>(&e.ui, "apply_cover").set_active(true);
+                app.tag_cover_preview();
             }
             dialog.destroy();
         });
@@ -501,10 +499,10 @@ impl App {
         let weak = Rc::downgrade(self);
         dialog.connect_response(move |d, response| {
             d.close();
-            if response == gtk::ResponseType::Accept {
-                if let Some(app) = weak.upgrade() {
-                    app.save_tags(Destination::Reload);
-                }
+            if response == gtk::ResponseType::Accept
+                && let Some(app) = weak.upgrade()
+            {
+                app.save_tags(Destination::Reload);
             }
         });
         dialog.present();
@@ -591,17 +589,16 @@ impl App {
     }
 
     pub(super) fn poll_tags(&self) {
-        if let Some(rx) = self.tags.progress.borrow().as_ref() {
-            if let Some((done, total)) = rx.try_iter().last() {
-                if let Some(e) = self.tags.editor.borrow().as_ref() {
-                    object::<gtk::ProgressBar>(&e.ui, "tag_progress")
-                        .set_fraction(done as f64 / total.max(1) as f64);
-                    e.status(
-                        &format!("{} {done}/{total}", self.tr("Saving tags…")),
-                        false,
-                    );
-                }
-            }
+        if let Some(rx) = self.tags.progress.borrow().as_ref()
+            && let Some((done, total)) = rx.try_iter().last()
+            && let Some(e) = self.tags.editor.borrow().as_ref()
+        {
+            object::<gtk::ProgressBar>(&e.ui, "tag_progress")
+                .set_fraction(done as f64 / total.max(1) as f64);
+            e.status(
+                &format!("{} {done}/{total}", self.tr("Saving tags…")),
+                false,
+            );
         }
         if self
             .tags
@@ -658,13 +655,13 @@ impl App {
             }
         }
         let album = self.album.borrow().clone();
-        if let Some(key) = album {
-            if !state.tracks.iter().any(|t| t.album_key() == key) {
-                // The album was renamed; return to the grid instead of leaving a misleading empty album.
-                drop(state);
-                self.album.borrow_mut().take();
-                state = self.state.borrow_mut();
-            }
+        if let Some(key) = album
+            && !state.tracks.iter().any(|t| t.album_key() == key)
+        {
+            // The album was renamed; return to the grid instead of leaving a misleading empty album.
+            drop(state);
+            self.album.borrow_mut().take();
+            state = self.state.borrow_mut();
         }
         drop(state);
         self.persist();
