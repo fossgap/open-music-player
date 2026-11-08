@@ -54,6 +54,18 @@ def window_size(target):
     return tuple(int(re.search(r'^' + axis + r'=(\d+)', geometry, re.M)[1]) for axis in ('WIDTH', 'HEIGHT'))
 
 
+def restored_window_size_matches(target, saved_size):
+    expected = saved_size
+    if os.environ.get('OPEN_MUSIC_TEST_WM'):
+        # GTK may request a larger minimum when restoring playback controls.
+        # A window manager must honor that minimum even for a saved smaller size.
+        hints = subprocess.check_output(['xprop', '-id', target, 'WM_NORMAL_HINTS'], text=True)
+        minimum = re.search(r'minimum size: (\d+) by (\d+)', hints)
+        if minimum:
+            expected = tuple(max(saved, int(limit)) for saved, limit in zip(saved_size, minimum.groups()))
+    return window_size(target) == expected
+
+
 def visible_player_windows():
     return subprocess.run(['xdotool', 'search', '--onlyvisible', '--name', '^Open Music'],
                           capture_output=True, text=True).stdout.splitlines()
@@ -346,10 +358,13 @@ with tempfile.TemporaryDirectory(prefix='open-music-test-') as temporary:
         subprocess.run(['xdotool', 'windowsize', main_window, '1140', '740'], check=True)
         wait_until(lambda: window_size(main_window) == (1140, 740))
         time.sleep(0.3)
-        saved_size = window_size(main_window)
         # Persist a meaningful resume position, then stop and start the process.
         call(PLAYER, 'SetPosition', f'/org/mpris/MediaPlayer2/Track/{second}', '8000000')
         call(PLAYER, 'Pause')
+        # Playback controls can change GTK's minimum size. Measure the final
+        # paused layout that is actually being saved, not the preceding frame.
+        time.sleep(0.3)
+        saved_size = window_size(main_window)
         call('org.mpris.MediaPlayer2', 'Quit')
         assert child.wait(timeout=10) == 0
         saved = state()
@@ -364,15 +379,17 @@ with tempfile.TemporaryDirectory(prefix='open-music-test-') as temporary:
         assert len(saved['playlists']) == 3 and len(saved['subscriptions']) == 4
         child = subprocess.Popen([str(BINARY)], env=env, stdout=log, stderr=log)
         wait_until(lambda: 'Stopped' in prop('PlaybackStatus'))
-        wait_until(lambda: window_size(window('Open Music Player')) == saved_size)
+        wait_until(lambda: restored_window_size_matches(window('Open Music Player'), saved_size))
         assert second in prop('Metadata')
         call(PLAYER, 'Play')
         wait_until(lambda: 'Playing' in prop('PlaybackStatus'))
         wait_until(lambda: int(re.search(r'int64 (\d+)', prop('Position'))[1]) >= 7_800_000)
+        saved_size = window_size(window('Open Music Player'))
         call('org.mpris.MediaPlayer2', 'Quit')
         assert child.wait(timeout=10) == 0
         # Startup and close preferences remain independent, including without a tray.
         saved = state()
+        saved_window = saved['window']
         saved.update(start_in_background=True, background=True, theme='sage')
         (data / 'library.json').write_text(json.dumps(saved))
         child = subprocess.Popen([str(BINARY)], env=env, stdout=log, stderr=log)
@@ -381,7 +398,7 @@ with tempfile.TemporaryDirectory(prefix='open-music-test-') as temporary:
         assert state()['window'] == saved_window
         subprocess.run([str(BINARY)], env=env, stdout=log, stderr=log, check=True, timeout=10)
         wait_until(lambda: window('Open Music Player'))
-        assert window_size(window('Open Music Player')) == saved_size
+        wait_until(lambda: restored_window_size_matches(window('Open Music Player'), saved_size))
         close_player_window('Open Music Player')
         wait_until(lambda: not visible_player_windows())
         assert child.poll() is None
@@ -419,6 +436,12 @@ with tempfile.TemporaryDirectory(prefix='open-music-test-') as temporary:
         if (data / 'library.json').exists():
             saved = state()
             print('Saved state:', len(saved['tracks']), 'tracks;', saved['folders'])
+            print('Window state:', saved.get('window'), '; expected geometry:', locals().get('saved_size'))
+            print('Original persisted window:', locals().get('saved_window'))
+            for visible in visible_player_windows():
+                print('Visible window geometry:', window_size(visible))
+                if os.environ.get('OPEN_MUSIC_TEST_WM'):
+                    print(subprocess.check_output(['xprop', '-id', visible, 'WM_NORMAL_HINTS'], text=True))
         if child.poll() is None:
             snapshot('failure.png')
         raise

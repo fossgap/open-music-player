@@ -102,8 +102,8 @@ EOF
     appdir="$root/OpenMusicPlayer.AppDir"
     mv "$root/root" "$appdir"
     libraries=()
-    for name in libfribidi.so.0 libharfbuzz.so.0 libwayland-client.so.0 libfontconfig.so.1 libfreetype.so.6; do
-      library=$(ldd "$appdir/usr/bin/open-music-player" | awk -v name="$name" '$1 == name { print $3; exit }')
+    for name in libfribidi.so.0 libharfbuzz.so.0 libwayland-client.so.0 libfontconfig.so.1 libfreetype.so.6 libasound.so.2 libjack.so.0 libusb-1.0.so.0 libexpat.so.1; do
+      library=$(ldd "$binary" "$(command -v ffmpeg)" | awk -v name="$name" '$1 == name && !found { print $3; found=1 }')
       [ -f "$library" ] || { echo "Missing runtime library: $name" >&2; exit 1; }
       libraries+=(--library "$library")
     done
