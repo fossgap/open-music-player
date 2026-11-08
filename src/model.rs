@@ -221,6 +221,40 @@ impl Default for PlaybackSettings {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct WindowState {
+    pub width: i32,
+    pub height: i32,
+    pub maximized: bool,
+}
+
+impl Default for WindowState {
+    fn default() -> Self {
+        Self {
+            width: 1240,
+            height: 800,
+            maximized: false,
+        }
+    }
+}
+
+impl WindowState {
+    fn sanitize(&mut self) {
+        let default = Self::default();
+        self.width = if self.width <= 0 {
+            default.width
+        } else {
+            self.width.clamp(760, 16384)
+        };
+        self.height = if self.height <= 0 {
+            default.height
+        } else {
+            self.height.clamp(580, 16384)
+        };
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct State {
@@ -240,6 +274,7 @@ pub struct State {
     pub background: bool,
     pub start_in_background: bool,
     pub theme: Theme,
+    pub window: WindowState,
     pub podcast_positions: std::collections::HashMap<String, f64>,
     pub youtube_account: Option<YoutubeAccount>,
     pub youtube_ignored_playlists: Vec<String>,
@@ -279,6 +314,7 @@ impl Default for State {
             background: true,
             start_in_background: false,
             theme: Theme::default(),
+            window: WindowState::default(),
             podcast_positions: Default::default(),
             youtube_account: None,
             youtube_ignored_playlists: vec![],
@@ -341,6 +377,7 @@ impl State {
     }
 
     pub fn sanitize(&mut self) {
+        self.window.sanitize();
         self.playback_rate = if self.playback_rate.is_finite() {
             self.playback_rate.clamp(0.5, 2.0)
         } else {

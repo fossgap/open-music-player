@@ -49,6 +49,11 @@ def window(title):
     return subprocess.check_output(['xdotool', 'search', '--onlyvisible', '--name', '^' + re.escape(title) + '$'], text=True).splitlines()[-1]
 
 
+def window_size(target):
+    geometry = subprocess.check_output(['xdotool', 'getwindowgeometry', '--shell', target], text=True)
+    return tuple(int(re.search(r'^' + axis + r'=(\d+)', geometry, re.M)[1]) for axis in ('WIDTH', 'HEIGHT'))
+
+
 def visible_player_windows():
     return subprocess.run(['xdotool', 'search', '--onlyvisible', '--name', '^Open Audio'],
                           capture_output=True, text=True).stdout.splitlines()
@@ -333,7 +338,10 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         action('page', 'podcasts')
         snapshot('compact-podcasts.png')
         action('page', 'library')
-        subprocess.run(['xdotool', 'windowsize', main_window, '1240', '800'], check=True)
+        subprocess.run(['xdotool', 'windowsize', main_window, '1140', '740'], check=True)
+        wait_until(lambda: window_size(main_window) == (1140, 740))
+        time.sleep(0.3)
+        saved_size = window_size(main_window)
         # Persist a meaningful resume position, then stop and start the process.
         call(PLAYER, 'SetPosition', f'/org/mpris/MediaPlayer2/Track/{second}', '8000000')
         call(PLAYER, 'Pause')
@@ -344,10 +352,14 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         assert saved['position'] >= 7.8, saved['position']
         assert saved['volume'] == 0.4
         assert saved['show_remaining'] and saved['playback_rate'] == 1.0
+        assert saved['window']['width'] > 0 and saved['window']['height'] > 0
+        assert not saved['window']['maximized']
+        saved_window = saved['window']
         assert saved['saved_audio'][0]['path'] == str(saved_audio)
         assert len(saved['playlists']) == 3 and len(saved['subscriptions']) == 4
         child = subprocess.Popen([str(BINARY)], env=env, stdout=log, stderr=log)
         wait_until(lambda: 'Stopped' in prop('PlaybackStatus'))
+        wait_until(lambda: window_size(window('Open Audio Player')) == saved_size)
         assert second in prop('Metadata')
         call(PLAYER, 'Play')
         wait_until(lambda: 'Playing' in prop('PlaybackStatus'))
@@ -361,8 +373,10 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         child = subprocess.Popen([str(BINARY)], env=env, stdout=log, stderr=log)
         wait_until(lambda: 'Stopped' in prop('PlaybackStatus'))
         assert child.poll() is None and not visible_player_windows()
+        assert state()['window'] == saved_window
         subprocess.run([str(BINARY)], env=env, stdout=log, stderr=log, check=True, timeout=10)
         wait_until(lambda: window('Open Audio Player'))
+        assert window_size(window('Open Audio Player')) == saved_size
         close_player_window('Open Audio Player')
         wait_until(lambda: not visible_player_windows())
         assert child.poll() is None
@@ -392,7 +406,7 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         log.seek(0)
         output = log.read()
         assert 'panicked' not in output and 'CRITICAL' not in output, output
-        print('PASS: library/audio/MPRIS, albums, playlist create/add/rename/import/grid, Apple and gPodder discovery/search/subscription toggles, empty/error states, mini player, compact layouts, session restoration, theme persistence, and independent startup/close preferences.')
+        print('PASS: library/audio/MPRIS, albums, playlist create/add/rename/import/grid, Apple and gPodder discovery/search/subscription toggles, empty/error states, mini player, compact layouts, session/window-size restoration, theme persistence, and independent startup/close preferences.')
     except Exception:
         log.seek(0)
         print(log.read())

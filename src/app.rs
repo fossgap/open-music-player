@@ -30,6 +30,7 @@ mod theme;
 mod updates;
 mod visualization;
 mod watermark;
+mod window_state;
 mod youtube;
 type BoundItems = RefCell<HashMap<usize, (glib::WeakRef<gtk::ListItem>, gtk::Builder)>>;
 use gtk::{gdk, gio, glib, prelude::*};
@@ -275,6 +276,7 @@ impl App {
         this.setup_global_search();
         this.setup_watermark();
         this.setup_controls();
+        this.setup_window_state();
         this.setup_timing();
         this.setup_downloads();
         this.setup_metadata();

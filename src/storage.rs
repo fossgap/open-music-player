@@ -82,4 +82,35 @@ mod tests {
         assert!(load(&path).is_err());
         assert_eq!(fs::read_to_string(path).unwrap(), "broken");
     }
+
+    #[test]
+    fn window_state_migrates_old_libraries_and_round_trips_normal_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("library.json");
+        fs::write(&path, "{}").unwrap();
+        let mut state = load(&path).unwrap();
+        assert_eq!(state.window, crate::model::WindowState::default());
+        state.window = crate::model::WindowState {
+            width: 1120,
+            height: 720,
+            maximized: true,
+        };
+        save(&path, &state).unwrap();
+        assert_eq!(load(&path).unwrap().window, state.window);
+
+        fs::write(
+            &path,
+            r#"{"window":{"width":0,"height":-1,"maximized":true}}"#,
+        )
+        .unwrap();
+        let restored = load(&path).unwrap();
+        assert_eq!((restored.window.width, restored.window.height), (1240, 800));
+        assert!(restored.window.maximized);
+        fs::write(&path, r#"{"window":{"width":1,"height":2147483647}}"#).unwrap();
+        let restored = load(&path).unwrap();
+        assert_eq!(
+            (restored.window.width, restored.window.height),
+            (760, 16384)
+        );
+    }
 }

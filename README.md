@@ -29,7 +29,7 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 | Desktop | MPRIS controls and metadata, StatusNotifierItem tray menu, background playback, mini player |
 | Artwork and lyrics | Embedded/folder/service covers, missing-cover lookup through MusicBrainz and Cover Art Archive, embedded/sidecar lyrics and LRCLIB lookup, local caching, artwork backdrop |
 | Visualization | Live waveform, spectrum bars, audio-reactive mood scenes, and album-art visualization |
-| Persistence | Library, sources, playlists, queue, track, position, volume, repeat, shuffle, and preferences |
+| Persistence | Library, sources, playlists, queue, track, position, volume, repeat, shuffle, window size/maximized state, and preferences |
 | Languages | English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean; new service copy falls back to English where untranslated |
 
 **Service boundaries:** Spotify uses [librespot](https://github.com/librespot-org/librespot) and requires Premium. Search and playlist operations use Spotify’s Web API, whose account/app restrictions still apply. YouTube Music uses the unofficial `ytmusicapi` and `yt-dlp` libraries, with no API key or Premium subscription requirement in Open Audio Player. Availability depends on your account, region and YouTube; sessions can expire and provider changes can require dependency updates. This is an initial implementation, not a published stable release.
@@ -177,6 +177,8 @@ The session is restored without automatically starting audio. Press Play to cont
 
 Open the app again from your launcher, or choose **Open Audio Player** in its tray menu, to bring it back. Background mode also works without a tray. **Quit** always exits, regardless of these settings.
 
+The main window remembers its size and whether it was maximized across restarts. Restoring a maximized window also preserves its previous normal size. The mini player has its own fixed layout.
+
 ### Global search
 
 Open **Search** in the sidebar, use the search button in the title bar, or press **Ctrl + K**. Typing searches your saved collection by title, artist, album, playlist, tags or source; accents and capitalization do not need to match. The audio-type filter narrows the results. Saved playlists include synchronized YouTube Music and Spotify playlists.
@@ -286,6 +288,8 @@ Install `xvfb`, `xauth`, `dbus-x11`, `libglib2.0-bin` (for `gdbus`), `xdotool`, 
 make smoke
 make ui-test
 ```
+
+For window-manager checks, also install `xfwm4` and `xprop`, build with `cargo build --locked`, then run `xvfb-run -a dbus-run-session -- python3 scripts/window-state-test.py`. This verifies resize/maximize restoration, quitting from the mini player, and hidden startup with temporary application and window-manager preferences.
 
 The integration test generates original audio, starts local feed and podcast-directory fixtures, and drives the real application over D-Bus and keyboard input. It checks library and playlist import, metadata, artwork, playback, seek, pause, favorites, queue, playlist creation/renaming, both podcast directories, subscription toggles, empty/error states, MPRIS, mini mode, dialogs, compact layouts, and session restoration. The GTK regression test checks card Play all, wheel volume/seek limits, refresh scheduling, unsubscribe races, and artwork/lyrics against local provider fixtures, settings switches, attribution, retries, and compact detail-panel scrolling. It checks multi-selection, bulk playlist actions, typed file/track drops, duplicate-entry removal, file-manager requests, and live folder changes. It also scrolls long lists and checks that activation preserves scroll and selection, album browsing does not start playback, filtered queue playback retains its members, and playlist deletion respects cancellation. All library and audio data are temporary. External services and real audio hardware are not required.
 
