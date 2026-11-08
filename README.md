@@ -54,8 +54,8 @@ sudo dnf install ./open-music-player-[0-9]*.x86_64.rpm
 sudo pacman -U ./open-music-player-[0-9]*-x86_64.pkg.tar.zst
 
 # AppImage — use the filename you downloaded
-chmod +x OpenMusicPlayer-0.1.3-x86_64.AppImage
-./OpenMusicPlayer-0.1.3-x86_64.AppImage
+chmod +x OpenMusicPlayer-0.1.4-x86_64.AppImage
+./OpenMusicPlayer-0.1.4-x86_64.AppImage
 ```
 
 The build baseline is Debian 12 (glibc 2.36, GTK 4.8). Native packages declare their runtime dependencies; the AppImage bundles GTK, GStreamer, and FFmpeg. Optional YouTube support needs Python, a JavaScript runtime, and the [setup helper](docs/wiki/streaming.md#youtube-music). Account connections need an unlocked desktop keyring. See [installation and updates](docs/wiki/installation.md) for details and running AppImage without FUSE.

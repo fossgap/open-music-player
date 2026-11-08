@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4 — 2026-11-08
+
+- Bundle the duration-column clock icon so it remains available across desktop icon themes.
+- Verify the duration icon without system themes at normal and doubled display scale.
+
 ## 0.1.3 — 2026-11-08
 
 - Simplify Settings by removing redundant descriptions for themes, both background controls, download folders, artist and album information, online artwork and lyrics, and folder watching.

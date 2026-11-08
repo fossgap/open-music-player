@@ -29,6 +29,9 @@ cp -a %{_sourcedir}/root/. %{buildroot}/
 %doc /usr/share/doc/open-music-player
 
 %changelog
+* Sun Nov 08 2026 Open Music Player contributors - 0.1.4-1
+- Bundle the duration-column clock icon for all desktop themes.
+
 * Sun Nov 08 2026 Open Music Player contributors - 0.1.3-1
 - Remove redundant settings descriptions and unused translations.
 
