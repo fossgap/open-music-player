@@ -13,15 +13,12 @@
 [![GTK 4.8+](https://img.shields.io/badge/GTK-4.8%2B-blue.svg)](Cargo.toml)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-lightgrey.svg)](docs/packaging.md)
 
-> A native Linux home for your music, podcasts, and radio. Built with Rust, GTK 4, and GStreamer, part of [FOSS Gap](https://github.com/fossgap).
-
-Open Music Player brings your local library, internet audio, and desktop playback controls into one interface. Choose your music folders, put something on, and keep listening in the mini player or system tray.
+> A native GPU accelerated Linux home for your music, podcasts, and radio. Built with Rust, GTK 4, and GStreamer, part of [FOSS Gap](https://github.com/fossgap).
 
 [Features](#features) · [User guide](docs/wiki/README.md) · [Installation](#installation) · [Data privacy](docs/wiki/data-privacy.md) · [Building from source](#building-from-source)
 
 ![Open Music Player with generated demonstration music](docs/player.png)
 
-*The screenshot uses original test tones and generated artwork. No commercial music is bundled.*
 
 ## Features
 
@@ -38,7 +35,7 @@ Open Music Player brings your local library, internet audio, and desktop playbac
 - MPRIS desktop controls, system tray, mini player, background playback, and remembered sessions
 - Ten interface languages: English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, and Korean
 
-YouTube Music uses the unofficial ytmusicapi/yt-dlp libraries; Spotify uses librespot and its Web API. Service availability, account restrictions, and provider changes apply. See [service requirements](docs/wiki/services.md) and [streaming setup](docs/wiki/streaming.md).
+YouTube Music uses community ytmusicapi/yt-dlp libraries; Spotify uses librespot and its Web API. Service availability, account restrictions, and provider changes apply. See [service requirements](docs/wiki/services.md) and [streaming setup](docs/wiki/streaming.md).
 
 ## Installation
 
