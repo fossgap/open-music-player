@@ -12,4 +12,11 @@
   <url type="bugtracker">https://github.com/fossgap/open-music-player/issues</url>
   <url type="help">https://github.com/fossgap/open-music-player/blob/main/docs/wiki/README.md</url>
   <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.1" date="2026-11-08">
+      <description>
+        <p>First public packaged release, with verified Linux packages, an AppImage runtime, and user and data privacy guides.</p>
+      </description>
+    </release>
+  </releases>
 </component>

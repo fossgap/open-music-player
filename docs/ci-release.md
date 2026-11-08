@@ -93,8 +93,8 @@ These commands do not publish anything.
 3. Create and push the matching annotated tag, for example:
 
 ```sh
-git tag -a v0.1.0 -m "Open Music Player 0.1.0"
-git push origin v0.1.0
+git tag -a v0.1.1 -m "Open Music Player 0.1.1"
+git push origin v0.1.1
 ```
 
 After all checks pass, GitHub creates a release with generated notes and the

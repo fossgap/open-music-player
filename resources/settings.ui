@@ -44,7 +44,7 @@
       <child><object class="GtkLabel"><property name="label">Subscriptions</property><property name="xalign">0</property><style><class name="section-title"/></style></object></child>
       <child><object class="GtkScrolledWindow" id="subscriptions_scroller"><property name="hscrollbar-policy">never</property><property name="vscrollbar-policy">automatic</property><property name="overlay-scrolling">false</property><property name="propagate-natural-height">true</property><property name="max-content-height">240</property><property name="vexpand">false</property><property name="child"><object class="GtkListBox" id="subscriptions"><property name="selection-mode">none</property></object></property></object></child>
       <child><object class="GtkSeparator"/></child>
-      <child><object class="GtkLabel"><property name="label">Open Music Player · 0.1.0</property><property name="xalign">0</property><style><class name="muted"/><class name="small"/></style></object></child>
+      <child><object class="GtkLabel"><property name="label">Open Music Player · 0.1.1</property><property name="xalign">0</property><style><class name="muted"/><class name="small"/></style></object></child>
       <child><object class="GtkButton" id="close"><property name="label">Done</property><property name="halign">end</property><style><class name="suggested-action"/></style></object></child>
     </object></property></object></property></object></child>
   </object>

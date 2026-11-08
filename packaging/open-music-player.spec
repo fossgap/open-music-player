@@ -29,5 +29,8 @@ cp -a %{_sourcedir}/root/. %{buildroot}/
 %doc /usr/share/doc/open-music-player
 
 %changelog
+* Sun Nov 08 2026 Open Music Player contributors - 0.1.1-1
+- Publish verified Linux packages with user and data privacy documentation.
+
 * Wed Nov 04 2026 Open Music Player contributors - 0.1.0-1
 - Initial package.
