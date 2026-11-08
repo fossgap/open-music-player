@@ -13,6 +13,11 @@
   <url type="help">https://github.com/fossgap/open-music-player/blob/main/docs/wiki/README.md</url>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.2" date="2026-11-08">
+      <description>
+        <p>Bundle sidebar and queue icons for consistent display across desktop themes, and use the Open Music Player logo in the system tray.</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-11-08">
       <description>
         <p>First public packaged release, with verified Linux packages, an AppImage runtime, and user and data privacy guides.</p>
