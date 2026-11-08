@@ -60,8 +60,13 @@ def visible_player_windows():
 
 
 def close_player_window(title):
-    # Click GTK's actual titlebar Close button in the isolated virtual display.
     target = window(title)
+    if os.environ.get('OPEN_MUSIC_TEST_WM'):
+        # Use the real window manager's close request across GTK decoration styles.
+        subprocess.run(['xdotool', 'windowactivate', '--sync', target], check=True)
+        keys('alt+F4')
+        return
+    # Click GTK's titlebar Close button on the baseline display without a WM.
     geometry = subprocess.check_output(['xdotool', 'getwindowgeometry', '--shell', target], text=True)
     width = int(re.search(r'^WIDTH=(\d+)', geometry, re.M)[1])
     subprocess.run(['xdotool', 'mousemove', '--window', target, str(width - 22), '23', 'click', '1'], check=True)

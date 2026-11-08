@@ -43,11 +43,13 @@ containers:
 | Kali rolling | APT dependency resolution and the same DEB |
 | Fedora 44 | DNF dependency resolution and RPM installation |
 | Arch rolling | Pacman installation of the Arch binary package |
-| Ubuntu 24.04 | AppImage extraction without FUSE, with no host GTK/GStreamer/FFmpeg installed |
+| Ubuntu 24.04 | AppImage extraction without FUSE, with no host GTK 4/GStreamer/FFmpeg installed |
 
 All jobs verify checksums and the expected version, check desktop/icon/AppStream,
 license, wiki, and optional-helper files, then run the installed application as
-an ordinary user through `scripts/smoke-test.py`. That suite covers local media,
+an ordinary user through `scripts/smoke-test.py` under Xvfb and the Xfwm window
+manager. This gives resizing and closing real desktop semantics across GTK
+versions. That suite covers local media,
 playback/seek, MPRIS, library/playlist operations, local podcast-directory/feed
 fixtures, downloads, and persistence. The AppImage's application binary must
 also match the DEB byte-for-byte. Fixtures and state are disposable; no host

@@ -76,12 +76,12 @@ if [[ "$format" == appimage ]]; then
 else
     # Check the installed app before test dependencies can mask missing libraries.
     runuser -u musictest -- "$binary" --help >/tmp/installed-help.txt
-    ffmpeg -version >/tmp/installed-ffmpeg.txt
-    ffprobe -version >/tmp/installed-ffprobe.txt
 fi
 installed_version=$(runuser -u musictest -- "$binary" --version)
 printf 'Installed version: %s\n' "$installed_version"
 [[ "$installed_version" == "Open Music Player $version" ]]
+ffmpeg -version >/tmp/installed-ffmpeg.txt
+ffprobe -version >/tmp/installed-ffprobe.txt
 test -x "$prefix/bin/open-music-setup-youtube"
 bash -n "$prefix/bin/open-music-setup-youtube"
 test -s "$prefix/share/open-music-player/youtube-requirements.txt"
@@ -91,10 +91,16 @@ test -s "$prefix/share/applications/io.github.openmusic.Player.desktop"
 test -s "$prefix/share/icons/hicolor/scalable/apps/io.github.openmusic.Player.svg"
 test -s "$prefix/share/metainfo/io.github.openmusic.Player.metainfo.xml"
 case "$format" in
-    deb) apt-get -y --no-install-recommends install xvfb xauth dbus-x11 libglib2.0-bin python3 xdotool fonts-dejavu-core ;;
-    rpm) dnf -y install xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon glib2 python3 xdotool dejavu-sans-fonts ;;
-    arch) pacman --noconfirm -S --needed xorg-server-xvfb xorg-xauth dbus glib2 python xdotool ttf-dejavu ;;
+    deb) apt-get -y --no-install-recommends install xvfb xauth dbus-x11 libglib2.0-bin python3 xdotool fonts-dejavu-core xfwm4 x11-utils ;;
+    rpm) dnf -y install xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon glib2 python3 xdotool dejavu-sans-fonts xfwm4 xprop ;;
+    arch) pacman --noconfirm -S --needed xorg-server-xvfb xorg-xauth dbus glib2 python xdotool ttf-dejavu xfwm4 xorg-xprop ;;
+    appimage)
+        apt-get -y --no-install-recommends install xfwm4 x11-utils
+        for package in libgtk-4-1 libgstreamer1.0-0 ffmpeg; do
+            [[ $(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null || true) != installed ]]
+        done
+        ;;
 esac
 runuser -u musictest -- env OPEN_MUSIC_BINARY="$binary" GTK_A11Y=none \
-    xvfb-run -a dbus-run-session -- python3 /workspace/scripts/smoke-test.py
+    xvfb-run -a dbus-run-session -- bash /package-test/smoke.sh
 printf 'PACKAGE_INSTALLATION_SUITE_PASSED: %s\n' "$format"
