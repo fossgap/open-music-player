@@ -1268,9 +1268,13 @@ fn exercise_embedded_icons(app: &App) {
         .unwrap()
         .icon_name()
         .unwrap();
+    let duration = object::<gtk::Image>(&app.ui, "duration_header")
+        .icon_name()
+        .unwrap();
     for (name, symbolic) in [
         (sidebar.as_str(), true),
         (queue.as_str(), true),
+        (duration.as_str(), true),
         ("io.github.openmusic.Player", false),
     ] {
         assert!(theme.has_icon(name), "Missing bundled icon: {name}");

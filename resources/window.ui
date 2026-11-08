@@ -706,8 +706,8 @@
                                   </object>
                                 </child>
                                 <child>
-                                  <object class="GtkImage">
-                                    <property name="icon-name">preferences-system-time-symbolic</property>
+                                  <object class="GtkImage" id="duration_header">
+                                    <property name="icon-name">open-music-duration-symbolic</property>
                                     <property name="width-request">55</property>
                                   </object>
                                 </child>
