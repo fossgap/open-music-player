@@ -2306,7 +2306,7 @@ dependencies = [
 
 [[package]]
 name = "open-music-player"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "gstreamer",
  "gstreamer-app",

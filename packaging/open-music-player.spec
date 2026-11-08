@@ -29,6 +29,9 @@ cp -a %{_sourcedir}/root/. %{buildroot}/
 %doc /usr/share/doc/open-music-player
 
 %changelog
+* Sun Nov 08 2026 Open Music Player contributors - 0.1.3-1
+- Remove redundant settings descriptions and unused translations.
+
 * Sun Nov 08 2026 Open Music Player contributors - 0.1.2-1
 - Bundle navigation icons and use the application logo in the system tray.
 

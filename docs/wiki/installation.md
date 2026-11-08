@@ -33,7 +33,7 @@ sha256sum --strict -c SHA256SUMS
 For a single downloaded package, use its exact filename:
 
 ```sh
-grep -F ' ./open-music-player_0.1.2_amd64.deb' SHA256SUMS | sha256sum --strict -c -
+grep -F ' ./open-music-player_0.1.3_amd64.deb' SHA256SUMS | sha256sum --strict -c -
 ```
 
 Replace the example version when needed. The command must report `OK` and exit
@@ -46,7 +46,7 @@ trusted publisher. Obtain both files from the project's GitHub release. See
 
 ```sh
 chmod +x OpenMusicPlayer-*-x86_64.AppImage
-./OpenMusicPlayer-0.1.2-x86_64.AppImage
+./OpenMusicPlayer-0.1.3-x86_64.AppImage
 ```
 
 Use your actual version in the second command. The image bundles GTK, GStreamer,
@@ -58,7 +58,7 @@ requirements.
 Without FUSE, extract it into a new directory and run its launcher:
 
 ```sh
-./OpenMusicPlayer-0.1.2-x86_64.AppImage --appimage-extract
+./OpenMusicPlayer-0.1.3-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 

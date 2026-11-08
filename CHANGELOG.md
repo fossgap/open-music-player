@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3 — 2026-11-08
+
+- Simplify Settings by removing redundant descriptions for themes, both background controls, download folders, artist and album information, online artwork and lyrics, and folder watching.
+- Remove the unused strings from all ten translation catalogues.
+
 ## 0.1.2 — 2026-11-08
 
 - Bundle sidebar-toggle and queue icons so they remain available across desktop icon themes.
