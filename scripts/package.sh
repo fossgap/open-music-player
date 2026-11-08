@@ -128,6 +128,10 @@ EOF
     export DEPLOY_GTK_VERSION=4
     export APPIMAGE_EXTRACT_AND_RUN=1
     "$LINUXDEPLOY" --appdir "$appdir" --executable "$appdir/usr/bin/open-music-player" --executable "$appdir/usr/bin/ffprobe" --executable "$appdir/usr/bin/ffmpeg" --desktop-file packaging/io.github.openmusic.Player.desktop --icon-file resources/io.github.openmusic.Player.svg --custom-apprun packaging/AppRun --plugin gtk --plugin gstreamer "${libraries[@]}"
+    # linuxdeploy wraps custom launchers with alphabetically ordered hooks.
+    # Set APPDIR before either hook, including when running an extracted image.
+    install -m755 packaging/AppRun "$appdir/AppRun"
+    rm -f "$appdir/AppRun.wrapped"
     # AppRun supplies the library path; retain the exact native-package binary
     # after linuxdeploy has inspected its dependencies and adjusted ELF rpaths.
     install -m755 "$binary" "$appdir/usr/bin/open-music-player"

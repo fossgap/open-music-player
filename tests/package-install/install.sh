@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'printf "Package verification failed at line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 if [[ ${OPEN_MUSIC_INSTALL_TEST_CONTAINER:-} != 1 || ! -f /.dockerenv || ! -d /artifacts ]]; then
     echo 'Use scripts/check-package-installation.sh; this script installs container packages.' >&2
     exit 2
@@ -18,6 +19,8 @@ case "$format" in
     deb)
         app=$(one_file /artifacts/open-music-player_*_amd64.deb)
         [[ $(dpkg-deb -f "$app" Version) == "$version" ]]
+        # Slim images normally omit documentation; exercise the packaged wiki.
+        printf 'path-include /usr/share/doc/open-music-player*\n' > /etc/dpkg/dpkg.cfg.d/zz-open-music-docs
         apt-get update
         apt-get -y --no-install-recommends --no-remove install "$app"
         [[ $(dpkg-query -W -f='${Version}' open-music-player) == "$version" ]]
@@ -25,7 +28,7 @@ case "$format" in
         ;;
     rpm)
         app=$(one_file /artifacts/open-music-player-[0-9]*.x86_64.rpm)
-        dnf -y --setopt=install_weak_deps=False install "$app"
+        dnf -y --setopt=install_weak_deps=False --setopt=tsflags= install "$app"
         [[ $(rpm -q --qf '%{VERSION}' open-music-player) == "$version" ]]
         [[ $(rpm -q --qf '%{VERSION}-%{RELEASE}' open-music-player) == $(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$app") ]]
         dnf check
@@ -33,6 +36,7 @@ case "$format" in
         ;;
     arch)
         app=$(one_file /artifacts/open-music-player-[0-9]*-x86_64.pkg.tar.zst)
+        printf '\n[options]\nNoExtract = !usr/share/doc/open-music-player*\n' >> /etc/pacman.conf
         pacman --noconfirm -Syu
         pacman --noconfirm -U "$app"
         [[ $(pacman -Q open-music-player) == "open-music-player $version-1" ]]
@@ -75,7 +79,9 @@ else
     ffmpeg -version >/tmp/installed-ffmpeg.txt
     ffprobe -version >/tmp/installed-ffprobe.txt
 fi
-[[ $(runuser -u musictest -- "$binary" --version) == "Open Music Player $version" ]]
+installed_version=$(runuser -u musictest -- "$binary" --version)
+printf 'Installed version: %s\n' "$installed_version"
+[[ "$installed_version" == "Open Music Player $version" ]]
 test -x "$prefix/bin/open-music-setup-youtube"
 bash -n "$prefix/bin/open-music-setup-youtube"
 test -s "$prefix/share/open-music-player/youtube-requirements.txt"
