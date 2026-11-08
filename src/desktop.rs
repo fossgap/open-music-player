@@ -1,3 +1,5 @@
+mod icons;
+
 use crate::{
     app::App,
     model::{Kind, Repeat, Track},
@@ -356,6 +358,20 @@ fn menu_event(app: &Rc<App>, id: i32) {
 fn register_tray(app: &Rc<App>, connection: &gio::DBusConnection) {
     let info = gio::DBusNodeInfo::for_xml(include_str!("../resources/tray.xml"))
         .expect("Invalid tray definition");
+    // The tray host is another process, so it cannot use our GResource icons.
+    // Supply pixels as well as the installed icon name for portable launches.
+    let pixmaps = icons::pixmaps().unwrap_or_else(|error| {
+        eprintln!("Tray icon: {error}");
+        Vec::new()
+    });
+    let icon_pixmaps = pixmaps.to_variant();
+    let tooltip = (
+        icons::NAME,
+        pixmaps,
+        "Open Music Player",
+        "Music, podcasts, and radio",
+    )
+        .to_variant();
     let weak = Rc::downgrade(app);
     let registration = connection
         .register_object(
@@ -378,27 +394,22 @@ fn register_tray(app: &Rc<App>, connection: &gio::DBusConnection) {
             }
             invocation.return_value(Some(&().to_variant()));
         })
-        .property(|_, _, _, _, name| match name {
+        .property(move |_, _, _, _, name| match name {
             "Category" => "ApplicationStatus".to_variant(),
             "Id" => "open-music-player".to_variant(),
             "Title" => "Open Music Player".to_variant(),
             "Status" => "Active".to_variant(),
-            "IconName" => "audio-x-generic".to_variant(),
+            "IconName" => icons::NAME.to_variant(),
             "WindowId" => 0_u32.to_variant(),
             "ItemIsMenu" => false.to_variant(),
             "Menu" => glib::variant::ObjectPath::try_from("/Menu")
                 .unwrap()
                 .to_variant(),
-            "IconPixmap" | "OverlayIconPixmap" | "AttentionIconPixmap" => {
+            "IconPixmap" => icon_pixmaps.clone(),
+            "OverlayIconPixmap" | "AttentionIconPixmap" => {
                 Vec::<(i32, i32, Vec<u8>)>::new().to_variant()
             }
-            "ToolTip" => (
-                "audio-x-generic",
-                Vec::<(i32, i32, Vec<u8>)>::new(),
-                "Open Music Player",
-                "Music, podcasts, and radio",
-            )
-                .to_variant(),
+            "ToolTip" => tooltip.clone(),
             _ => "".to_variant(),
         })
         .build();

@@ -28,7 +28,7 @@
         </property>
         <child type="start">
           <object class="GtkButton" id="sidebar_toggle">
-            <property name="icon-name">sidebar-show-symbolic</property>
+            <property name="icon-name">open-music-sidebar-symbolic</property>
             <property name="tooltip-text">Toggle sidebar</property>
             <style>
               <class name="flat" />
@@ -295,7 +295,7 @@
                             <property name="spacing">12</property>
                             <child>
                               <object class="GtkImage">
-                                <property name="icon-name">view-list-bullet-symbolic</property>
+                                <property name="icon-name">open-music-queue-symbolic</property>
                               </object>
                             </child>
                             <child>

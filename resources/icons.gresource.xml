@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources><gresource prefix="/io/github/openmusic/Player">
   <file>icons/scalable/actions/open-music-star-outline-symbolic.svg</file>
+  <file>icons/scalable/actions/open-music-sidebar-symbolic.svg</file>
+  <file>icons/scalable/actions/open-music-queue-symbolic.svg</file>
+  <file alias="icons/scalable/apps/io.github.openmusic.Player.svg">io.github.openmusic.Player.svg</file>
 </gresource></gresources>

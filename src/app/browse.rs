@@ -390,7 +390,7 @@ impl App {
                 return;
             };
             object::<gtk::Image>(ui, "placeholder")
-                .set_icon_name(Some("view-list-bullet-symbolic"));
+                .set_icon_name(Some("open-music-queue-symbolic"));
             let menu = gio::Menu::new();
             for (label, action) in [
                 ("Rename playlist", "app.rename-playlist"),

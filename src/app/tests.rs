@@ -70,6 +70,7 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     application.register(None::<&gio::Cancellable>).unwrap();
     let app = App::new(&application, state).unwrap();
     settle();
+    exercise_embedded_icons(&app);
     if std::env::var_os("OPEN_MUSIC_TEST_SEARCH_ONLY").is_some() {
         super::search::exercise(&app, &audio);
         app.shutdown();
@@ -1249,6 +1250,49 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     drop(spotify_runtime);
     app.window.destroy();
     object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+}
+
+fn exercise_embedded_icons(app: &App) {
+    let theme = gtk::IconTheme::new();
+    theme.set_search_path(&[]);
+    theme.set_resource_path(&["/io/github/openmusic/Player/icons"]);
+    theme.set_theme_name(Some("open-music-test-empty"));
+    let sidebar = app.button("sidebar_toggle").icon_name().unwrap();
+    let queue = app
+        .button("nav_queue")
+        .child()
+        .unwrap()
+        .first_child()
+        .unwrap()
+        .downcast::<gtk::Image>()
+        .unwrap()
+        .icon_name()
+        .unwrap();
+    for (name, symbolic) in [
+        (sidebar.as_str(), true),
+        (queue.as_str(), true),
+        ("io.github.openmusic.Player", false),
+    ] {
+        assert!(theme.has_icon(name), "Missing bundled icon: {name}");
+        for scale in [1, 2] {
+            let icon = theme.lookup_icon(
+                name,
+                &[],
+                16,
+                scale,
+                gtk::TextDirection::Ltr,
+                gtk::IconLookupFlags::empty(),
+            );
+            assert!(
+                icon.file()
+                    .unwrap()
+                    .uri()
+                    .starts_with("resource:///io/github/openmusic/Player/icons/")
+            );
+            assert_eq!(icon.is_symbolic(), symbolic);
+        }
+    }
+    screenshot(app.window.upcast_ref(), "desktop-bundled-icons.png");
 }
 
 fn exercise_preferences(app: &Rc<App>) {

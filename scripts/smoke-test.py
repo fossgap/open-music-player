@@ -40,6 +40,29 @@ def prop(name):
     return call('org.freedesktop.DBus.Properties', 'Get', PLAYER, name)
 
 
+def check_tray_icon():
+    def tray_property(name):
+        return call('org.freedesktop.DBus.Properties', 'Get', 'org.kde.StatusNotifierItem', name,
+                    path='/StatusNotifierItem')
+    assert 'io.github.openmusic.Player' in tray_property('IconName')
+    pixmaps = {}
+    for width, height, raw in re.findall(r'\((\d+), (\d+), \[(.*?)\]\)', tray_property('IconPixmap')):
+        width, height = int(width), int(height)
+        pixels = bytes.fromhex(''.join(re.findall(r'0x([0-9a-f]{2})', raw)))
+        assert width == height and len(pixels) == width * height * 4, (width, height, len(pixels))
+        pixmaps[width] = pixels
+    assert sorted(pixmaps) == [16, 22, 24, 32, 48, 64, 128], sorted(pixmaps)
+    # Inspect the actual wire image, including ARGB byte order and the app's sage bars.
+    foreground = (32 * 64 + 27) * 4
+    assert pixmaps[64][foreground:foreground + 4] == bytes([255, 194, 223, 163])
+    assert 'io.github.openmusic.Player' in tray_property('ToolTip')
+    if directory := os.environ.get('OPEN_MUSIC_SCREENSHOTS'):
+        Path(directory).mkdir(parents=True, exist_ok=True)
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pixel_format', 'argb',
+                        '-video_size', '64x64', '-i', 'pipe:0', '-frames:v', '1',
+                        str(Path(directory) / 'tray-icon.png')], input=pixmaps[64], check=True)
+
+
 def action(name, value=None):
     params = '[]' if value is None else "[<" + json.dumps(value) + ">]"
     return call('org.gtk.Actions', 'Activate', name, params, '{}', dest='io.github.openmusic.Player', path='/io/github/openmusic/Player')
@@ -196,6 +219,7 @@ with tempfile.TemporaryDirectory(prefix='open-music-test-') as temporary:
         assert len(state()['folders']) == 1
         assert all(t['duration'] >= 44 for t in state()['tracks'])
         assert all(t['artwork'] for t in state()['tracks'])
+        check_tray_icon()
         snapshot('desktop-library.png')
         first = state()['tracks'][0]['id']
         second = state()['tracks'][1]['id']
@@ -428,7 +452,7 @@ with tempfile.TemporaryDirectory(prefix='open-music-test-') as temporary:
         log.seek(0)
         output = log.read()
         assert 'panicked' not in output and 'CRITICAL' not in output, output
-        print('PASS: library/audio/MPRIS, albums, playlist create/add/rename/import/grid, Apple and gPodder discovery/search/subscription toggles, empty/error states, mini player, compact layouts, session/window-size restoration, theme persistence, and independent startup/close preferences.')
+        print('PASS: library/audio/MPRIS/tray icons, albums, playlist create/add/rename/import/grid, Apple and gPodder discovery/search/subscription toggles, empty/error states, mini player, compact layouts, session/window-size restoration, theme persistence, and independent startup/close preferences.')
     except Exception:
         log.seek(0)
         print(log.read())
