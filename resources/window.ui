@@ -36,6 +36,14 @@
           </object>
         </child>
         <child type="end">
+          <object class="GtkButton" id="global_search_button">
+            <property name="icon-name">system-search-symbolic</property>
+            <property name="tooltip-text">Search all audio (Ctrl+K)</property>
+            <property name="action-name">app.global-search</property>
+            <style><class name="flat"/></style>
+          </object>
+        </child>
+        <child type="end">
           <object class="GtkMenuButton" id="main_menu">
             <property name="icon-name">open-menu-symbolic</property>
             <property name="tooltip-text">Main menu</property>
@@ -91,6 +99,16 @@
                             </style>
                           </object>
                         </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkButton" id="nav_search">
+                        <property name="action-name">app.global-search</property>
+                        <style><class name="nav"/></style>
+                        <property name="child"><object class="GtkBox"><property name="spacing">12</property>
+                          <child><object class="GtkImage"><property name="icon-name">system-search-symbolic</property></object></child>
+                          <child><object class="GtkLabel"><property name="label">Search</property></object></child>
+                        </object></property>
                       </object>
                     </child>
                     <child>

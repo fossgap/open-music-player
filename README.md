@@ -23,6 +23,7 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 | Podcasts | Apple Podcasts/iTunes and gPodder search/discovery, subscribe/unsubscribe toggles, RSS/Atom subscriptions, feed refresh, per-episode resume positions |
 | Internet radio | Search and discovery through Radio Browser, station artwork, favorites, playback |
 | Streaming | One view for YouTube Music, Spotify and direct HTTP(S) audio |
+| Global search | Saved music, albums, playlists, episodes, stations and stream URLs, plus online discovery across the existing services |
 | YouTube Music | Song search, personal browser-session connection, native playback, two-way playlist sync and private playlist publishing |
 | Spotify | Browser sign-in, librespot playback (Premium), track search, two-way playlist sync and private playlist publishing |
 | Desktop | MPRIS controls and metadata, StatusNotifierItem tray menu, background playback, mini player |
@@ -176,6 +177,14 @@ The session is restored without automatically starting audio. Press Play to cont
 
 Open the app again from your launcher, or choose **Open Audio Player** in its tray menu, to bring it back. Background mode also works without a tray. **Quit** always exits, regardless of these settings.
 
+### Global search
+
+Open **Search** in the sidebar, use the search button in the title bar, or press **Ctrl + K**. Typing searches your saved collection by title, artist, album, playlist, tags or source; accents and capitalization do not need to match. The audio-type filter narrows the results. Saved playlists include synchronized YouTube Music and Spotify playlists.
+
+Press **Enter** or click **Search online** to search Apple Podcasts, gPodder, Radio Browser, YouTube Music and your connected Spotify account. Each provider loads independently, with cancellation and individual retries. Existing account and playback requirements still apply. Albums, playlists and direct stream URLs are searched in your saved collection.
+
+Single-click selects a result. Double-click plays a track or opens an album, playlist or podcast. The **Play** and **Add to queue** buttons act directly; playing an album or playlist replaces the queue, while adding to the queue preserves playback. You can preview a podcast’s episodes before subscribing. Online results enter the saved collection only when played, queued or subscribed to.
+
 ### Local tags
 
 Choose **Edit tags** from a local track’s menu or the selection actions menu. Edit one track or select several with Ctrl/Shift for a bulk edit. The editor has **Tags**, **Artwork**, and **Lyrics** tabs. Bulk edits change only checked fields; unchecked mixed values are preserved. Clear a checked field to remove its value. **Review changes** shows before/after values and the affected files before saving.
@@ -242,6 +251,7 @@ Closing either player window follows **Settings → Keep running when the window
 | Ctrl + Shift + Home / End | Move selected playlist/queue entries to the top/bottom |
 | Ctrl + O | Add a music folder |
 | Ctrl + F | Focus search |
+| Ctrl + K | Open global search |
 | Ctrl + R | Refresh the current source |
 | Ctrl + L | Artwork and lyrics |
 | Ctrl + M | Mini player |
@@ -288,7 +298,7 @@ OPEN_AUDIO_SCREENSHOTS=/tmp/open-audio-screens make smoke
 
 Set `OPEN_AUDIO_BINARY` to an absolute binary path to run the same checks against a release build or AppImage. Use `APPIMAGE_EXTRACT_AND_RUN=1` when FUSE is unavailable; this keeps the AppImage runtime's library and plugin environment intact.
 
-`OPEN_AUDIO_ITUNES_API` and `OPEN_AUDIO_GPODDER_API` optionally replace the respective API base URLs for a private mirror or offline test server. The optional `OPEN_AUDIO_MUSICBRAINZ_API`, `OPEN_AUDIO_COVER_ART_API`, and `OPEN_AUDIO_LRCLIB_API` variables similarly replace metadata API bases. Normal use needs none of these settings.
+`OPEN_AUDIO_ITUNES_API`, `OPEN_AUDIO_GPODDER_API` and `OPEN_AUDIO_RADIO_API` optionally replace the respective API base URLs for a private mirror or offline test server. The optional `OPEN_AUDIO_MUSICBRAINZ_API`, `OPEN_AUDIO_COVER_ART_API`, and `OPEN_AUDIO_LRCLIB_API` variables similarly replace metadata API bases. Normal use needs none of these settings.
 
 To explore with a separate demonstration library:
 
@@ -351,6 +361,7 @@ src/
   app/files.rs   Local file drops, folder watching controls, file manager
   app/selection.rs Multi-selection, bulk actions, playlist/queue reordering
   app/tags.rs    Single/bulk tag editor, review, progress and failure handling
+  app/search.rs  Global search view, result actions and podcast previews
   app/tests.rs   GTK scroll, selection, collection and streaming regressions
   app/spotify.rs Spotify account and playlist interface
   app/youtube.rs YouTube Music account and playlist interface
@@ -366,6 +377,8 @@ src/
   watch.rs       Recursive native GIO folder monitors on a worker thread
   collections.rs Occurrence-aware collection ordering and removal
   model.rs       Tracks, collections, queue, persisted session
+  search.rs      Ranked collection search with background indexing
+  search/        Independent provider workers and search regression tests
   playlists.rs   M3U/M3U8, PLS, and XSPF parsing and import
   process.rs     Bounded subprocess execution without a shell
   services.rs    Podcast directories/feeds, Radio Browser and artwork

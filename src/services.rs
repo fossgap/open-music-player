@@ -185,13 +185,35 @@ pub fn parse_podcast_search(
 }
 
 pub fn radio(query: &str, cache: &Path) -> Result<Vec<Track>, String> {
+    radio_cancellable(query, cache, || false)
+}
+
+pub fn radio_cancellable(
+    query: &str,
+    cache: &Path,
+    cancelled: impl Fn() -> bool,
+) -> Result<Vec<Track>, String> {
     let mut last_error = String::new();
-    for server in [
-        "de1.api.radio-browser.info",
-        "nl1.api.radio-browser.info",
-        "at1.api.radio-browser.info",
-    ] {
-        let mut url = url::Url::parse(&format!("https://{server}/json/stations/search")).unwrap();
+    let servers = std::env::var("OPEN_AUDIO_RADIO_API")
+        .map(|base| vec![base])
+        .unwrap_or_else(|_| {
+            vec![
+                "https://de1.api.radio-browser.info/".into(),
+                "https://nl1.api.radio-browser.info/".into(),
+                "https://at1.api.radio-browser.info/".into(),
+            ]
+        });
+    for server in servers {
+        if cancelled() {
+            return Err("Cancelled".into());
+        }
+        let mut base = http_url(&server)?;
+        if !base.path().ends_with('/') {
+            base.set_path(&format!("{}/", base.path()));
+        }
+        let mut url = base
+            .join("json/stations/search")
+            .map_err(|e| e.to_string())?;
         url.query_pairs_mut()
             .append_pair("name", query)
             .append_pair("limit", "60")

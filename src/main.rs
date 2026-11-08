@@ -12,6 +12,7 @@ mod lyrics;
 mod model;
 mod playlists;
 mod process;
+mod search;
 mod services;
 mod spotify;
 mod storage;

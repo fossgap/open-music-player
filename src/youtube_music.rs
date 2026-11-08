@@ -216,7 +216,15 @@ pub fn disconnect() -> Result<(), String> {
     Ok(())
 }
 pub fn search(account: Option<&YoutubeAccount>, query: &str) -> Result<Vec<Track>, String> {
-    let songs: Vec<Song> = request(account, json!({"op":"search","query":query}), 90)?;
+    search_cancellable(account, query, || false)
+}
+pub fn search_cancellable(
+    account: Option<&YoutubeAccount>,
+    query: &str,
+    cancelled: impl Fn() -> bool,
+) -> Result<Vec<Track>, String> {
+    let songs: Vec<Song> =
+        request_cancellable(account, json!({"op":"search","query":query}), 90, cancelled)?;
     songs.into_iter().map(Song::into_track).collect()
 }
 pub fn album(

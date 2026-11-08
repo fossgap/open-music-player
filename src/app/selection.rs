@@ -225,6 +225,10 @@ impl App {
     }
 
     pub(super) fn update_selection(&self) {
+        if *self.page.borrow() == "search" {
+            object::<gtk::Box>(&self.ui, "selection_bar").set_visible(false);
+            return;
+        }
         let selected = self.selected_rows();
         let tracks = object::<gtk::Stack>(&self.ui, "content_stack")
             .visible_child_name()

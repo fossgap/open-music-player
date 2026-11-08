@@ -530,6 +530,11 @@ impl App {
 
     pub(super) fn refresh(&self) {
         let page = self.page.borrow().clone();
+        if page == "search" {
+            self.show_global_search();
+            return;
+        }
+        self.hide_global_search();
         object::<gtk::Box>(&self.ui, "toolbar").set_visible(page != "downloads");
         let state = self.state.borrow();
         let query = object::<gtk::SearchEntry>(&self.ui, "search")

@@ -70,6 +70,13 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     application.register(None::<&gio::Cancellable>).unwrap();
     let app = App::new(&application, state).unwrap();
     settle();
+    if std::env::var_os("OPEN_AUDIO_TEST_SEARCH_ONLY").is_some() {
+        super::search::exercise(&app, &audio);
+        app.shutdown();
+        app.window.destroy();
+        object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+        return;
+    }
     if std::env::var_os("OPEN_AUDIO_TEST_TAGS_ONLY").is_some() {
         super::tags::exercise(&app, &audio);
         app.shutdown();
@@ -1235,6 +1242,7 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     exercise_information(&app, &audio);
     super::discography::exercise(&app, &audio);
     super::tags::exercise(&app, &audio);
+    super::search::exercise(&app, &audio);
     exercise_preferences(&app);
     exercise_visualization(&app, directory.path());
     app.shutdown();

@@ -489,6 +489,10 @@ impl App {
                     }
                 }
             }
+            Reply::GlobalSearch(generation, result) => {
+                self.global_spotify_reply(generation, result);
+                return;
+            }
             Reply::Search(generation, result) => {
                 if generation != self.spotify.generation.get() {
                     return;

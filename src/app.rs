@@ -20,6 +20,7 @@ mod playback;
 mod podcasts;
 mod preferences;
 mod render_area;
+mod search;
 mod selection;
 mod spotify;
 mod tags;
@@ -81,6 +82,7 @@ pub struct App {
     podcast_cards: BoundItems,
     youtube: youtube::Controls,
     spotify: spotify::Controls,
+    search: search::Controls,
     metadata: RefCell<enrichment::Service>,
     metadata_last: Cell<Instant>,
     lyrics_key: RefCell<Option<String>>,
@@ -211,6 +213,7 @@ impl App {
             podcast_cards: Default::default(),
             youtube: youtube::Controls::default(),
             spotify: spotify::Controls::default(),
+            search: search::Controls::default(),
             metadata: RefCell::new(enrichment::Service::new(enrichment::Config::default())),
             metadata_last: Cell::new(Instant::now()),
             lyrics_key: RefCell::new(None),
@@ -269,6 +272,7 @@ impl App {
         this.setup_selection();
         this.setup_files();
         this.setup_tags();
+        this.setup_global_search();
         this.setup_watermark();
         this.setup_controls();
         this.setup_timing();
@@ -596,7 +600,11 @@ impl App {
         key.connect_key_pressed(move |_, key, _, modifiers| {
             if modifiers.contains(gdk::ModifierType::CONTROL_MASK) && key == gdk::Key::f {
                 if let Some(a) = weak.upgrade() {
-                    object::<gtk::SearchEntry>(&a.ui, "search").grab_focus();
+                    if *a.page.borrow() == "search" {
+                        a.focus_global_search();
+                    } else {
+                        object::<gtk::SearchEntry>(&a.ui, "search").grab_focus();
+                    }
                 }
                 return glib::Propagation::Stop;
             }
@@ -675,6 +683,7 @@ impl App {
 
     pub fn navigate(self: &Rc<Self>, page: &str) {
         if ![
+            "search",
             "library",
             "favorites",
             "playlists",
@@ -701,6 +710,7 @@ impl App {
             page
         };
         for name in [
+            "search",
             "library",
             "favorites",
             "playlists",
@@ -724,6 +734,9 @@ impl App {
             self.updating.set(false);
         }
         self.refresh();
+        if page == "search" {
+            self.focus_global_search();
+        }
     }
 
     fn primary_action(self: &Rc<Self>) {
@@ -759,6 +772,10 @@ impl App {
 
     pub fn notice(&self, text: &str, error: bool, busy: bool) {
         self.buffering_notice.set(false);
+        if *self.page.borrow() == "search" {
+            self.global_notice(text, error);
+            return;
+        }
         let notice: gtk::Box = object(&self.ui, "notice");
         notice.set_visible(true);
         if error {
@@ -1221,6 +1238,7 @@ impl App {
     }
 
     pub fn shutdown(&self) {
+        self.cancel_global_search();
         self.shutdown_tags();
         self.background_hold.borrow_mut().take();
         self.theme.borrow_mut().detach();
@@ -1332,18 +1350,22 @@ impl App {
 
     fn ensure_artwork(&self) {
         let urls: Vec<String> = self
-            .podcast_results
-            .borrow()
-            .iter()
-            .filter_map(|s| s.artwork.as_ref())
-            .cloned()
+            .global_artwork_urls()
+            .into_iter()
             .chain(
-                self.state
+                self.podcast_results
                     .borrow()
-                    .tracks
                     .iter()
-                    .filter_map(|t| t.artwork.as_ref())
-                    .cloned(),
+                    .filter_map(|s| s.artwork.as_ref())
+                    .cloned()
+                    .chain(
+                        self.state
+                            .borrow()
+                            .tracks
+                            .iter()
+                            .filter_map(|t| t.artwork.as_ref())
+                            .cloned(),
+                    ),
             )
             .filter(|u| u.starts_with("http"))
             .take(60)
@@ -1367,6 +1389,7 @@ impl App {
     }
 
     fn tick(self: &Rc<Self>) {
+        self.poll_global_search();
         self.poll_tags();
         if self.images.take_changed() {
             self.update_backdrop();
@@ -1555,7 +1578,11 @@ impl App {
                 }
                 Message::Artwork(uri, result) => {
                     self.artwork_pending.borrow_mut().remove(&uri);
-                    let Ok(path) = result else { continue };
+                    let Ok(path) = result else {
+                        self.global_artwork_failed(&uri);
+                        continue;
+                    };
+                    self.global_artwork(&uri, &path);
                     for show in self.podcast_results.borrow_mut().iter_mut() {
                         if show.artwork.as_deref() == Some(&uri) {
                             show.artwork = Some(path.clone());
@@ -1566,7 +1593,9 @@ impl App {
                             track.artwork = Some(path.clone());
                         }
                     }
-                    self.refresh();
+                    if *self.page.borrow() != "search" {
+                        self.refresh();
+                    }
                     self.update_player();
                 }
                 Message::SaveError(e) => self.notice(&e, true, false),
@@ -1782,11 +1811,12 @@ impl App {
             .modal(true)
             .text(self.tr("Keyboard shortcuts"))
             .secondary_text(format!(
-                "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+                "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
                 self.tr("Ctrl + Space — Play / pause"),
                 self.tr("Alt + Left / Right — Previous / next"),
                 self.tr("Ctrl + O — Add music"),
                 self.tr("Ctrl + F — Search"),
+                self.tr("Ctrl + K — Search all audio"),
                 self.tr("Ctrl + M — Mini player"),
                 self.tr("Ctrl + , — Settings"),
                 self.tr("Ctrl + Q — Quit"),
