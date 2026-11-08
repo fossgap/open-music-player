@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Copy)]
 enum Grid {
     Albums,
+    Artists,
     Playlists,
     Podcasts,
 }
@@ -110,6 +111,7 @@ impl App {
             }
         });
         self.setup_grid(Grid::Albums, "album_grid", &self.albums_model);
+        self.setup_grid(Grid::Artists, "artist_grid", &self.artists.model);
         self.setup_grid(Grid::Playlists, "playlist_grid", &self.playlists_model);
         self.setup_grid(Grid::Podcasts, "podcast_grid", &self.podcasts_model);
     }
@@ -214,6 +216,7 @@ impl App {
     fn cards(&self, grid: Grid) -> &BoundItems {
         match grid {
             Grid::Albums => &self.album_cards,
+            Grid::Artists => &self.artists.cards,
             Grid::Playlists => &self.playlist_cards,
             Grid::Podcasts => &self.podcast_cards,
         }
@@ -239,6 +242,9 @@ impl App {
                     "album_card"
                 },
             )));
+            if matches!(kind, Grid::Artists) {
+                object::<gtk::Box>(&ui, "album_card").add_css_class("artist-card");
+            }
             if matches!(kind, Grid::Podcasts) {
                 let weak_item = item.downgrade();
                 let weak_app = Rc::downgrade(&app);
@@ -299,6 +305,7 @@ impl App {
             if let (Some(app), Some(id)) = (weak.upgrade(), model.string(position)) {
                 match kind {
                     Grid::Albums => app.open_album(&id),
+                    Grid::Artists => app.open_artist(&id),
                     Grid::Playlists => app.open_playlist(&id),
                     Grid::Podcasts => {}
                 }
@@ -356,9 +363,10 @@ impl App {
             );
             return;
         }
-        if matches!(kind, Grid::Playlists) {
+        if matches!(kind, Grid::Playlists | Grid::Artists) {
             let compact = self.compact_browse.get()
-                && ["youtube", "spotify"].contains(&self.page.borrow().as_str());
+                && (matches!(kind, Grid::Artists)
+                    || ["youtube", "spotify"].contains(&self.page.borrow().as_str()));
             let card: gtk::Box = object(ui, "album_card");
             card.set_orientation(if compact {
                 gtk::Orientation::Horizontal
@@ -423,6 +431,30 @@ impl App {
                 ),
                 art,
             )
+        } else if matches!(kind, Grid::Artists) {
+            let artists = self.artists.groups.borrow();
+            let Some(artist) = artists.get(id.as_str()) else {
+                return;
+            };
+            object::<gtk::Image>(ui, "placeholder")
+                .set_icon_name(Some("open-music-artist-symbolic"));
+            (
+                if artist.name.is_empty() {
+                    self.tr("Unknown artist")
+                } else {
+                    artist.name.clone()
+                },
+                format!(
+                    "{} {}",
+                    artist.tracks.len(),
+                    self.tr(if artist.tracks.len() == 1 {
+                        "track"
+                    } else {
+                        "tracks"
+                    })
+                ),
+                artist.artwork.clone(),
+            )
         } else {
             let Some(track) = state.track(&id) else {
                 return;
@@ -478,6 +510,13 @@ impl App {
                 tracks.sort_by_key(|t| t.album_order());
                 tracks.into_iter().map(|t| t.id.clone()).collect()
             }
+            Grid::Artists => self
+                .artists
+                .groups
+                .borrow()
+                .get(id)
+                .map(|artist| artist.tracks.clone())
+                .unwrap_or_default(),
             Grid::Podcasts => vec![],
         }
     }
@@ -537,10 +576,37 @@ impl App {
         self.hide_global_search();
         object::<gtk::Box>(&self.ui, "toolbar").set_visible(page != "downloads");
         let state = self.state.borrow();
-        let query = object::<gtk::SearchEntry>(&self.ui, "search")
+        let mut query = object::<gtk::SearchEntry>(&self.ui, "search")
             .text()
             .to_string();
+        if page == "library" {
+            self.refresh_artists(&state.tracks, &mut query);
+        }
         let album = self.album.borrow().clone();
+        let artist = self.artists.selected.borrow().clone();
+        let artist_overview = page == "library"
+            && album.is_none()
+            && artist.is_none()
+            && object::<gtk::ToggleButton>(&self.ui, "artists_view").is_active();
+        let artist_tracks: Option<HashSet<String>> = if let Some(id) = &artist {
+            self.artists
+                .groups
+                .borrow()
+                .get(id)
+                .map(|artist| artist.tracks.iter().cloned().collect())
+        } else if artist_overview {
+            Some(
+                self.artists
+                    .groups
+                    .borrow()
+                    .values()
+                    .filter(|artist| artist.matches)
+                    .flat_map(|artist| artist.tracks.iter().cloned())
+                    .collect(),
+            )
+        } else {
+            None
+        };
         let playlist_id = self.playlist.borrow().clone();
         let playlist = playlist_id.as_deref().and_then(|id| state.playlist(id));
         let youtube = page == "youtube";
@@ -683,6 +749,14 @@ impl App {
             } else {
                 album.clone()
             }
+        } else if let Some(id) = &artist {
+            let artists = self.artists.groups.borrow();
+            let name = &artists[id].name;
+            if name.is_empty() {
+                self.tr("Unknown artist")
+            } else {
+                name.clone()
+            }
         } else {
             self.tr(if service || page == "streams" {
                 "Streaming"
@@ -731,9 +805,10 @@ impl App {
                     _ => {
                         t.kind == Kind::Music
                             && album.as_ref().is_none_or(|key| &t.album_key() == key)
+                            && artist_tracks.as_ref().is_none_or(|ids| ids.contains(&t.id))
                     }
                 })
-                .filter(|t| t.matches(&query))
+                .filter(|t| artist_overview || t.matches(&query))
                 .collect()
         };
         if page == "library" || page == "favorites" {
@@ -746,7 +821,7 @@ impl App {
         *self.visible.borrow_mut() = ids.clone();
         self.sync_track_selection(&ids);
         let mut album_count = 0;
-        if page == "library" && album.is_none() {
+        if page == "library" && album.is_none() && artist.is_none() {
             let mut groups: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
             for track in &tracks {
                 groups
@@ -802,7 +877,9 @@ impl App {
             .map(|s| s.id.clone())
             .collect();
         sync_model(&self.podcasts_model, &podcast_ids);
-        let count = if playlist_overview {
+        let count = if artist_overview {
+            self.artists.model.n_items() as usize
+        } else if playlist_overview {
             playlist_ids.len()
         } else if podcast_browser {
             podcast_ids.len()
@@ -822,6 +899,12 @@ impl App {
                 self.tr("Search unavailable")
             } else if podcast_browser && !self.button("podcast_search").is_sensitive() {
                 self.tr("Finding podcasts…")
+            } else if artist_overview {
+                format!(
+                    "{} {}",
+                    count,
+                    self.tr(if count == 1 { "artist" } else { "artists" })
+                )
             } else if playlist_overview {
                 format!(
                     "{} {}",
@@ -860,7 +943,7 @@ impl App {
         self.label(
             "footer_status",
             &match page.as_str() {
-                "library" if album.is_none() => format!(
+                "library" if album.is_none() && artist.is_none() => format!(
                     "{} {}  ·  {} {}",
                     album_count,
                     self.tr("albums"),
@@ -888,7 +971,7 @@ impl App {
             },
         );
         object::<gtk::Box>(&self.ui, "view_switch")
-            .set_visible(page == "library" && album.is_none());
+            .set_visible(page == "library" && album.is_none() && artist.is_none());
         object::<gtk::Box>(&self.ui, "streaming_services")
             .set_visible(service || page == "streams");
         object::<gtk::Box>(&self.ui, "youtube_tabs").set_visible(youtube);
@@ -979,16 +1062,18 @@ impl App {
             .set_visible(page == "playlists" && !compact_playlist);
         self.button("playlist_delete")
             .set_visible(page == "playlists" && playlist.is_some() && !compact_playlist);
-        let podcast_grid: gtk::GridView = object(&self.ui, "podcast_grid");
-        if self.compact_browse.get() {
-            podcast_grid.set_min_columns(1);
-            podcast_grid.set_max_columns(1);
-        } else {
-            podcast_grid.set_max_columns(5);
-            podcast_grid.set_min_columns(2);
+        for id in ["podcast_grid", "artist_grid"] {
+            let grid: gtk::GridView = object(&self.ui, id);
+            if self.compact_browse.get() {
+                grid.set_min_columns(1);
+                grid.set_max_columns(1);
+            } else {
+                grid.set_max_columns(5);
+                grid.set_min_columns(2);
+            }
         }
         self.button("browse_back")
-            .set_visible(album.is_some() || playlist.is_some());
+            .set_visible(album.is_some() || artist.is_some() || playlist.is_some());
         self.button("play_all")
             .set_visible(!playlist_overview && !podcast_browser);
         self.button("play_all").set_sensitive(!tracks.is_empty());
@@ -1063,8 +1148,11 @@ impl App {
                 "playlists"
             } else if podcast_browser {
                 "podcasts"
+            } else if artist_overview {
+                "artists"
             } else if page == "library"
                 && album.is_none()
+                && artist.is_none()
                 && object::<gtk::ToggleButton>(&self.ui, "albums_view").is_active()
             {
                 "albums"
@@ -1088,7 +1176,7 @@ impl App {
         for (item, ui) in bound(&self.track_rows) {
             self.bind_track(&item, &ui);
         }
-        for kind in [Grid::Albums, Grid::Playlists, Grid::Podcasts] {
+        for kind in [Grid::Albums, Grid::Artists, Grid::Playlists, Grid::Podcasts] {
             for (item, ui) in bound(self.cards(kind)) {
                 self.bind_card(kind, &item, &ui);
             }
@@ -1112,6 +1200,7 @@ impl App {
             .text()
             .to_string();
         *self.album.borrow_mut() = Some(key);
+        self.artists.selected.borrow_mut().take();
         object::<gtk::SearchEntry>(&self.ui, "search").set_text("");
         self.refresh();
     }
@@ -1134,10 +1223,14 @@ impl App {
     }
 
     pub(super) fn browse_back(&self) {
-        if self.album.borrow().is_none() && self.playlist.borrow().is_none() {
+        if self.album.borrow().is_none()
+            && self.artists.selected.borrow().is_none()
+            && self.playlist.borrow().is_none()
+        {
             return;
         }
         self.album.borrow_mut().take();
+        self.artists.selected.borrow_mut().take();
         self.playlist.borrow_mut().take();
         object::<gtk::SearchEntry>(&self.ui, "search").set_text(&self.parent_query.borrow());
         self.refresh();

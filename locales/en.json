@@ -602,5 +602,7 @@
   "result": "result",
   "Play or queue an episode, or go back to search results.": "Play or queue an episode, or go back to search results.",
   "Collapse group": "Collapse group",
-  "Expand group": "Expand group"
+  "Expand group": "Expand group",
+  "artist": "artist",
+  "artists": "artists"
 }

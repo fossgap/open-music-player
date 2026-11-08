@@ -71,6 +71,13 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     let app = App::new(&application, state).unwrap();
     settle();
     exercise_embedded_icons(&app);
+    if std::env::var_os("OPEN_MUSIC_TEST_ARTISTS_ONLY").is_some() {
+        super::artists::exercise(&app, &audio);
+        app.shutdown();
+        app.window.destroy();
+        object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
+        return;
+    }
     if std::env::var_os("OPEN_MUSIC_TEST_SEARCH_ONLY").is_some() {
         super::search::exercise(&app, &audio);
         app.shutdown();
@@ -124,6 +131,7 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
         object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
         return;
     }
+    super::artists::exercise(&app, &audio);
     let initial_state = app.state.borrow().clone();
     exercise_pointer_reordering(&app);
     *app.state.borrow_mut() = initial_state;
@@ -1271,10 +1279,17 @@ fn exercise_embedded_icons(app: &App) {
     let duration = object::<gtk::Image>(&app.ui, "duration_header")
         .icon_name()
         .unwrap();
+    let row = app.track_rows.borrow().values().next().unwrap().1.clone();
+    let drag = object::<gtk::Image>(&row, "drag_handle")
+        .icon_name()
+        .unwrap();
+    let artists = app.button("artists_view").icon_name().unwrap();
     for (name, symbolic) in [
         (sidebar.as_str(), true),
         (queue.as_str(), true),
         (duration.as_str(), true),
+        (drag.as_str(), true),
+        (artists.as_str(), true),
         ("io.github.openmusic.Player", false),
     ] {
         assert!(theme.has_icon(name), "Missing bundled icon: {name}");

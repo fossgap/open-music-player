@@ -602,5 +602,7 @@
   "result": "个结果",
   "Play or queue an episode, or go back to search results.": "播放单集、添加到队列，或返回搜索结果。",
   "Collapse group": "折叠分组",
-  "Expand group": "展开分组"
+  "Expand group": "展开分组",
+  "artist": "艺术家",
+  "artists": "艺术家"
 }

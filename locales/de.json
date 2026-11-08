@@ -602,5 +602,7 @@
   "result": "Ergebnis",
   "Play or queue an episode, or go back to search results.": "Spiele eine Folge ab, füge sie zur Warteschlange hinzu oder kehre zu den Suchergebnissen zurück.",
   "Collapse group": "Gruppe einklappen",
-  "Expand group": "Gruppe ausklappen"
+  "Expand group": "Gruppe ausklappen",
+  "artist": "Künstler",
+  "artists": "Künstler"
 }

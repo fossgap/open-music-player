@@ -599,6 +599,13 @@
                             <property name="tooltip-text">Albums</property>
                           </object>
                         </child>
+                        <child>
+                          <object class="GtkToggleButton" id="artists_view">
+                            <property name="icon-name">open-music-artist-symbolic</property>
+                            <property name="group">tracks_view</property>
+                            <property name="tooltip-text">Artists</property>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>
@@ -743,6 +750,23 @@
                               </object></child>
                               <child><object class="GtkButton"><property name="icon-name">edit-clear-symbolic</property><property name="tooltip-text">Clear selection</property><property name="action-name">app.selection-clear</property><style><class name="flat"/></style></object></child>
                             </object></child>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkStackPage">
+                        <property name="name">artists</property>
+                        <property name="child">
+                          <object class="GtkScrolledWindow" id="artist_scroller">
+                            <property name="hscrollbar-policy">never</property>
+                            <property name="child">
+                              <object class="GtkGridView" id="artist_grid">
+                                <property name="min-columns">2</property>
+                                <property name="max-columns">5</property>
+                                <property name="single-click-activate">false</property>
+                              </object>
+                            </property>
                           </object>
                         </property>
                       </object>

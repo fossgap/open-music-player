@@ -602,5 +602,7 @@
   "result": "개 결과",
   "Play or queue an episode, or go back to search results.": "에피소드를 재생하거나 대기열에 추가하거나 검색 결과로 돌아가세요.",
   "Collapse group": "그룹 접기",
-  "Expand group": "그룹 펼치기"
+  "Expand group": "그룹 펼치기",
+  "artist": "아티스트",
+  "artists": "아티스트"
 }

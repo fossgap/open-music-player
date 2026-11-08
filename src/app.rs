@@ -7,6 +7,7 @@ use crate::{
     playlists, services, storage, youtube_music,
 };
 
+mod artists;
 mod artwork;
 mod browse;
 mod discography;
@@ -79,6 +80,7 @@ pub struct App {
     podcasts_model: gtk::StringList,
     track_rows: BoundItems,
     album_cards: BoundItems,
+    artists: artists::Controls,
     playlist_cards: BoundItems,
     podcast_cards: BoundItems,
     youtube: youtube::Controls,
@@ -210,6 +212,7 @@ impl App {
             podcasts_model: gtk::StringList::new(&[]),
             track_rows: Default::default(),
             album_cards: Default::default(),
+            artists: Default::default(),
             playlist_cards: Default::default(),
             podcast_cards: Default::default(),
             youtube: youtube::Controls::default(),
@@ -384,6 +387,10 @@ impl App {
             app.navigate("library");
             object::<gtk::ToggleButton>(&app.ui, "tracks_view").set_active(true);
         });
+        self.action("artists", |app| {
+            app.navigate("library");
+            object::<gtk::ToggleButton>(&app.ui, "artists_view").set_active(true);
+        });
         self.string_action("subscribe", |app, uri| app.subscribe(uri));
         self.string_action("page", |app, page| app.navigate(page));
         self.string_action("play-track", |app, id| app.play_track(id, None));
@@ -536,9 +543,15 @@ impl App {
                 }
             }
         });
-        for id in ["tracks_view", "albums_view"] {
+        for (id, label) in [
+            ("tracks_view", "Tracks"),
+            ("albums_view", "Albums"),
+            ("artists_view", "Artists"),
+        ] {
+            let button: gtk::ToggleButton = object(&self.ui, id);
+            button.update_property(&[gtk::accessible::Property::Label(&self.tr(label))]);
             let weak = Rc::downgrade(self);
-            object::<gtk::ToggleButton>(&self.ui, id).connect_toggled(move |_| {
+            button.connect_toggled(move |_| {
                 if let Some(a) = weak.upgrade() {
                     a.refresh();
                 }
@@ -703,6 +716,7 @@ impl App {
         }
         *self.page.borrow_mut() = page.into();
         self.album.borrow_mut().take();
+        self.artists.selected.borrow_mut().take();
         self.playlist.borrow_mut().take();
         object::<gtk::SearchEntry>(&self.ui, "search").set_text("");
         object::<gtk::Box>(&self.ui, "entry_bar").set_visible(false);

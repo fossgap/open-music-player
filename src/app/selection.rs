@@ -65,10 +65,11 @@ impl App {
 
     pub(super) fn sync_track_selection(&self, ids: &[String]) {
         let context = format!(
-            "{}:{:?}:{:?}",
+            "{}:{:?}:{:?}:{:?}",
             self.page.borrow(),
             self.playlist.borrow(),
-            self.album.borrow()
+            self.album.borrow(),
+            self.artists.selected.borrow()
         );
         let same_context = *self.selection_context.borrow() == context;
         let old: Vec<String> = (0..self.tracks_model.n_items())

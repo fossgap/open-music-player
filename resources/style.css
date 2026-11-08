@@ -99,7 +99,7 @@ gridview > child { border-radius: 12px; }
 gridview > child:hover { background: @omp_row_hover; }
 gridview > child:selected { background: @omp_selected; color: @omp_text; }
 /* Older GTK themes add margins to every nested box in a grid cell. */
-.podcast-card, .podcast-card box { margin: 0; }
+.podcast-card, .podcast-card box, .artist-card, .artist-card box { margin: 0; }
 .track-row { padding: 9px 8px; }
 .track-title { color: @omp_text; font-weight: 650; font-size: 14px; }
 .track-row.playing .track-title { color: @omp_accent; }

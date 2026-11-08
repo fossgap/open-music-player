@@ -602,5 +602,7 @@
   "result": "risultato",
   "Play or queue an episode, or go back to search results.": "Riproduci un episodio, aggiungilo alla coda o torna ai risultati.",
   "Collapse group": "Comprimi gruppo",
-  "Expand group": "Espandi gruppo"
+  "Expand group": "Espandi gruppo",
+  "artist": "artista",
+  "artists": "artisti"
 }

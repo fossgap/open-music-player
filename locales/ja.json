@@ -602,5 +602,7 @@
   "result": "件の結果",
   "Play or queue an episode, or go back to search results.": "エピソードを再生するか、キューに追加するか、検索結果に戻ります。",
   "Collapse group": "グループを折りたたむ",
-  "Expand group": "グループを展開"
+  "Expand group": "グループを展開",
+  "artist": "アーティスト",
+  "artists": "アーティスト"
 }
