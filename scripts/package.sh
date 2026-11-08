@@ -40,7 +40,7 @@ Priority: optional
 Architecture: $architecture
 Maintainer: Open Music Player contributors <noreply@localhost>
 Homepage: https://github.com/fossgap/open-music-player
-Depends: $library_depends, libgtk-4-1 (>= 4.8), gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-pulseaudio | gstreamer1.0-alsa, ffmpeg, ca-certificates, adwaita-icon-theme, glib-networking
+Depends: $library_depends, libgtk-4-1 (>= 4.8), gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-pulseaudio | gstreamer1.0-alsa, ffmpeg, ca-certificates, adwaita-icon-theme, glib-networking, librsvg2-common
 Recommends: gstreamer1.0-libav, gstreamer1.0-plugins-bad, gstreamer1.0-plugins-ugly, python3, python3-venv, libsecret-tools
 Description: A native home for music, podcasts, and radio
  Rust and GTK player with a local library, podcasts, internet radio,

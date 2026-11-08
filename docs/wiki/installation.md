@@ -71,7 +71,7 @@ The optional YouTube setup command is then
 Install Rust 1.89+ with rustfmt and Clippy, then on Debian/Ubuntu:
 
 ```sh
-sudo apt install build-essential pkg-config libdbus-1-dev libgtk-4-dev \
+sudo apt install build-essential pkg-config libdbus-1-dev libgtk-4-dev librsvg2-common \
   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
   gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
