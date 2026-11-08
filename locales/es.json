@@ -607,5 +607,7 @@
   "View episodes": "Ver episodios",
   "results": "resultados",
   "result": "resultado",
-  "Play or queue an episode, or go back to search results.": "Reproduce un episodio, añádelo a la cola o vuelve a los resultados."
+  "Play or queue an episode, or go back to search results.": "Reproduce un episodio, añádelo a la cola o vuelve a los resultados.",
+  "Collapse group": "Contraer grupo",
+  "Expand group": "Expandir grupo"
 }

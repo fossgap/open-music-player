@@ -33,6 +33,7 @@ pub(super) struct Controls {
     ui: gtk::Builder,
     model: gtk::StringList,
     rows: RefCell<HashMap<String, Row>>,
+    collapsed: RefCell<HashSet<Group>>,
     bound: BoundItems,
     hidden: RefCell<Vec<(gtk::Widget, bool)>>,
     documents: RefCell<Arc<Vec<Document>>>,
@@ -57,6 +58,7 @@ impl Default for Controls {
             ui: gtk::Builder::from_string(include_str!("../../resources/search.ui")),
             model: gtk::StringList::new(&[]),
             rows: Default::default(),
+            collapsed: Default::default(),
             bound: Default::default(),
             hidden: Default::default(),
             documents: Default::default(),
@@ -176,7 +178,7 @@ impl App {
             let Some(app) = weak.upgrade() else { return };
             let item = item.downcast_ref::<gtk::ListItem>().unwrap();
             let ui = gtk::Builder::from_string(include_str!("../../resources/search-row.ui"));
-            for (id, action) in [("primary", 0), ("secondary", 1)] {
+            for (id, action) in [("primary", 0), ("secondary", 1), ("heading_toggle", 3)] {
                 let weak = Rc::downgrade(&app);
                 let row = item.downgrade();
                 object::<gtk::Button>(&ui, id).connect_clicked(move |_| {
@@ -532,24 +534,25 @@ impl App {
         let mut seen = HashSet::new();
         let mut count = 0;
         let mut more = false;
+        let collapsed = self.search.collapsed.borrow().clone();
         let mut append = |group: Group, items: &[Document], status: String, retry: bool| {
             let items: Vec<_> = items
                 .iter()
                 .filter(|item| seen.insert(item.key.clone()))
                 .collect();
             let key = format!("heading:{group:?}");
-            let show_heading = group != Group::Feed || !status.is_empty();
             let detail = if status.is_empty() {
                 items.len().to_string()
             } else {
                 status
             };
-            if show_heading {
-                rows.insert(key.clone(), Row::Heading(group, detail, retry));
-                keys.push(key);
+            rows.insert(key.clone(), Row::Heading(group, detail, retry));
+            keys.push(key);
+            count += items.len();
+            if collapsed.contains(&group) {
+                return;
             }
             for item in items {
-                count += 1;
                 rows.insert(item.key.clone(), Row::Item(Box::new(item.clone())));
                 keys.push(item.key.clone());
             }
@@ -559,7 +562,7 @@ impl App {
                 if category != 0 && category != group.category() {
                     continue;
                 }
-                more |= results.total > results.items.len();
+                more |= !collapsed.contains(&group) && results.total > results.items.len();
                 append(
                     group,
                     &results.items,
@@ -695,18 +698,12 @@ impl App {
         else {
             return;
         };
-        let title: gtk::Label = object(&ui, "title");
-        let detail: gtk::Label = object(&ui, "detail");
         let heading = matches!(row, Some(Row::Heading(..)));
-        let labels: gtk::Box = object(&ui, "labels");
-        labels.set_orientation(if heading {
-            gtk::Orientation::Horizontal
-        } else {
-            gtk::Orientation::Vertical
-        });
-        labels.set_spacing(if heading { 12 } else { 4 });
-        title.set_hexpand(heading);
-        detail.set_xalign(if heading { 1.0 } else { 0.0 });
+        let title: gtk::Label = object(&ui, if heading { "heading_title" } else { "title" });
+        let detail: gtk::Label = object(&ui, if heading { "heading_detail" } else { "detail" });
+        let toggle: gtk::Button = object(&ui, "heading_toggle");
+        toggle.set_visible(heading);
+        object::<gtk::Box>(&ui, "labels").set_visible(!heading);
         object::<gtk::Box>(&ui, "row").set_tooltip_text(None);
         let primary: gtk::Button = object(&ui, "primary");
         let secondary: gtk::Button = object(&ui, "secondary");
@@ -721,6 +718,22 @@ impl App {
         object::<gtk::Overlay>(&ui, "artwork").set_visible(matches!(row, Some(Row::Item(_))));
         match row {
             Some(Row::Heading(group, text, retry)) => {
+                let expanded = !self.search.collapsed.borrow().contains(&group);
+                object::<gtk::Image>(&ui, "disclosure").set_icon_name(Some(if expanded {
+                    "pan-down-symbolic"
+                } else {
+                    "pan-end-symbolic"
+                }));
+                toggle.set_tooltip_text(Some(&self.tr(if expanded {
+                    "Collapse group"
+                } else {
+                    "Expand group"
+                })));
+                toggle.update_state(&[gtk::accessible::State::Expanded(Some(expanded))]);
+                toggle.update_property(&[gtk::accessible::Property::Label(&format!(
+                    "{} — {text}",
+                    self.tr(group.label())
+                ))]);
                 title.remove_css_class("track-title");
                 title.add_css_class("section-title");
                 title.set_label(&self.tr(group.label()));
@@ -839,6 +852,15 @@ impl App {
         let row = self.search.rows.borrow().get(key).cloned();
         let Some(row) = row else { return };
         let document = match row {
+            Row::Heading(group, _, _) if action == 3 => {
+                let mut collapsed = self.search.collapsed.borrow_mut();
+                if !collapsed.remove(&group) {
+                    collapsed.insert(group);
+                }
+                drop(collapsed);
+                self.render_global_search();
+                return;
+            }
             Row::Heading(group, _, true) => {
                 if group == Group::Spotify && !self.audio.borrow().spotify_ready() {
                     self.navigate("spotify");

@@ -185,6 +185,8 @@ Press **Enter** or click **Search online** to search Apple Podcasts, gPodder, Ra
 
 Single-click selects a result. Double-click plays a track or opens an album, playlist or podcast. The **Play** and **Add to queue** buttons act directly; playing an album or playlist replaces the queue, while adding to the queue preserves playback. You can preview a podcast’s episodes before subscribing. Online results enter the saved collection only when played, queued or subscribed to.
 
+Click a group header to collapse or expand its results, or focus the header with Tab and press Space/Enter. Counts and retry controls stay visible. Collapsed groups stay collapsed across searches, filters and result updates until reopened or the app restarts.
+
 ### Local tags
 
 Choose **Edit tags** from a local track’s menu or the selection actions menu. Edit one track or select several with Ctrl/Shift for a bulk edit. The editor has **Tags**, **Artwork**, and **Lyrics** tabs. Bulk edits change only checked fields; unchecked mixed values are preserved. Clear a checked field to remove its value. **Review changes** shows before/after values and the affected files before saving.

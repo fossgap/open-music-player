@@ -79,6 +79,7 @@ button.nav.selected { background: @oap_nav_selected; color: @oap_nav_text; }
 separator { background: @oap_separator; min-height: 1px; }
 .page-title { font-size: 32px; font-weight: 750; letter-spacing: -0.7px; }
 .section-title { font-size: 17px; font-weight: 700; }
+button.search-group-toggle { padding: 0; min-height: 24px; }
 .empty-title { font-size: 25px; font-weight: 700; letter-spacing: -0.4px; }
 .muted { color: @oap_muted; }
 .small { font-size: 12px; }

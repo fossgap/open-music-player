@@ -11,6 +11,142 @@ fn until(condition: impl Fn() -> bool) {
     assert!(condition(), "Global search operation timed out");
 }
 
+fn heading_ui(app: &App, group: Group) -> gtk::Builder {
+    let key = format!("heading:{group:?}");
+    app.search
+        .bound
+        .borrow()
+        .values()
+        .find_map(|(item, ui)| {
+            item.upgrade()
+                .and_then(|item| item.item().and_downcast::<gtk::StringObject>())
+                .filter(|value| value.string().as_str() == key)
+                .map(|_| ui.clone())
+        })
+        .expect("Group header must be bound")
+}
+
+fn exercise_group_disclosure(
+    app: &Rc<App>,
+    query: &gtk::SearchEntry,
+    selection: &gtk::SingleSelection,
+) {
+    let xdo = |args: &[&str]| {
+        let result = std::process::Command::new("xdotool")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "xdotool: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        String::from_utf8(result.stdout).unwrap()
+    };
+    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Audio Player$"]);
+    let window = windows.lines().last().unwrap();
+    xdo(&["windowfocus", "--sync", window]);
+    let current = app.state.borrow().current.clone();
+    let queue = app.state.borrow().queue.clone();
+    let count = object::<gtk::Label>(&app.search.ui, "global_count").label();
+    let album = (0..app.search.model.n_items())
+        .find(|&p| app.search.model.string(p).as_deref() == Some("album:globalLocal"))
+        .unwrap();
+    selection.set_selected(album);
+    let ui = heading_ui(app, Group::Music);
+    let button: gtk::Button = object(&ui, "heading_toggle");
+    let bounds = button.compute_bounds(&app.window).unwrap();
+    let (dx, dy) = app.window.surface_transform();
+    // Click the header text/count area, not just the disclosure arrow.
+    xdo(&[
+        "mousemove",
+        "--window",
+        window,
+        &(f64::from(bounds.x() + bounds.width() / 2.0) + dx)
+            .round()
+            .to_string(),
+        &(f64::from(bounds.y() + bounds.height() / 2.0) + dy)
+            .round()
+            .to_string(),
+        "click",
+        "1",
+    ]);
+    settle();
+    assert!(app.search.collapsed.borrow().contains(&Group::Music));
+    assert!(!app.search.rows.borrow().contains_key("track:globalLocal"));
+    assert!(app.search.rows.borrow().contains_key("heading:Music"));
+    assert_eq!(
+        selection
+            .selected_item()
+            .and_downcast::<gtk::StringObject>()
+            .unwrap()
+            .string(),
+        "album:globalLocal"
+    );
+    assert_eq!(
+        object::<gtk::Label>(&app.search.ui, "global_count").label(),
+        count
+    );
+    assert_eq!(
+        object::<gtk::Image>(&ui, "disclosure")
+            .icon_name()
+            .as_deref(),
+        Some("pan-end-symbolic")
+    );
+    app.refresh();
+    until(|| !app.search.local_busy.get());
+    assert!(!app.search.rows.borrow().contains_key("track:globalLocal"));
+    let filter: gtk::DropDown = object(&app.search.ui, "global_filter");
+    filter.set_selected(1);
+    assert_eq!(
+        app.search.model.n_items(),
+        1,
+        "An entirely collapsed result set retains its header"
+    );
+    assert_eq!(
+        object::<gtk::Stack>(&app.search.ui, "global_body")
+            .visible_child_name()
+            .as_deref(),
+        Some("results")
+    );
+    query.set_text("night song");
+    settle();
+    until(|| !app.search.local_busy.get());
+    assert!(app.search.collapsed.borrow().contains(&Group::Music));
+    assert!(!app.search.rows.borrow().contains_key("track:globalLocal"));
+    query.set_text("night");
+    settle();
+    until(|| !app.search.local_busy.get());
+    filter.set_selected(0);
+    settle();
+    screenshot(app.window.upcast_ref(), "global-search-collapsed-local.png");
+    let ui = heading_ui(app, Group::Music);
+    object::<gtk::Button>(&ui, "heading_toggle").grab_focus();
+    xdo(&["key", "space"]);
+    settle();
+    assert!(!app.search.collapsed.borrow().contains(&Group::Music));
+    assert!(app.search.rows.borrow().contains_key("track:globalLocal"));
+    assert_eq!(
+        object::<gtk::Image>(&ui, "disclosure")
+            .icon_name()
+            .as_deref(),
+        Some("pan-down-symbolic")
+    );
+    xdo(&["key", "Return"]);
+    settle();
+    assert!(app.search.collapsed.borrow().contains(&Group::Music));
+    xdo(&["key", "space"]);
+    settle();
+    assert!(!app.search.collapsed.borrow().contains(&Group::Music));
+    assert_eq!(app.state.borrow().current, current);
+    assert_eq!(app.state.borrow().queue, queue);
+    assert!(
+        !app.audio.borrow().playing,
+        "Disclosure must not start playback"
+    );
+    query.grab_focus();
+}
+
 pub(crate) fn exercise(app: &Rc<App>, tone: &std::path::Path) {
     let before = app.state.borrow().clone();
     let page = app.page.borrow().clone();
@@ -114,7 +250,10 @@ pub(crate) fn exercise(app: &Rc<App>, tone: &std::path::Path) {
     app.window.set_default_size(1240, 800);
     settle();
     screenshot(app.window.upcast_ref(), "global-search-local.png");
+    exercise_group_disclosure(app, &query, &selection);
     query.emit_activate();
+    app.act_global("heading:Youtube", 3);
+    assert!(app.search.collapsed.borrow().contains(&Group::Youtube));
     until(|| {
         app.search
             .sections
@@ -157,6 +296,10 @@ pub(crate) fn exercise(app: &Rc<App>, tone: &std::path::Path) {
         .key
         .clone();
     assert!(
+        !app.search.rows.borrow().contains_key(&youtube_id),
+        "Incoming results must respect collapsed groups"
+    );
+    assert!(
         app.state
             .borrow()
             .tracks
@@ -165,8 +308,31 @@ pub(crate) fn exercise(app: &Rc<App>, tone: &std::path::Path) {
         "Discovery results remain ephemeral until used"
     );
     let filter: gtk::DropDown = object(&app.search.ui, "global_filter");
+    filter.set_selected(1);
+    settle();
+    screenshot(
+        app.window.upcast_ref(),
+        "global-search-collapsed-online.png",
+    );
+    object::<gtk::Button>(&heading_ui(app, Group::Youtube), "heading_toggle").emit_clicked();
+    assert!(app.search.rows.borrow().contains_key(&youtube_id));
     filter.set_selected(4);
     settle();
+    let failed = heading_ui(app, Group::Gpodder);
+    object::<gtk::Button>(&failed, "heading_toggle").emit_clicked();
+    assert!(object::<gtk::Button>(&failed, "primary").is_visible());
+    object::<gtk::Button>(&failed, "primary").emit_clicked();
+    until(|| {
+        matches!(
+            app.search.sections.borrow()[&Group::Gpodder].status,
+            Status::Failed(_)
+        )
+    });
+    assert!(
+        app.search.collapsed.borrow().contains(&Group::Gpodder),
+        "Retry must not toggle a group"
+    );
+    object::<gtk::Button>(&heading_ui(app, Group::Gpodder), "heading_toggle").emit_clicked();
     screenshot(app.window.upcast_ref(), "global-search-online.png");
     filter.set_selected(1);
     app.window.set_default_size(780, 640);
@@ -185,6 +351,7 @@ pub(crate) fn exercise(app: &Rc<App>, tone: &std::path::Path) {
         .key
         .clone();
     app.act_global(&show_key, 0);
+    app.act_global("heading:Feed", 3);
     until(|| {
         matches!(
             app.search
@@ -202,6 +369,13 @@ pub(crate) fn exercise(app: &Rc<App>, tone: &std::path::Path) {
             .iter()
             .all(|s| s.url != feed_url)
     );
+    assert!(app.search.collapsed.borrow().contains(&Group::Feed));
+    assert_eq!(
+        app.search.model.n_items(),
+        1,
+        "A collapsed episode group must retain its header when loading finishes"
+    );
+    object::<gtk::Button>(&heading_ui(app, Group::Feed), "heading_toggle").emit_clicked();
     assert!(
         app.search
             .rows
@@ -303,6 +477,14 @@ pub(crate) fn exercise(app: &Rc<App>, tone: &std::path::Path) {
             .string(),
         selected
     );
+    app.act_global("heading:Music", 3);
+    assert!(
+        !app.search.rows.borrow().contains_key("more"),
+        "Hide pagination when all matching groups are collapsed"
+    );
+    assert_eq!(app.search.model.n_items(), 1);
+    app.act_global("heading:Music", 3);
+    assert!(app.search.rows.borrow().contains_key("more"));
     filter.set_selected(0);
     query.set_text("does not exist");
     settle();

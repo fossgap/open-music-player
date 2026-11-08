@@ -607,5 +607,7 @@
   "View episodes": "Смотреть выпуски",
   "results": "результатов",
   "result": "результат",
-  "Play or queue an episode, or go back to search results.": "Воспроизведите выпуск, добавьте его в очередь или вернитесь к результатам поиска."
+  "Play or queue an episode, or go back to search results.": "Воспроизведите выпуск, добавьте его в очередь или вернитесь к результатам поиска.",
+  "Collapse group": "Свернуть группу",
+  "Expand group": "Развернуть группу"
 }
