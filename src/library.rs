@@ -121,7 +121,7 @@ pub fn scan_filtered(
                 t.modified == modified
                     && t.size == meta.len()
                     && t.audio_details.codec.is_some()
-                    && t.metadata_version == 1
+                    && t.metadata_version == 2
             }) {
                 let mut cached = (*t).clone();
                 refresh_sidecars(&path, &mut cached);
@@ -139,7 +139,9 @@ pub fn scan_filtered(
         }
     }
     result.tracks.sort_by(|a, b| {
-        (&a.artist, &a.album, a.number, &a.title).cmp(&(&b.artist, &b.album, b.number, &b.title))
+        a.album_key()
+            .cmp(&b.album_key())
+            .then_with(|| a.album_order().cmp(&b.album_order()))
     });
     // Check removals on the worker, only inside roots that remain available.
     // A failed probe or permission error never means the file was deleted.
@@ -249,11 +251,18 @@ pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
     let fallback = path.file_stem().unwrap_or_default().to_string_lossy();
     let mut t = Track::new(
         &uri,
-        tags.get("title").map(String::as_str).unwrap_or(&fallback),
+        tags.get("title")
+            .filter(|s| !s.trim().is_empty())
+            .map(String::as_str)
+            .unwrap_or(&fallback),
         Kind::Music,
     );
     t.audio_details = crate::audio_info::Details::from_probe(&data);
-    t.metadata_version = 1;
+    t.metadata_version = 2;
+    if let Ok(meta) = path.metadata() {
+        t.modified = crate::tags::modified(&meta);
+        t.size = meta.len();
+    }
     t.title_from_filename = tags.get("title").is_none_or(|s| s.trim().is_empty());
     t.artist = tags.get("artist").cloned().unwrap_or_default();
     t.album = tags.get("album").cloned().unwrap_or_default();
@@ -283,8 +292,45 @@ pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
         .unwrap_or(0.0);
     t.number = tags
         .get("track")
+        .or_else(|| tags.get("tracknumber"))
         .and_then(|n| n.split('/').next()?.parse().ok())
         .unwrap_or(0);
+    t.track_total = tags
+        .get("tracktotal")
+        .or_else(|| tags.get("totaltracks"))
+        .and_then(|v| v.parse().ok())
+        .or_else(|| {
+            tags.get("track")
+                .and_then(|n| n.split('/').nth(1)?.parse().ok())
+        })
+        .unwrap_or(0);
+    t.disc = tags
+        .get("disc")
+        .or_else(|| tags.get("discnumber"))
+        .and_then(|n| n.split('/').next()?.parse().ok())
+        .unwrap_or(0);
+    t.disc_total = tags
+        .get("disctotal")
+        .or_else(|| tags.get("totaldiscs"))
+        .and_then(|v| v.parse().ok())
+        .or_else(|| {
+            tags.get("disc")
+                .and_then(|n| n.split('/').nth(1)?.parse().ok())
+        })
+        .unwrap_or(0);
+    t.date = tags
+        .get("date")
+        .or_else(|| tags.get("year"))
+        .cloned()
+        .unwrap_or_default();
+    t.genres = tags
+        .get("genre")
+        .map(|s| crate::tags::values(s))
+        .unwrap_or_default();
+    t.composers = tags
+        .get("composer")
+        .map(|s| crate::tags::values(s))
+        .unwrap_or_default();
     t.source = path
         .parent()
         .unwrap_or(Path::new(""))
@@ -294,6 +340,7 @@ pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
         .get("lyrics")
         .or_else(|| tags.get("unsyncedlyrics"))
         .cloned();
+    let _ = crate::tags::read(path, &mut t, cache);
     refresh_sidecars(path, &mut t);
     if t.artwork.is_none()
         && streams
@@ -325,7 +372,7 @@ pub fn probe(path: &Path, cache: &Path) -> Result<Track, String> {
     Ok(t)
 }
 
-fn refresh_sidecars(path: &Path, t: &mut Track) {
+pub(crate) fn refresh_sidecars(path: &Path, t: &mut Track) {
     for ext in ["lrc", "txt"] {
         let sidecar = path.with_extension(ext);
         if sidecar.metadata().is_ok_and(|m| m.len() < 512_000) {

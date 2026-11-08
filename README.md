@@ -17,7 +17,7 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 
 | Area | Included |
 | --- | --- |
-| Local library | Recursive folder discovery and watching, file/folder drag and drop, Open location, metadata, search, track and album views, configurable automatic refresh, duplicate detection |
+| Local library | Recursive folder discovery and watching, file/folder drag and drop, Open location, metadata, search, album-artist grouping, disc/track ordering, single/bulk tag editing, configurable automatic refresh, duplicate detection |
 | Collections | Multi-selection and bulk actions, drag/keyboard reordering, favorites, playlist artwork grid, hover/focus Play all, create/rename/delete playlists, M3U/M3U8/PLS/XSPF import, queue, shuffle, repeat one/all |
 | Playback | GStreamer audio, play/pause, previous/next, seeking, 0.5–2× playback speed, elapsed/remaining time, volume, mute, automatic next track, gapless, optional crossfade and ReplayGain |
 | Podcasts | Apple Podcasts/iTunes and gPodder search/discovery, subscribe/unsubscribe toggles, RSS/Atom subscriptions, feed refresh, per-episode resume positions |
@@ -31,7 +31,7 @@ Open Audio keeps a local library, internet audio, and desktop playback controls 
 | Persistence | Library, sources, playlists, queue, track, position, volume, repeat, shuffle, and preferences |
 | Languages | English, French, Spanish, German, Italian, Portuguese, Russian, Chinese, Japanese, Korean; new service copy falls back to English where untranslated |
 
-**Service boundaries:** Spotify uses [librespot](https://github.com/librespot-org/librespot) and requires Premium. Search and playlist operations use Spotify’s Web API, whose account/app restrictions still apply. YouTube Music uses the unofficial `ytmusicapi` and `yt-dlp` libraries, with no API key or Premium subscription requirement in Open Audio Player. Availability depends on your account, region and YouTube; sessions can expire and provider changes can require dependency updates. Synchronized lyric highlighting is not included. This is an initial implementation, not a published stable release.
+**Service boundaries:** Spotify uses [librespot](https://github.com/librespot-org/librespot) and requires Premium. Search and playlist operations use Spotify’s Web API, whose account/app restrictions still apply. YouTube Music uses the unofficial `ytmusicapi` and `yt-dlp` libraries, with no API key or Premium subscription requirement in Open Audio Player. Availability depends on your account, region and YouTube; sessions can expire and provider changes can require dependency updates. This is an initial implementation, not a published stable release.
 
 
 ### Provider access
@@ -161,7 +161,7 @@ Select the **Artist & album** tab in the playback panel for artist biographies, 
 
 **Settings → Artist and album information** controls automatic lookup for the current local, Spotify or YouTube Music track. It is on by default; disabling it cancels pending work and retains cached information. Tags and embedded MusicBrainz identifiers are sent for matching, never audio. Lookups run in the background, share MusicBrainz’s rate limit with cover requests, and cache entity responses for 30 days (missing results for seven days). The refresh button retries missing/partial information and bypasses caches. Ambiguous names and recordings are left unmatched; Wikipedia pages are followed only through verified MusicBrainz relationships, not guessed from names.
 
-Missing artist or album names are filled **in the library only**, using embedded MusicBrainz recording/release IDs or exact, unambiguous title/artist/album matches with duration checks. Filename-only titles are not used for recording searches. Existing file/service tags take priority, audio files are never rewritten, and matching library fallbacks survive folder rescans. Completely untagged files without identifiers cannot be identified automatically; acoustic fingerprinting is not implemented.
+Missing artist or album names are filled **in the library only**, using embedded MusicBrainz recording/release IDs or exact, unambiguous title/artist/album matches with duration checks. Filename-only titles are not used for recording searches. Existing file/service tags take priority; automatic lookups never rewrite audio files, and matching library fallbacks survive folder rescans. Completely untagged files without identifiers cannot be identified automatically; acoustic fingerprinting is not implemented.
 
 Scroll over the volume control to adjust volume by **5 percentage points** per wheel step. Scroll over the seek bar to move **5 seconds** per step. Up/right increases volume or moves forward; down/left decreases volume or moves backward. Seeking is disabled for sources without a known duration, and both controls clamp to their limits.
 
@@ -175,6 +175,18 @@ The session is restored without automatically starting audio. Press Play to cont
 - **Keep running when the window closes** (on by default): closing the main or mini window hides the app even while paused or stopped. Turn it off to quit on close.
 
 Open the app again from your launcher, or choose **Open Audio Player** in its tray menu, to bring it back. Background mode also works without a tray. **Quit** always exits, regardless of these settings.
+
+### Local tags
+
+Choose **Edit tags** from a local track’s menu or the selection actions menu. Edit one track or select several with Ctrl/Shift for a bulk edit. The editor has **Tags**, **Artwork**, and **Lyrics** tabs. Bulk edits change only checked fields; unchecked mixed values are preserved. Clear a checked field to remove its value. **Review changes** shows before/after values and the affected files before saving.
+
+Tags include title, artists, album, album artists, track/disc numbers and totals, date/year, genres, and composers. Separate multiple artists, genres, or composers with `;`. Album cards group by album artist, falling back to track artist, and albums play in disc-then-track order. This keeps compilations and multi-disc releases together. Search also matches album artists, dates, genres, and composers.
+
+- **Library only** is the default. Changes survive rescans and restarts without altering audio files. The **Reload file tags** button removes these overrides and reads the files again; it does not undo tags already written to disk.
+- **Audio files** writes the checked fields using Lofty, without re-encoding audio. Supported containers include MP3, FLAC, Ogg/Vorbis, Opus, M4A/MP4, WAV, AIFF, AAC, and APE. Other imported formats remain editable in the library. Unsupported fields or values produce a per-file error instead of replacing the original.
+- **Artwork** accepts a local PNG/JPEG up to 20 MB. **Lyrics** accepts plain text or timed LRC; timestamps are stored as text in the file’s lyrics tag and drive synchronized scrolling in Open Audio Player. Shared folder covers and existing lyric sidecars are left untouched; explicit artwork/lyrics choices take priority until you reload file tags.
+
+Saving runs in the background with progress and **Cancel remaining**. File edits are prepared in a temporary copy, checked, and atomically replace one original at a time. Failed or cancelled files keep their originals; already completed edits remain saved. Read-only files and files changed since scanning report errors. Failed tracks remain in the editor for correction and retry. Editing preserves track identity, favorites, playlists, queue order, and playing/paused state.
 
 ### Downloads and recordings
 
@@ -265,7 +277,7 @@ make ui-test
 
 The integration test generates original audio, starts local feed and podcast-directory fixtures, and drives the real application over D-Bus and keyboard input. It checks library and playlist import, metadata, artwork, playback, seek, pause, favorites, queue, playlist creation/renaming, both podcast directories, subscription toggles, empty/error states, MPRIS, mini mode, dialogs, compact layouts, and session restoration. The GTK regression test checks card Play all, wheel volume/seek limits, refresh scheduling, unsubscribe races, and artwork/lyrics against local provider fixtures, settings switches, attribution, retries, and compact detail-panel scrolling. It checks multi-selection, bulk playlist actions, typed file/track drops, duplicate-entry removal, file-manager requests, and live folder changes. It also scrolls long lists and checks that activation preserves scroll and selection, album browsing does not start playback, filtered queue playback retains its members, and playlist deletion respects cancellation. All library and audio data are temporary. External services and real audio hardware are not required.
 
-The unit suite includes offline cover/lyric matching, positive/negative caching, invalid/oversized images, rate-limit backoff, cancellation, and Spotify authentication, catalog, sync and PCM-output checks; the display-dependent GTK regression runs separately through `make ui-test`. CI targets the Rust 1.85/GTK 4.8 Debian development container; native Linux checks include strict Clippy validation. The same integration suite can exercise native, release, and AppImage builds. The Arch recipe has not been built on Arch.
+The unit suite includes offline cover/lyric matching, positive/negative caching, invalid/oversized images, rate-limit backoff, cancellation, and Spotify authentication, catalog, sync and PCM-output checks. Tag regressions verify decoded-audio preservation across formats, unrelated metadata, artwork/lyrics round trips, failed/cancelled writes, and overrides surviving rescans. The GTK suite also exercises single/bulk tag editing, review, read-only errors, both themes, and compact layouts. The display-dependent GTK regression runs separately through `make ui-test`. CI targets the Rust 1.85/GTK 4.8 Debian development container; native Linux checks include strict Clippy validation. The same integration suite can exercise native, release, and AppImage builds. The Arch recipe has not been built on Arch.
 
 For review screenshots:
 
@@ -338,6 +350,7 @@ src/
   app/browse.rs  Track/album views, playlist management, podcast browser
   app/files.rs   Local file drops, folder watching controls, file manager
   app/selection.rs Multi-selection, bulk actions, playlist/queue reordering
+  app/tags.rs    Single/bulk tag editor, review, progress and failure handling
   app/tests.rs   GTK scroll, selection, collection and streaming regressions
   app/spotify.rs Spotify account and playlist interface
   app/youtube.rs YouTube Music account and playlist interface
@@ -348,6 +361,8 @@ src/
   enrichment.rs  Background cover/lyric jobs, cancellation, metadata matching
   enrichment/    MusicBrainz, Cover Art Archive, LRCLIB clients, cache and tests
   library.rs     Folder scanning, FFmpeg metadata, artwork, lyrics
+  tags.rs        Structured tag fields, validation and library-only overrides
+  tags/          Native tag reading/writing, safe replacement and regression tests
   watch.rs       Recursive native GIO folder monitors on a worker thread
   collections.rs Occurrence-aware collection ordering and removal
   model.rs       Tracks, collections, queue, persisted session

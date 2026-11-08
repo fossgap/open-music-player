@@ -163,6 +163,12 @@ pub fn valid_mbid(id: &str) -> bool {
         })
 }
 pub fn missing(track: &Track, field: Field) -> bool {
+    if matches!(field, Field::Cover) && track.tag_overrides.contains(crate::tags::Field::Cover)
+        || matches!(field, Field::Lyrics)
+            && track.tag_overrides.contains(crate::tags::Field::Lyrics)
+    {
+        return false;
+    }
     match field {
         Field::Cover => track.artwork.as_ref().is_none_or(|s| {
             s.trim().is_empty() || (track.artwork_source.is_some() && !Path::new(s).is_file())

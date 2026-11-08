@@ -54,7 +54,7 @@ impl Query {
                 self.matches(&t.album, [artist])
             })
             .collect();
-        tracks.sort_by_key(|t| (t.number == 0, t.number, t.title.to_lowercase(), &t.id));
+        tracks.sort_by_key(|t| t.album_order());
         tracks.into_iter().map(|t| t.id.clone()).collect()
     }
 }

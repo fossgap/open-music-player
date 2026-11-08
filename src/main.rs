@@ -15,6 +15,7 @@ mod process;
 mod services;
 mod spotify;
 mod storage;
+mod tags;
 mod watch;
 mod youtube_music;
 

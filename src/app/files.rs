@@ -127,7 +127,7 @@ impl App {
                 _ => {}
             }
         }
-        if self.scanning.get() || self.files.importing.get() {
+        if self.scanning.get() || self.files.importing.get() || self.tags.busy.get() {
             return;
         }
         let paths = std::mem::take(&mut *self.files.pending.borrow_mut());
@@ -190,6 +190,10 @@ impl App {
     }
 
     pub(super) fn remove_local_tracks(&self, ids: &[String]) {
+        if self.tags.busy.get() {
+            self.notice(&self.tr("Wait for tag changes to finish."), false, false);
+            return;
+        }
         let ids: Vec<_> =
             ids.iter()
                 .filter(|id| {
@@ -221,6 +225,10 @@ impl App {
     }
 
     pub(super) fn trash_local_tracks(&self, ids: Vec<String>) {
+        if self.tags.busy.get() {
+            self.notice(&self.tr("Wait for tag changes to finish."), false, false);
+            return;
+        }
         if self.files.deleting.get() {
             return;
         }

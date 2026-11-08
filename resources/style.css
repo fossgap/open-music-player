@@ -82,6 +82,7 @@ separator { background: @oap_separator; min-height: 1px; }
 .empty-title { font-size: 25px; font-weight: 700; letter-spacing: -0.4px; }
 .muted { color: @oap_muted; }
 .small { font-size: 12px; }
+.tag-lyrics, .tag-lyrics text { background: @oap_field; color: @oap_text; }
 entry, searchentry { background: @oap_field; color: @oap_text; border: 1px solid @oap_outline; border-radius: 8px; min-height: 24px; padding: 7px 12px; box-shadow: none; }
 entry placeholder, searchentry placeholder, text placeholder { color: @oap_muted; opacity: 1; }
 .sidebar-scroll { background: @oap_rail; }

@@ -183,6 +183,9 @@ impl App {
             menu.append_item(&entry);
         }
         if local {
+            let edit = gio::MenuItem::new(Some(&self.tr("Edit tags")), None);
+            edit.set_action_and_target_value(Some("app.edit-tags"), Some(&track.id.to_variant()));
+            menu.append_item(&edit);
             if *self.page.borrow() != "library" {
                 let entry = gio::MenuItem::new(Some(&self.tr("Remove from library")), None);
                 entry.set_action_and_target_value(
@@ -430,7 +433,11 @@ impl App {
                 } else {
                     track.album.clone()
                 },
-                self.artist(track),
+                if track.album_key().0.is_empty() {
+                    self.tr("Unknown artist")
+                } else {
+                    track.album_key().0
+                },
                 track.artwork.clone(),
             )
         };
@@ -466,11 +473,9 @@ impl App {
                 let mut tracks: Vec<_> = state
                     .tracks
                     .iter()
-                    .filter(|t| {
-                        t.kind == Kind::Music && t.artist == album.artist && t.album == album.album
-                    })
+                    .filter(|t| t.kind == Kind::Music && t.album_key() == album.album_key())
                     .collect();
-                tracks.sort_by_key(|t| (t.number, t.title.to_lowercase()));
+                tracks.sort_by_key(|t| t.album_order());
                 tracks.into_iter().map(|t| t.id.clone()).collect()
             }
             Grid::Podcasts => vec![],
@@ -720,9 +725,7 @@ impl App {
                     "streams" => t.kind == Kind::Stream,
                     _ => {
                         t.kind == Kind::Music
-                            && album.as_ref().is_none_or(|(artist, name)| {
-                                &t.artist == artist && &t.album == name
-                            })
+                            && album.as_ref().is_none_or(|key| &t.album_key() == key)
                     }
                 })
                 .filter(|t| t.matches(&query))
@@ -730,12 +733,8 @@ impl App {
         };
         if page == "library" || page == "favorites" {
             tracks.sort_by_key(|t| {
-                (
-                    t.artist.to_lowercase(),
-                    t.album.to_lowercase(),
-                    t.number,
-                    t.title.to_lowercase(),
-                )
+                let (artist, album) = t.album_key();
+                (artist.to_lowercase(), album.to_lowercase(), t.album_order())
             });
         }
         let ids: Vec<String> = tracks.iter().map(|t| t.id.clone()).collect();
@@ -746,7 +745,7 @@ impl App {
             let mut groups: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
             for track in &tracks {
                 groups
-                    .entry((track.artist.clone(), track.album.clone()))
+                    .entry(track.album_key())
                     .or_default()
                     .push(track.id.clone());
             }
@@ -1099,11 +1098,7 @@ impl App {
     }
 
     pub(super) fn open_album(self: &Rc<Self>, id: &str) {
-        let key = self
-            .state
-            .borrow()
-            .track(id)
-            .map(|t| (t.artist.clone(), t.album.clone()));
+        let key = self.state.borrow().track(id).map(Track::album_key);
         let Some(key) = key else { return };
         if *self.page.borrow() != "library" {
             self.navigate("library");

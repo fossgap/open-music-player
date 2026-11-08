@@ -22,6 +22,7 @@ mod preferences;
 mod render_area;
 mod selection;
 mod spotify;
+mod tags;
 #[cfg(test)]
 mod tests;
 mod theme;
@@ -110,6 +111,7 @@ pub struct App {
     preparation: RefCell<playback::Preparation>,
     scanning: Cell<bool>,
     files: files::Controls,
+    tags: tags::Controls,
     downloads: downloads::Controls,
     tx: mpsc::Sender<Message>,
     rx: RefCell<mpsc::Receiver<Message>>,
@@ -239,6 +241,7 @@ impl App {
             preparation: Default::default(),
             scanning: Cell::new(false),
             files: files::Controls::default(),
+            tags: tags::Controls::default(),
             downloads: downloads::Controls::default(),
             tx,
             rx: RefCell::new(rx),
@@ -265,6 +268,7 @@ impl App {
         this.setup_lists();
         this.setup_selection();
         this.setup_files();
+        this.setup_tags();
         this.setup_watermark();
         this.setup_controls();
         this.setup_timing();
@@ -803,7 +807,7 @@ impl App {
     }
 
     fn scan_folders(self: &Rc<Self>, folders: Vec<PathBuf>, background: bool) {
-        if self.scanning.get() || self.files.importing.get() {
+        if self.scanning.get() || self.files.importing.get() || self.tags.busy.get() {
             self.files.scan_pending.set(true);
             if !background {
                 self.files.scan_manual.set(true);
@@ -1217,6 +1221,7 @@ impl App {
     }
 
     pub fn shutdown(&self) {
+        self.shutdown_tags();
         self.background_hold.borrow_mut().take();
         self.theme.borrow_mut().detach();
         self.cancel_discography();
@@ -1362,6 +1367,7 @@ impl App {
     }
 
     fn tick(self: &Rc<Self>) {
+        self.poll_tags();
         if self.images.take_changed() {
             self.update_backdrop();
         }

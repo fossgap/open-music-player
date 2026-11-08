@@ -67,6 +67,16 @@ impl I18n {
                     button.set_label(&self.text(&label));
                 }
             }
+            if let Some(button) = object.downcast_ref::<gtk::CheckButton>() {
+                if let Some(label) = button.label() {
+                    button.set_label(Some(&self.text(&label)));
+                }
+            }
+            if let Some(page) = object.downcast_ref::<gtk::StackPage>() {
+                if let Some(title) = page.title() {
+                    page.set_title(&self.text(&title));
+                }
+            }
             if let Some(entry) = object.downcast_ref::<gtk::Entry>() {
                 if let Some(text) = entry.placeholder_text() {
                     entry.set_placeholder_text(Some(&self.text(&text)));

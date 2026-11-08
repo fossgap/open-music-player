@@ -22,6 +22,17 @@ pub struct Track {
     pub artist: String,
     pub album: String,
     pub album_artist: String,
+    pub artists: Vec<String>,
+    pub album_artists: Vec<String>,
+    pub genres: Vec<String>,
+    pub composers: Vec<String>,
+    pub date: String,
+    pub disc: u32,
+    pub track_total: u32,
+    pub disc_total: u32,
+    #[serde(skip_serializing_if = "crate::tags::Patch::is_empty")]
+    pub tag_overrides: crate::tags::Patch,
+    pub tag_revision: u64,
     pub musicbrainz_release_id: Option<String>,
     pub musicbrainz_recording_id: Option<String>,
     pub musicbrainz_artist_id: Option<String>,
@@ -58,10 +69,39 @@ impl Track {
     }
 
     pub fn matches(&self, query: &str) -> bool {
-        let haystack = format!("{} {} {}", self.title, self.artist, self.album).to_lowercase();
+        let haystack = format!(
+            "{} {} {} {} {} {} {}",
+            self.title,
+            self.artist,
+            self.album,
+            self.album_artist,
+            self.date,
+            self.genres.join(" "),
+            self.composers.join(" ")
+        )
+        .to_lowercase();
         query
             .split_whitespace()
             .all(|word| haystack.contains(&word.to_lowercase()))
+    }
+
+    pub fn album_key(&self) -> (String, String) {
+        let artist = if self.album_artist.trim().is_empty() {
+            &self.artist
+        } else {
+            &self.album_artist
+        };
+        (artist.trim().to_string(), self.album.trim().to_string())
+    }
+
+    pub fn album_order(&self) -> (u32, bool, u32, String, &str) {
+        (
+            self.disc.max(1),
+            self.number == 0,
+            self.number,
+            self.title.to_lowercase(),
+            &self.id,
+        )
     }
 }
 
@@ -287,6 +327,9 @@ impl State {
             if let Some(&i) = indices.get(&track.id) {
                 track.favorite = self.tracks[i].favorite;
                 track.download_path = self.tracks[i].download_path.clone();
+                track.tag_overrides = self.tracks[i].tag_overrides.clone();
+                track.tag_revision = self.tracks[i].tag_revision;
+                track.tag_overrides.clone().apply(&mut track);
                 crate::enrichment::preserve_downloaded(&self.tracks[i], &mut track);
                 self.tracks[i] = track;
             } else {

@@ -171,6 +171,7 @@ impl App {
         });
         let menu = gio::Menu::new();
         for (label, action) in [
+            ("Edit tags", "selection-tags"),
             ("Add to queue", "selection-queue"),
             ("Add to playlist", "selection-playlist"),
             ("Add to favorites", "selection-favorite"),
@@ -248,6 +249,7 @@ impl App {
         let can_trash = tracks
             && !selected.is_empty()
             && !self.files.deleting.get()
+            && !self.tags.busy.get()
             && self.selected_ids().iter().all(|id| {
                 self.state
                     .borrow()
@@ -257,6 +259,13 @@ impl App {
         if let Some(action) = self
             .application
             .lookup_action("selection-trash")
+            .and_downcast::<gio::SimpleAction>()
+        {
+            action.set_enabled(can_trash);
+        }
+        if let Some(action) = self
+            .application
+            .lookup_action("selection-tags")
             .and_downcast::<gio::SimpleAction>()
         {
             action.set_enabled(can_trash);

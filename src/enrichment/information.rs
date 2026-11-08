@@ -79,7 +79,8 @@ pub struct Information {
 
 pub(super) fn apply_information(track: &mut Track, information: &Information) {
     let mut info = information.clone();
-    if track.artist.trim().is_empty() {
+    if track.artist.trim().is_empty() && !track.tag_overrides.contains(crate::tags::Field::Artists)
+    {
         if let Some(artist) = &info.filled_artist {
             track.artist.clone_from(artist);
         }
@@ -91,7 +92,7 @@ pub(super) fn apply_information(track: &mut Track, information: &Information) {
             .filter(|s| *s == &track.artist)
             .cloned();
     }
-    if track.album.trim().is_empty() {
+    if track.album.trim().is_empty() && !track.tag_overrides.contains(crate::tags::Field::Album) {
         if let Some(album) = &info.filled_album {
             track.album.clone_from(album);
         }
