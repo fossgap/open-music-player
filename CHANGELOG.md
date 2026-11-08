@@ -5,6 +5,7 @@
 - Bundle sidebar-toggle and queue icons so they remain available across desktop icon themes.
 - Use the Open Music Player logo in the system tray, with embedded images at multiple sizes for portable launches.
 - Verify bundled icon lookup without system themes and check the tray image sent over D-Bus in desktop package tests.
+- Make headless window-close tests independent of titlebar rendering timing.
 
 ## 0.1.1 — 2026-11-08
 

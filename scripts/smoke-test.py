@@ -5,6 +5,7 @@ Run inside xvfb-run and dbus-run-session. All media and state live in a temporar
 directory. Optional OPEN_MUSIC_SCREENSHOTS captures review artifacts;
 OPEN_MUSIC_BINARY selects a release binary or extracted AppImage launcher.
 """
+import ctypes
 import importlib.util
 import functools
 import http.server
@@ -101,10 +102,42 @@ def close_player_window(title):
         subprocess.run(['xdotool', 'windowactivate', '--sync', target], check=True)
         keys('alt+F4')
         return
-    # Click GTK's titlebar Close button on the baseline display without a WM.
-    geometry = subprocess.check_output(['xdotool', 'getwindowgeometry', '--shell', target], text=True)
-    width = int(re.search(r'^WIDTH=(\d+)', geometry, re.M)[1])
-    subprocess.run(['xdotool', 'mousemove', '--window', target, str(width - 22), '23', 'click', '1'], check=True)
+    # A mapped X11 window may not have painted its titlebar yet. Send the same
+    # close request a WM would, so startup tests cannot miss a coordinate click.
+    # This still exercises GTK's close-request handler and background preference.
+    class ClientMessage(ctypes.Structure):
+        _fields_ = [('type', ctypes.c_int), ('serial', ctypes.c_ulong),
+                    ('send_event', ctypes.c_int), ('display', ctypes.c_void_p),
+                    ('window', ctypes.c_ulong), ('message_type', ctypes.c_ulong),
+                    ('format', ctypes.c_int), ('data', ctypes.c_long * 5)]
+
+    class Event(ctypes.Union):
+        _fields_ = [('client', ClientMessage), ('padding', ctypes.c_long * 24)]
+
+    x11 = ctypes.CDLL('libX11.so.6')
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+    x11.XInternAtom.restype = ctypes.c_ulong
+    x11.XSendEvent.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int,
+                              ctypes.c_long, ctypes.POINTER(Event)]
+    x11.XSendEvent.restype = ctypes.c_int
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    x11.XCloseDisplay.restype = ctypes.c_int
+    display = x11.XOpenDisplay(None)
+    assert display, 'Could not connect to the test X11 display'
+    try:
+        event = Event()
+        event.client.type = 33  # ClientMessage
+        event.client.display = display
+        event.client.window = int(target)
+        event.client.message_type = x11.XInternAtom(display, b'WM_PROTOCOLS', False)
+        event.client.format = 32
+        event.client.data[0] = x11.XInternAtom(display, b'WM_DELETE_WINDOW', False)
+        assert x11.XSendEvent(display, int(target), False, 0, ctypes.byref(event))
+    finally:
+        # XCloseDisplay flushes the request before closing our connection.
+        x11.XCloseDisplay(display)
 
 
 def keys(*sequence):
