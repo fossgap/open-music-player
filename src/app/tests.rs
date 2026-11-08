@@ -2442,6 +2442,9 @@ fn exercise_library_details(app: &Rc<App>, tone: &std::path::Path) {
     app.play_track(&id(&timed), Some(0.0));
     until(|| app.audio.borrow().position() > 0.2);
     app.toggle_play();
+    // Rendering on a busy runner can advance beyond the first lyric before
+    // pause is processed. Seek to a known position for the paused assertions.
+    app.seek(0.25);
     if !object::<gtk::Revealer>(&app.ui, "detail_revealer").is_visible() {
         app.toggle_details();
     }
