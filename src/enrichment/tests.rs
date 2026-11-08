@@ -255,7 +255,7 @@ fn cover_matching_download_validation_cache_and_album_artist() {
     assert_eq!(fixture.count(), 4);
     assert!(
         fixture.requests.lock().unwrap()[0]
-            .contains("https://github.com/fossgap/open-audio-player")
+            .contains("https://github.com/fossgap/open-music-player")
     );
 }
 

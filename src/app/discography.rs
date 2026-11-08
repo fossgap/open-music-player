@@ -786,7 +786,7 @@ fn click_release(app: &Rc<App>, row: &gtk::ListBoxRow, clicks: u8) {
         .set_value(scroller.vadjustment().upper());
     settle();
     let bounds = row.compute_bounds(&app.window).unwrap();
-    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Audio Player$"]);
+    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Music Player$"]);
     let window = windows.lines().last().unwrap();
     xdo(&["windowfocus", "--sync", window]);
     let (dx, dy) = app.window.surface_transform();

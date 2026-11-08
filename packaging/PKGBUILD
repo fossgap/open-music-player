@@ -1,4 +1,4 @@
-pkgname=open-audio-player
+pkgname=open-music-player
 pkgver=0.1.0
 pkgrel=1
 pkgdesc='A native home for music, podcasts, and radio'

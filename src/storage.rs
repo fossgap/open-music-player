@@ -6,7 +6,7 @@ use std::{
 };
 
 pub fn data_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("OPEN_AUDIO_DATA_DIR") {
+    if let Some(dir) = std::env::var_os("OPEN_MUSIC_DATA_DIR") {
         return dir.into();
     }
     std::env::var_os("XDG_DATA_HOME")
@@ -15,7 +15,7 @@ pub fn data_dir() -> PathBuf {
         .unwrap_or_else(|| {
             PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local/share")
         })
-        .join("open-audio-player")
+        .join("open-music-player")
 }
 
 pub fn load(path: &Path) -> Result<State, String> {
@@ -29,7 +29,7 @@ pub fn load(path: &Path) -> Result<State, String> {
             })?;
             if state.version > 1 {
                 return Err(
-                    "This library was written by a newer version of Open Audio Player.".into(),
+                    "This library was written by a newer version of Open Music Player.".into(),
                 );
             }
             state.sanitize();

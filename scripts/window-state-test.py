@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import time
 
-BINARY = Path(__file__).resolve().parents[1] / 'target/debug/open-audio-player'
+BINARY = Path(__file__).resolve().parents[1] / 'target/debug/open-music-player'
 for dependency in ['xfwm4', 'xdotool', 'xprop', 'gdbus']:
     if not shutil.which(dependency):
         raise SystemExit(f'Missing window-test dependency: {dependency}')
@@ -36,7 +36,7 @@ def wait_until(predicate):
     raise AssertionError('Timed out waiting for window state')
 
 
-def visible(title='Open Audio Player'):
+def visible(title='Open Music Player'):
     result = subprocess.run(['xdotool', 'search', '--onlyvisible', '--name', '^' + re.escape(title) + '$'], capture_output=True, text=True, timeout=5)
     return result.stdout.splitlines()
 
@@ -58,14 +58,14 @@ def toggle_maximized():
 
 
 def mpris(method):
-    return run('gdbus', 'call', '--session', '--dest', 'org.mpris.MediaPlayer2.OpenAudioPlayer', '--object-path', '/org/mpris/MediaPlayer2', '--method', 'org.mpris.MediaPlayer2.' + method)
+    return run('gdbus', 'call', '--session', '--dest', 'org.mpris.MediaPlayer2.OpenMusicPlayer', '--object-path', '/org/mpris/MediaPlayer2', '--method', 'org.mpris.MediaPlayer2.' + method)
 
 
-with tempfile.TemporaryDirectory(prefix='open-audio-window-') as directory:
+with tempfile.TemporaryDirectory(prefix='open-music-window-') as directory:
     root = Path(directory)
     runtime = root / 'runtime'
     runtime.mkdir(mode=0o700)
-    env = {**os.environ, 'OPEN_AUDIO_DATA_DIR': str(root), 'OPEN_AUDIO_FAKE_SINK': '1',
+    env = {**os.environ, 'OPEN_MUSIC_DATA_DIR': str(root), 'OPEN_MUSIC_FAKE_SINK': '1',
            'XDG_RUNTIME_DIR': str(runtime), 'XDG_CONFIG_HOME': str(root / 'config'),
            'XDG_DATA_HOME': str(root / 'data'), 'XDG_CACHE_HOME': str(root / 'cache'),
            'GDK_BACKEND': 'x11', 'GSK_RENDERER': 'cairo', 'GTK_A11Y': 'none',
@@ -81,7 +81,7 @@ with tempfile.TemporaryDirectory(prefix='open-audio-window-') as directory:
             global child
             child = subprocess.Popen([str(BINARY)], env=env, stdout=log, stderr=log)
             wait_until(lambda: mpris('Raise') if not hidden else run(
-                'gdbus', 'call', '--session', '--dest', 'org.mpris.MediaPlayer2.OpenAudioPlayer',
+                'gdbus', 'call', '--session', '--dest', 'org.mpris.MediaPlayer2.OpenMusicPlayer',
                 '--object-path', '/org/mpris/MediaPlayer2', '--method', 'org.freedesktop.DBus.Properties.Get',
                 'org.mpris.MediaPlayer2.Player', 'PlaybackStatus'))
             if not hidden:
@@ -112,9 +112,9 @@ with tempfile.TemporaryDirectory(prefix='open-audio-window-') as directory:
             wait_until(maximized)
             toggle_maximized()
             wait_until(lambda: not maximized() and size() == (1140, 740))
-            run('gdbus', 'call', '--session', '--dest', 'io.github.openaudio.Player',
-                '--object-path', '/io/github/openaudio/Player', '--method', 'org.gtk.Actions.Activate', 'mini', '[]', '{}')
-            wait_until(lambda: visible('Open Audio · Mini') and not visible())
+            run('gdbus', 'call', '--session', '--dest', 'io.github.openmusic.Player',
+                '--object-path', '/io/github/openmusic/Player', '--method', 'org.gtk.Actions.Activate', 'mini', '[]', '{}')
+            wait_until(lambda: visible('Open Music · Mini') and not visible())
             assert quit_player()['window'] == normal
 
             saved = json.loads(path.read_text())

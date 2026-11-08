@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
-  <object class="GtkWindow" id="mini_window"><property name="title">Open Audio · Mini</property><property name="default-width">420</property><property name="resizable">false</property>
+  <object class="GtkWindow" id="mini_window"><property name="title">Open Music · Mini</property><property name="default-width">420</property><property name="resizable">false</property>
     <child><object class="GtkBox"><property name="spacing">14</property><property name="margin-start">16</property><property name="margin-end">12</property><property name="margin-top">14</property><property name="margin-bottom">14</property>
       <child><object class="GtkOverlay"><property name="child"><object class="GtkImage"><property name="icon-name">audio-x-generic-symbolic</property><property name="width-request">54</property><property name="height-request">54</property><style><class name="cover-placeholder"/></style></object></property><child type="overlay"><object class="GtkPicture" id="mini_art"><property name="content-fit">cover</property><property name="can-shrink">true</property><style><class name="cover"/></style></object></child></object></child>
       <child><object class="GtkBox"><property name="orientation">vertical</property><property name="hexpand">true</property><property name="valign">center</property><property name="spacing">5</property>

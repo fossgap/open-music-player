@@ -107,7 +107,7 @@ fn connect(
         .timeout(Duration::from_secs(30))
         .connect_timeout(Duration::from_secs(10))
         .redirect(reqwest::redirect::Policy::none())
-        .user_agent("OpenAudioPlayer/0.1")
+        .user_agent("OpenMusicPlayer/0.1")
         .build()
         .map_err(|e| e.to_string())?;
     let (stored, token) = if let Some(expected) = previous {

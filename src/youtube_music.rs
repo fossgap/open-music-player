@@ -172,7 +172,7 @@ fn request_cancellable<T: DeserializeOwned>(
     input["namespace"] = json!(stable_id(&data_dir.to_string_lossy()));
     input["account_id"] = json!(account.map(|a| &a.id));
     let installed = data_dir.join("youtube-python/bin/python");
-    let python = std::env::var_os("OPEN_AUDIO_PYTHON")
+    let python = std::env::var_os("OPEN_MUSIC_PYTHON")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
             if installed.is_file() {

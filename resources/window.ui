@@ -11,7 +11,7 @@
     <property name="value">0.75</property>
   </object>
   <object class="GtkApplicationWindow" id="window">
-    <property name="title">Open Audio Player</property>
+    <property name="title">Open Music Player</property>
     <property name="default-width">1240</property>
     <property name="default-height">800</property>
     <property name="width-request">760</property>
@@ -20,7 +20,7 @@
       <object class="GtkHeaderBar" id="header">
         <property name="title-widget">
           <object class="GtkLabel">
-            <property name="label">Open Audio</property>
+            <property name="label">Open Music</property>
             <style>
               <class name="header-title" />
             </style>
@@ -93,7 +93,7 @@
                         </child>
                         <child>
                           <object class="GtkLabel">
-                            <property name="label">open audio</property>
+                            <property name="label">open music</property>
                             <style>
                               <class name="brand" />
                             </style>

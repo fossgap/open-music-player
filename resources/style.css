@@ -1,150 +1,150 @@
 /* Semantic roles; adaptive palettes override these colors without replacing layout rules. */
-@define-color oap_accent #c2dfa3;
-@define-color oap_accent_ink #182414;
-@define-color oap_window #1b201e;
-@define-color oap_text #f1f3eb;
-@define-color oap_rail #141917;
-@define-color oap_raised #29312d;
-@define-color oap_muted #adb9b0;
-@define-color oap_header_line #2a332e;
-@define-color oap_hover #354239;
-@define-color oap_control #e7ede4;
-@define-color oap_active #435343;
-@define-color oap_flat_hover #303b33;
-@define-color oap_accent_hover #d1ebba;
-@define-color oap_play_hover #dbedc7;
-@define-color oap_selected #34412f;
-@define-color oap_nav_hover #242c27;
-@define-color oap_nav_selected #303c2b;
-@define-color oap_nav_text #d1e7b8;
-@define-color oap_separator #303a33;
-@define-color oap_field #252d28;
-@define-color oap_outline #3c4941;
-@define-color oap_selection #526345;
-@define-color oap_notice #303c30;
-@define-color oap_divider #344037;
-@define-color oap_row_hover #29332c;
-@define-color oap_placeholder #354235;
-@define-color oap_placeholder_text #b8cca5;
-@define-color oap_album_placeholder #334332;
-@define-color oap_album_placeholder_text #b4cc9f;
-@define-color oap_thumb #e3efda;
-@define-color oap_detail #202923;
-@define-color oap_lyrics #d0dacb;
-@define-color oap_popover_border #435146;
-@define-color oap_popover_hover #3b4c36;
-@define-color oap_scrollbar #526253;
-@define-color accent_color @oap_accent;
-@define-color accent_bg_color @oap_accent;
-@define-color accent_fg_color @oap_accent_ink;
-@define-color window_bg_color @oap_window;
-@define-color window_fg_color @oap_text;
-@define-color view_bg_color @oap_window;
-@define-color view_fg_color @oap_text;
-@define-color headerbar_bg_color @oap_rail;
-@define-color headerbar_fg_color @oap_text;
-@define-color popover_bg_color @oap_raised;
-@define-color popover_fg_color @oap_text;
-@define-color dialog_bg_color @oap_window;
-@define-color dialog_fg_color @oap_text;
-@define-color theme_bg_color @oap_window;
-@define-color theme_fg_color @oap_text;
-@define-color theme_base_color @oap_field;
-@define-color theme_text_color @oap_text;
-@define-color theme_selected_bg_color @oap_accent;
-@define-color theme_selected_fg_color @oap_accent_ink;
-window { background: @oap_window; color: @oap_text; font-family: "Adwaita Sans", "Cantarell", sans-serif; font-size: 14px; }
-headerbar { background: @oap_rail; box-shadow: none; border-bottom: 1px solid @oap_header_line; min-height: 42px; }
-.header-title { color: @oap_muted; font-size: 12px; font-weight: 600; }
+@define-color omp_accent #c2dfa3;
+@define-color omp_accent_ink #182414;
+@define-color omp_window #1b201e;
+@define-color omp_text #f1f3eb;
+@define-color omp_rail #141917;
+@define-color omp_raised #29312d;
+@define-color omp_muted #adb9b0;
+@define-color omp_header_line #2a332e;
+@define-color omp_hover #354239;
+@define-color omp_control #e7ede4;
+@define-color omp_active #435343;
+@define-color omp_flat_hover #303b33;
+@define-color omp_accent_hover #d1ebba;
+@define-color omp_play_hover #dbedc7;
+@define-color omp_selected #34412f;
+@define-color omp_nav_hover #242c27;
+@define-color omp_nav_selected #303c2b;
+@define-color omp_nav_text #d1e7b8;
+@define-color omp_separator #303a33;
+@define-color omp_field #252d28;
+@define-color omp_outline #3c4941;
+@define-color omp_selection #526345;
+@define-color omp_notice #303c30;
+@define-color omp_divider #344037;
+@define-color omp_row_hover #29332c;
+@define-color omp_placeholder #354235;
+@define-color omp_placeholder_text #b8cca5;
+@define-color omp_album_placeholder #334332;
+@define-color omp_album_placeholder_text #b4cc9f;
+@define-color omp_thumb #e3efda;
+@define-color omp_detail #202923;
+@define-color omp_lyrics #d0dacb;
+@define-color omp_popover_border #435146;
+@define-color omp_popover_hover #3b4c36;
+@define-color omp_scrollbar #526253;
+@define-color accent_color @omp_accent;
+@define-color accent_bg_color @omp_accent;
+@define-color accent_fg_color @omp_accent_ink;
+@define-color window_bg_color @omp_window;
+@define-color window_fg_color @omp_text;
+@define-color view_bg_color @omp_window;
+@define-color view_fg_color @omp_text;
+@define-color headerbar_bg_color @omp_rail;
+@define-color headerbar_fg_color @omp_text;
+@define-color popover_bg_color @omp_raised;
+@define-color popover_fg_color @omp_text;
+@define-color dialog_bg_color @omp_window;
+@define-color dialog_fg_color @omp_text;
+@define-color theme_bg_color @omp_window;
+@define-color theme_fg_color @omp_text;
+@define-color theme_base_color @omp_field;
+@define-color theme_text_color @omp_text;
+@define-color theme_selected_bg_color @omp_accent;
+@define-color theme_selected_fg_color @omp_accent_ink;
+window { background: @omp_window; color: @omp_text; font-family: "Adwaita Sans", "Cantarell", sans-serif; font-size: 14px; }
+headerbar { background: @omp_rail; box-shadow: none; border-bottom: 1px solid @omp_header_line; min-height: 42px; }
+.header-title { color: @omp_muted; font-size: 12px; font-weight: 600; }
 headerbar windowcontrols button { padding: 4px; min-width: 24px; min-height: 24px; background: transparent; }
-headerbar windowcontrols button:hover { background: @oap_hover; }
-button { color: @oap_control; background: @oap_raised; border: 0; border-radius: 8px; padding: 9px 14px; box-shadow: none; font-weight: 500; transition: background 150ms ease-out; }
-button:hover { background: @oap_hover; }
-button:active { background: @oap_active; }
+headerbar windowcontrols button:hover { background: @omp_hover; }
+button { color: @omp_control; background: @omp_raised; border: 0; border-radius: 8px; padding: 9px 14px; box-shadow: none; font-weight: 500; transition: background 150ms ease-out; }
+button:hover { background: @omp_hover; }
+button:active { background: @omp_active; }
 button:disabled { opacity: 0.38; }
-button:focus-visible, entry:focus-within, searchentry:focus-within { outline: 2px solid @oap_accent; outline-offset: 2px; }
+button:focus-visible, entry:focus-within, searchentry:focus-within { outline: 2px solid @omp_accent; outline-offset: 2px; }
 button.flat, menubutton.flat > button { background: transparent; padding: 8px; }
-button.flat:hover, menubutton.flat > button:hover { background: @oap_flat_hover; }
-button.suggested-action { background: @oap_accent; color: @oap_accent_ink; padding: 11px 18px; font-weight: 700; }
-button.suggested-action:hover { background: @oap_accent_hover; }
-button.play-button { background: @oap_accent; color: @oap_accent_ink; border-radius: 999px; min-width: 28px; min-height: 28px; padding: 8px; }
-button.play-button:hover { background: @oap_play_hover; }
-button:checked, button.active { color: @oap_accent; background: @oap_selected; }
-.sidebar { background: @oap_rail; padding: 16px; }
+button.flat:hover, menubutton.flat > button:hover { background: @omp_flat_hover; }
+button.suggested-action { background: @omp_accent; color: @omp_accent_ink; padding: 11px 18px; font-weight: 700; }
+button.suggested-action:hover { background: @omp_accent_hover; }
+button.play-button { background: @omp_accent; color: @omp_accent_ink; border-radius: 999px; min-width: 28px; min-height: 28px; padding: 8px; }
+button.play-button:hover { background: @omp_play_hover; }
+button:checked, button.active { color: @omp_accent; background: @omp_selected; }
+.sidebar { background: @omp_rail; padding: 16px; }
 .brand { font-size: 20px; font-weight: 750; letter-spacing: -0.5px; }
-.accent { color: @oap_accent; }
-button.nav { background: transparent; padding: 13px 12px; border-radius: 8px; font-weight: 500; color: @oap_muted; }
-button.nav:hover { background: @oap_nav_hover; color: @oap_text; }
-button.nav.selected { background: @oap_nav_selected; color: @oap_nav_text; }
-separator { background: @oap_separator; min-height: 1px; }
+.accent { color: @omp_accent; }
+button.nav { background: transparent; padding: 13px 12px; border-radius: 8px; font-weight: 500; color: @omp_muted; }
+button.nav:hover { background: @omp_nav_hover; color: @omp_text; }
+button.nav.selected { background: @omp_nav_selected; color: @omp_nav_text; }
+separator { background: @omp_separator; min-height: 1px; }
 .page-title { font-size: 32px; font-weight: 750; letter-spacing: -0.7px; }
 .section-title { font-size: 17px; font-weight: 700; }
 button.search-group-toggle { padding: 0; min-height: 24px; }
 .empty-title { font-size: 25px; font-weight: 700; letter-spacing: -0.4px; }
-.muted { color: @oap_muted; }
+.muted { color: @omp_muted; }
 .small { font-size: 12px; }
-.tag-lyrics, .tag-lyrics text { background: @oap_field; color: @oap_text; }
-entry, searchentry { background: @oap_field; color: @oap_text; border: 1px solid @oap_outline; border-radius: 8px; min-height: 24px; padding: 7px 12px; box-shadow: none; }
-entry placeholder, searchentry placeholder, text placeholder { color: @oap_muted; opacity: 1; }
-.sidebar-scroll { background: @oap_rail; }
-entry selection, label selection { background: @oap_selection; color: #fff; }
-.notice { background: @oap_notice; border-radius: 8px; padding: 10px 12px; }
+.tag-lyrics, .tag-lyrics text { background: @omp_field; color: @omp_text; }
+entry, searchentry { background: @omp_field; color: @omp_text; border: 1px solid @omp_outline; border-radius: 8px; min-height: 24px; padding: 7px 12px; box-shadow: none; }
+entry placeholder, searchentry placeholder, text placeholder { color: @omp_muted; opacity: 1; }
+.sidebar-scroll { background: @omp_rail; }
+entry selection, label selection { background: @omp_selection; color: #fff; }
+.notice { background: @omp_notice; border-radius: 8px; padding: 10px 12px; }
 .notice.error { background: #442c28; color: #ffb4a9; }
-.table-header { color: @oap_muted; font-size: 12px; padding: 8px 0 12px; border-bottom: 1px solid @oap_divider; }
-listview, gridview { background: transparent; color: @oap_text; }
+.table-header { color: @omp_muted; font-size: 12px; padding: 8px 0 12px; border-bottom: 1px solid @omp_divider; }
+listview, gridview { background: transparent; color: @omp_text; }
 listview > row { background: transparent; border-radius: 8px; padding: 0; }
-listview > row:hover { background: @oap_row_hover; }
-listview > row:selected { background: @oap_selected; }
+listview > row:hover { background: @omp_row_hover; }
+listview > row:selected { background: @omp_selected; }
 gridview > child { border-radius: 12px; }
-gridview > child:hover { background: @oap_row_hover; }
-gridview > child:selected { background: @oap_selected; color: @oap_text; }
+gridview > child:hover { background: @omp_row_hover; }
+gridview > child:selected { background: @omp_selected; color: @omp_text; }
 /* Older GTK themes add margins to every nested box in a grid cell. */
 .podcast-card, .podcast-card box { margin: 0; }
 .track-row { padding: 9px 8px; }
-.track-title { color: @oap_text; font-weight: 650; font-size: 14px; }
-.track-row.playing .track-title { color: @oap_accent; }
+.track-title { color: @omp_text; font-weight: 650; font-size: 14px; }
+.track-row.playing .track-title { color: @omp_accent; }
 .cover { border-radius: 12px; }
 .cover-small, .cover-placeholder { border-radius: 7px; }
-.cover-placeholder { background: @oap_placeholder; color: @oap_placeholder_text; }
-.album-placeholder { background: @oap_album_placeholder; color: @oap_album_placeholder_text; border-radius: 12px; }
-.player-bar { background: @oap_rail; border-top: 1px solid @oap_divider; padding: 16px 24px 12px; }
+.cover-placeholder { background: @omp_placeholder; color: @omp_placeholder_text; }
+.album-placeholder { background: @omp_album_placeholder; color: @omp_album_placeholder_text; border-radius: 12px; }
+.player-bar { background: @omp_rail; border-top: 1px solid @omp_divider; padding: 16px 24px 12px; }
 .player-bar.compact { padding-left: 16px; padding-right: 16px; }
 button.art-button { padding: 0; }
-.time, .audio-summary { font-size: 11px; color: @oap_muted; font-feature-settings: "tnum"; }
+.time, .audio-summary { font-size: 11px; color: @omp_muted; font-feature-settings: "tnum"; }
 scale { padding: 9px 0; }
-scale trough { background: @oap_outline; border-color: @oap_outline; box-shadow: none; min-height: 4px; border-radius: 10px; }
-scale highlight { background: @oap_accent; border-color: @oap_accent; box-shadow: none; min-height: 4px; border-radius: 10px; }
-scale slider { background: @oap_thumb; min-width: 12px; min-height: 12px; margin: -4px; border: 0; box-shadow: none; }
-.detail-panel { background: @oap_detail; border-left: 1px solid @oap_divider; padding: 20px; }
+scale trough { background: @omp_outline; border-color: @omp_outline; box-shadow: none; min-height: 4px; border-radius: 10px; }
+scale highlight { background: @omp_accent; border-color: @omp_accent; box-shadow: none; min-height: 4px; border-radius: 10px; }
+scale slider { background: @omp_thumb; min-width: 12px; min-height: 12px; margin: -4px; border: 0; box-shadow: none; }
+.detail-panel { background: @omp_detail; border-left: 1px solid @omp_divider; padding: 20px; }
 /* One continuous cover sits underneath the content; controls remain opaque and legible. */
-.artwork-watermark .sidebar-scroll { background: alpha(@oap_rail, 0.6); }
+.artwork-watermark .sidebar-scroll { background: alpha(@omp_rail, 0.6); }
 .artwork-watermark .sidebar { background: transparent; }
-.artwork-watermark .player-bar { background: alpha(@oap_rail, 0.65); }
-.artwork-watermark .detail-panel { background: alpha(@oap_detail, 0.65); }
-.detail-tabs button { background: transparent; color: @oap_muted; border-radius: 0; border-bottom: 2px solid transparent; padding: 8px 4px; min-width: 0; font-size: 12px; }
-.detail-tabs button:hover { background: @oap_row_hover; color: @oap_text; }
-.detail-tabs button:checked { background: transparent; color: @oap_accent; border-bottom-color: @oap_accent; }
+.artwork-watermark .player-bar { background: alpha(@omp_rail, 0.65); }
+.artwork-watermark .detail-panel { background: alpha(@omp_detail, 0.65); }
+.detail-tabs button { background: transparent; color: @omp_muted; border-radius: 0; border-bottom: 2px solid transparent; padding: 8px 4px; min-width: 0; font-size: 12px; }
+.detail-tabs button:hover { background: @omp_row_hover; color: @omp_text; }
+.detail-tabs button:checked { background: transparent; color: @omp_accent; border-bottom-color: @omp_accent; }
 button.visualization-button { background: transparent; padding: 0; min-height: 0; min-width: 0; }
-button.visualization-button:hover { background: @oap_row_hover; }
+button.visualization-button:hover { background: @omp_row_hover; }
 .information-summary { line-height: 1.35; }
-button.summary-toggle { padding: 4px 0; color: @oap_accent; font-size: 12px; }
+button.summary-toggle { padding: 4px 0; color: @omp_accent; font-size: 12px; }
 button.summary-toggle:checked { background: transparent; }
-.discography-list, .discography-list > row { background: transparent; color: @oap_text; }
+.discography-list, .discography-list > row { background: transparent; color: @omp_text; }
 .discography-list > row { padding: 8px 4px; border-radius: 8px; }
-.discography-list > row:hover { background: @oap_row_hover; }
-.discography-list > row:selected { background: @oap_selected; }
-.discography-list > row:focus-visible { outline: 2px solid @oap_accent; outline-offset: -2px; }
+.discography-list > row:hover { background: @omp_row_hover; }
+.discography-list > row:selected { background: @omp_selected; }
+.discography-list > row:focus-visible { outline: 2px solid @omp_accent; outline-offset: -2px; }
 button.discography-action { background: transparent; padding: 4px; min-width: 20px; min-height: 20px; }
-button.discography-action:hover { background: @oap_hover; }
-.lyrics { color: @oap_lyrics; font-size: 15px; line-height: 1.6; }
-.timed-lyrics, .timed-lyrics text { background: transparent; color: @oap_lyrics; }
-.timed-lyrics text selection { background: @oap_selection; color: #fff; }
-popover > contents { background: @oap_raised; color: @oap_text; border: 1px solid @oap_popover_border; border-radius: 10px; padding: 6px; }
+button.discography-action:hover { background: @omp_hover; }
+.lyrics { color: @omp_lyrics; font-size: 15px; line-height: 1.6; }
+.timed-lyrics, .timed-lyrics text { background: transparent; color: @omp_lyrics; }
+.timed-lyrics text selection { background: @omp_selection; color: #fff; }
+popover > contents { background: @omp_raised; color: @omp_text; border: 1px solid @omp_popover_border; border-radius: 10px; padding: 6px; }
 popover modelbutton { padding: 8px; border-radius: 5px; }
-popover modelbutton:hover { background: @oap_popover_hover; }
+popover modelbutton:hover { background: @omp_popover_hover; }
 dropdown button { padding: 8px; }
 scrollbar { background: transparent; }
-scrollbar slider { background: @oap_scrollbar; border-radius: 8px; min-width: 5px; min-height: 24px; }
+scrollbar slider { background: @omp_scrollbar; border-radius: 8px; min-width: 5px; min-height: 24px; }
 .settings-body { padding: 24px; }
 
 .metadata-source { padding: 0; min-height: 24px; font-size: 12px; }
@@ -152,30 +152,30 @@ scrollbar slider { background: @oap_scrollbar; border-radius: 8px; min-width: 5p
 button.card-play { opacity: 0; transition: opacity 150ms ease-out; }
 .album-card:hover button.card-play, .album-card:focus-within button.card-play { opacity: 1; }
 
-spinbutton { background: @oap_field; color: @oap_text; border: 1px solid @oap_outline; border-radius: 8px; }
-spinbutton text { background: transparent; color: @oap_text; padding: 7px 10px; }
-spinbutton:focus-within { outline: 2px solid @oap_accent; outline-offset: 2px; }
-.selection-bar { padding: 8px; background: @oap_raised; border-radius: 8px; }
-.track-row.drop-before { box-shadow: inset 0 1px @oap_accent; }
-.track-row.drop-after { box-shadow: inset 0 -1px @oap_accent; }
-.drop-library { outline: 1px solid @oap_accent; outline-offset: -2px; }
+spinbutton { background: @omp_field; color: @omp_text; border: 1px solid @omp_outline; border-radius: 8px; }
+spinbutton text { background: transparent; color: @omp_text; padding: 7px 10px; }
+spinbutton:focus-within { outline: 2px solid @omp_accent; outline-offset: 2px; }
+.selection-bar { padding: 8px; background: @omp_raised; border-radius: 8px; }
+.track-row.drop-before { box-shadow: inset 0 1px @omp_accent; }
+.track-row.drop-after { box-shadow: inset 0 -1px @omp_accent; }
+.drop-library { outline: 1px solid @omp_accent; outline-offset: -2px; }
 button.time-toggle { padding: 4px 6px; }
 .speed-control > button, button.player-side { padding: 8px; min-height: 20px; }
-.download-list, .download-list > row { background: transparent; color: @oap_text; }
-.download-list > row { padding: 6px 0; border-bottom: 1px solid @oap_divider; }
-.download-list > row:hover { background: @oap_row_hover; }
-.download-list progressbar trough { background: @oap_outline; border: 0; min-height: 4px; }
-.download-list progressbar progress { background: @oap_accent; border: 0; margin: 0; min-width: 0; min-height: 4px; }
+.download-list, .download-list > row { background: transparent; color: @omp_text; }
+.download-list > row { padding: 6px 0; border-bottom: 1px solid @omp_divider; }
+.download-list > row:hover { background: @omp_row_hover; }
+.download-list progressbar trough { background: @omp_outline; border: 0; min-height: 4px; }
+.download-list progressbar progress { background: @omp_accent; border: 0; margin: 0; min-width: 0; min-height: 4px; }
 .download-list label.error { color: #ffb4a9; }
 
 /* Keep native controls and auxiliary windows in the same semantic palette. */
-switch { background: @oap_field; border-color: @oap_outline; color: @oap_text; box-shadow: none; }
-switch:checked { background: @oap_accent; border-color: @oap_accent; color: @oap_accent_ink; }
-switch > slider { background: @oap_thumb; border-color: @oap_outline; box-shadow: none; }
-switch:checked > slider { background: @oap_accent_ink; border-color: @oap_accent_ink; }
-check, radio { background: @oap_field; border-color: @oap_outline; color: @oap_accent_ink; box-shadow: none; }
-check:checked, check:indeterminate, radio:checked, radio:indeterminate { background: @oap_accent; border-color: @oap_accent; color: @oap_accent_ink; }
+switch { background: @omp_field; border-color: @omp_outline; color: @omp_text; box-shadow: none; }
+switch:checked { background: @omp_accent; border-color: @omp_accent; color: @omp_accent_ink; }
+switch > slider { background: @omp_thumb; border-color: @omp_outline; box-shadow: none; }
+switch:checked > slider { background: @omp_accent_ink; border-color: @omp_accent_ink; }
+check, radio { background: @omp_field; border-color: @omp_outline; color: @omp_accent_ink; box-shadow: none; }
+check:checked, check:indeterminate, radio:checked, radio:indeterminate { background: @omp_accent; border-color: @omp_accent; color: @omp_accent_ink; }
 switch:disabled, checkbutton:disabled { opacity: 0.38; }
-switch:focus-visible, checkbutton:focus-visible, scale:focus-visible { outline-color: @oap_accent; }
-tooltip.background { background: @oap_raised; color: @oap_text; border-color: @oap_popover_border; }
-link, link:visited { color: @oap_accent; }
+switch:focus-visible, checkbutton:focus-visible, scale:focus-visible { outline-color: @omp_accent; }
+tooltip.background { background: @omp_raised; color: @omp_text; border-color: @omp_popover_border; }
+link, link:visited { color: @omp_accent; }

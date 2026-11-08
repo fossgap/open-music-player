@@ -123,7 +123,7 @@ fn information_fetches_attributed_summaries_dates_and_paged_discography() {
             .lock()
             .unwrap()
             .iter()
-            .all(|r| r.to_lowercase().contains("user-agent: openaudioplayer/"))
+            .all(|r| r.to_lowercase().contains("user-agent: openmusicplayer/"))
     );
     let restored: Track = serde_json::from_str(&serde_json::to_string(&track).unwrap()).unwrap();
     assert_eq!(restored.music_info, track.music_info);

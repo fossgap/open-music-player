@@ -25,15 +25,15 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             cache: storage::data_dir().join("metadata"),
-            musicbrainz: std::env::var("OPEN_AUDIO_MUSICBRAINZ_API")
+            musicbrainz: std::env::var("OPEN_MUSIC_MUSICBRAINZ_API")
                 .unwrap_or_else(|_| "https://musicbrainz.org/ws/2/".into()),
-            covers: std::env::var("OPEN_AUDIO_COVER_ART_API")
+            covers: std::env::var("OPEN_MUSIC_COVER_ART_API")
                 .unwrap_or_else(|_| "https://coverartarchive.org/".into()),
-            lrclib: std::env::var("OPEN_AUDIO_LRCLIB_API")
+            lrclib: std::env::var("OPEN_MUSIC_LRCLIB_API")
                 .unwrap_or_else(|_| "https://lrclib.net/api/".into()),
-            wikipedia: std::env::var("OPEN_AUDIO_WIKIPEDIA_API")
+            wikipedia: std::env::var("OPEN_MUSIC_WIKIPEDIA_API")
                 .unwrap_or_else(|_| "https://en.wikipedia.org/w/api.php".into()),
-            wikidata: std::env::var("OPEN_AUDIO_WIKIDATA_API")
+            wikidata: std::env::var("OPEN_MUSIC_WIKIDATA_API")
                 .unwrap_or_else(|_| "https://www.wikidata.org/w/api.php".into()),
             interval: Duration::from_millis(1100),
         }
@@ -73,7 +73,7 @@ impl Client {
     pub fn with_pacing(config: Config, pacing: Arc<std::sync::Mutex<Pacing>>) -> Self {
         let http = HttpClient::builder()
             .user_agent(concat!(
-                "OpenAudioPlayer/",
+                "OpenMusicPlayer/",
                 env!("CARGO_PKG_VERSION"),
                 " (",
                 env!("CARGO_PKG_HOMEPAGE"),

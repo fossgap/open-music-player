@@ -38,8 +38,8 @@ def keyring(action, namespace, value=None):
         raise BridgeError("Invalid credential storage identifier.")
     args = ["secret-tool", action]
     if action == "store":
-        args += ["--label=Open Audio Player — YouTube Music"]
-    args += ["application", "open-audio-player", "service", "youtube-music", "profile", namespace]
+        args += ["--label=Open Music Player — YouTube Music"]
+    args += ["application", "open-music-player", "service", "youtube-music", "profile", namespace]
     try:
         result = subprocess.run(
             args, input=value, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -428,7 +428,7 @@ def main():
             result = dispatch(request)
         response = {"ok": True, "data": result}
     except ModuleNotFoundError:
-        response = {"ok": False, "error": "Run open-audio-setup-youtube (or scripts/setup-youtube-music.sh from the source tree), then try again."}
+        response = {"ok": False, "error": "Run open-music-setup-youtube (or scripts/setup-youtube-music.sh from the source tree), then try again."}
     except BridgeError as error:
         response = {"ok": False, "error": str(error)}
     except Exception:

@@ -47,7 +47,7 @@ def create(destination, seconds=45):
             subprocess.run(['ffmpeg', '-v', 'error', '-y', '-f', 'lavfi', '-i',
                             f'sine=frequency={220 + 55 * index + 27.5 * number}:duration={seconds}',
                             '-af', 'volume=0.1,afade=t=in:d=1,afade=t=out:st=' + str(seconds-1) + ':d=1',
-                            '-metadata', f'title={title}', '-metadata', 'artist=Open Audio · Demo',
+                            '-metadata', f'title={title}', '-metadata', 'artist=Open Music · Demo',
                             '-metadata', f'album={album}', '-metadata', f'track={number}', str(audio)], check=True)
         (folder / f'01 - {names[0]}.txt').write_text('Original demonstration tone.\n\nThis fixture tests local lyrics, artwork,\nmetadata, and playback without using\ncommercial recordings.\n')
     (destination / 'README.txt').write_text('Generated demonstration tones and geometric artwork. Not commercial recordings.\n')

@@ -17,7 +17,7 @@ pub fn http_url(input: &str) -> Result<url::Url, String> {
 
 fn client() -> Result<Client, String> {
     Client::builder()
-        .user_agent(concat!("OpenAudioPlayer/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("OpenMusicPlayer/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(Duration::from_secs(8))
         .timeout(Duration::from_secs(25))
         .redirect(reqwest::redirect::Policy::limited(5))
@@ -82,8 +82,8 @@ pub fn podcast_search(
     query: &str,
 ) -> Result<Vec<PodcastShow>, String> {
     let (variable, default) = match directory {
-        PodcastDirectory::Apple => ("OPEN_AUDIO_ITUNES_API", "https://itunes.apple.com/"),
-        PodcastDirectory::Gpodder => ("OPEN_AUDIO_GPODDER_API", "https://gpodder.net/"),
+        PodcastDirectory::Apple => ("OPEN_MUSIC_ITUNES_API", "https://itunes.apple.com/"),
+        PodcastDirectory::Gpodder => ("OPEN_MUSIC_GPODDER_API", "https://gpodder.net/"),
     };
     // Overrides support private mirrors and deterministic offline integration tests.
     let base = std::env::var(variable).unwrap_or_else(|_| default.into());
@@ -194,7 +194,7 @@ pub fn radio_cancellable(
     cancelled: impl Fn() -> bool,
 ) -> Result<Vec<Track>, String> {
     let mut last_error = String::new();
-    let servers = std::env::var("OPEN_AUDIO_RADIO_API")
+    let servers = std::env::var("OPEN_MUSIC_RADIO_API")
         .map(|base| vec![base])
         .unwrap_or_else(|_| {
             vec![

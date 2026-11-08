@@ -1,4 +1,4 @@
-# open-audio-player
+# open-music-player
 
 A fully featured music player with support for local music, podcasts, live radio, and streaming services. It is designed to be lightweight, fast, amazing UI and user-friendly.
 

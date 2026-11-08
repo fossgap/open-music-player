@@ -26,12 +26,12 @@ use std::{cell::RefCell, rc::Rc};
 fn main() -> glib::ExitCode {
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--version") {
-        println!("Open Audio Player {}", env!("CARGO_PKG_VERSION"));
+        println!("Open Music Player {}", env!("CARGO_PKG_VERSION"));
         return glib::ExitCode::SUCCESS;
     }
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
-            "Open Audio Player\n\nUsage: open-audio-player [--import FOLDER] [--smoke-test]\n\n  --import FOLDER  Scan a music folder on startup\n  --smoke-test     Open the UI, then exit after 3 seconds\n  --version       Print version\n\nEnvironment:\n  OPEN_AUDIO_DATA_DIR  Override the library directory\n  OPEN_AUDIO_FAKE_SINK Use a silent sink for automated tests"
+            "Open Music Player\n\nUsage: open-music-player [--import FOLDER] [--smoke-test]\n\n  --import FOLDER  Scan a music folder on startup\n  --smoke-test     Open the UI, then exit after 3 seconds\n  --version       Print version\n\nEnvironment:\n  OPEN_MUSIC_DATA_DIR  Override the library directory\n  OPEN_MUSIC_FAKE_SINK Use a silent sink for automated tests"
         );
         return glib::ExitCode::SUCCESS;
     }
@@ -42,7 +42,7 @@ fn main() -> glib::ExitCode {
         .map(std::path::PathBuf::from);
     let smoke = args.iter().any(|a| a == "--smoke-test");
     let application = gtk::Application::builder()
-        .application_id("io.github.openaudio.Player")
+        .application_id("io.github.openmusic.Player")
         .flags(gio::ApplicationFlags::FLAGS_NONE)
         .build();
     let controller: Rc<RefCell<Option<Rc<app::App>>>> = Rc::new(RefCell::new(None));
@@ -54,7 +54,7 @@ fn main() -> glib::ExitCode {
         gio::resources_register(&resource);
         if let Some(display) = gtk::gdk::Display::default() {
             gtk::IconTheme::for_display(&display)
-                .add_resource_path("/io/github/openaudio/Player/icons");
+                .add_resource_path("/io/github/openmusic/Player/icons");
         }
     });
     application.connect_activate(move |application| {
@@ -86,7 +86,7 @@ fn main() -> glib::ExitCode {
                 eprintln!("{error}");
                 let dialog = gtk::MessageDialog::builder()
                     .application(application)
-                    .text("Open Audio Player could not start")
+                    .text("Open Music Player could not start")
                     .secondary_text(error)
                     .buttons(gtk::ButtonsType::Close)
                     .build();
@@ -100,7 +100,7 @@ fn main() -> glib::ExitCode {
         }
     });
     // Custom options are parsed above, not forwarded to GApplication.
-    let result = application.run_with_args(&["open-audio-player"]);
+    let result = application.run_with_args(&["open-music-player"]);
     if let Some(app) = controller.borrow_mut().take() {
         app.shutdown();
     }

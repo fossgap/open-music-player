@@ -46,8 +46,8 @@ fn property(app: &App, name: &str) -> glib::Variant {
     let state = app.state.borrow();
     let audio = app.audio.borrow();
     match name {
-        "Identity" => "Open Audio Player".to_variant(),
-        "DesktopEntry" => "io.github.openaudio.Player".to_variant(),
+        "Identity" => "Open Music Player".to_variant(),
+        "DesktopEntry" => "io.github.openmusic.Player".to_variant(),
         "SupportedUriSchemes" => vec!["file", "http", "https"].to_variant(),
         "SupportedMimeTypes" => vec![
             "audio/mpeg",
@@ -103,7 +103,7 @@ pub fn setup(app: &Rc<App>) {
     let weak = Rc::downgrade(app);
     gio::bus_own_name(
         gio::BusType::Session,
-        "org.mpris.MediaPlayer2.OpenAudioPlayer",
+        "org.mpris.MediaPlayer2.OpenMusicPlayer",
         gio::BusNameOwnerFlags::NONE,
         move |connection, _| {
             let Some(app) = weak.upgrade() else {
@@ -331,7 +331,7 @@ fn menu_properties(app: &App, id: i32) -> Properties {
         props.insert(
             "label".into(),
             app.tr(match id {
-                1 => "Open Audio Player",
+                1 => "Open Music Player",
                 2 => "Play / pause",
                 3 => "Next",
                 _ => "Quit",
@@ -380,8 +380,8 @@ fn register_tray(app: &Rc<App>, connection: &gio::DBusConnection) {
         })
         .property(|_, _, _, _, name| match name {
             "Category" => "ApplicationStatus".to_variant(),
-            "Id" => "open-audio-player".to_variant(),
-            "Title" => "Open Audio Player".to_variant(),
+            "Id" => "open-music-player".to_variant(),
+            "Title" => "Open Music Player".to_variant(),
             "Status" => "Active".to_variant(),
             "IconName" => "audio-x-generic".to_variant(),
             "WindowId" => 0_u32.to_variant(),
@@ -395,7 +395,7 @@ fn register_tray(app: &Rc<App>, connection: &gio::DBusConnection) {
             "ToolTip" => (
                 "audio-x-generic",
                 Vec::<(i32, i32, Vec<u8>)>::new(),
-                "Open Audio Player",
+                "Open Music Player",
                 "Music, podcasts, and radio",
             )
                 .to_variant(),

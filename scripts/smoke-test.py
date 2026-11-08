@@ -2,8 +2,8 @@
 """Exercise the real GTK app, audio pipeline, MPRIS and persistence offline.
 
 Run inside xvfb-run and dbus-run-session. All media and state live in a temporary
-directory. Optional OPEN_AUDIO_SCREENSHOTS captures review artifacts;
-OPEN_AUDIO_BINARY selects a release binary or extracted AppImage launcher.
+directory. Optional OPEN_MUSIC_SCREENSHOTS captures review artifacts;
+OPEN_MUSIC_BINARY selects a release binary or extracted AppImage launcher.
 """
 import importlib.util
 import functools
@@ -20,11 +20,11 @@ import threading
 from urllib.parse import quote, urlparse, unquote, parse_qs
 
 ROOT = Path(__file__).resolve().parents[1]
-BINARY = Path(os.environ.get('OPEN_AUDIO_BINARY', ROOT / 'target/debug/open-audio-player')).resolve()
-DEST = 'org.mpris.MediaPlayer2.OpenAudioPlayer'
+BINARY = Path(os.environ.get('OPEN_MUSIC_BINARY', ROOT / 'target/debug/open-music-player')).resolve()
+DEST = 'org.mpris.MediaPlayer2.OpenMusicPlayer'
 PLAYER = 'org.mpris.MediaPlayer2.Player'
 
-for dependency in ['ffmpeg', 'gdbus', 'xdotool'] + (['import'] if os.environ.get('OPEN_AUDIO_SCREENSHOTS') else []):
+for dependency in ['ffmpeg', 'gdbus', 'xdotool'] + (['import'] if os.environ.get('OPEN_MUSIC_SCREENSHOTS') else []):
     if not shutil.which(dependency):
         raise SystemExit(f'Missing integration-test dependency: {dependency}')
 if not BINARY.is_file():
@@ -42,7 +42,7 @@ def prop(name):
 
 def action(name, value=None):
     params = '[]' if value is None else "[<" + json.dumps(value) + ">]"
-    return call('org.gtk.Actions', 'Activate', name, params, '{}', dest='io.github.openaudio.Player', path='/io/github/openaudio/Player')
+    return call('org.gtk.Actions', 'Activate', name, params, '{}', dest='io.github.openmusic.Player', path='/io/github/openmusic/Player')
 
 
 def window(title):
@@ -55,7 +55,7 @@ def window_size(target):
 
 
 def visible_player_windows():
-    return subprocess.run(['xdotool', 'search', '--onlyvisible', '--name', '^Open Audio'],
+    return subprocess.run(['xdotool', 'search', '--onlyvisible', '--name', '^Open Music'],
                           capture_output=True, text=True).stdout.splitlines()
 
 
@@ -103,7 +103,7 @@ def wait_until(predicate, seconds=25):
     raise AssertionError('Timed out waiting for application state')
 
 
-with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
+with tempfile.TemporaryDirectory(prefix='open-music-test-') as temporary:
     temp = Path(temporary)
     spec = importlib.util.spec_from_file_location('demo', ROOT / 'scripts/create-demo.py')
     demo = importlib.util.module_from_spec(spec)
@@ -122,9 +122,9 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
                     self.send_error(503, 'Test directory unavailable')
                     return
                 shows = [
-                    ('Listening notes', 'Open Audio Studio', 'Daylight studies'),
+                    ('Listening notes', 'Open Music Studio', 'Daylight studies'),
                     ('After the recording', 'The demo collection', 'After hours'),
-                    ('Small discoveries', 'Open Audio Studio', 'Soft signals'),
+                    ('Small discoveries', 'Open Music Studio', 'Soft signals'),
                 ]
                 results = []
                 for index, (title, author, album) in enumerate(shows):
@@ -159,20 +159,20 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
     (data / 'library.json').write_text(json.dumps({'tracks': [], 'folders': [], 'fetch_covers': False, 'fetch_lyrics': False, 'fetch_information': False, 'download_directory': str(temp / 'downloads')}))
     runtime = temp / 'runtime'
     runtime.mkdir(mode=0o700)
-    env = {**os.environ, 'OPEN_AUDIO_DATA_DIR': str(data), 'OPEN_AUDIO_FAKE_SINK': '1',
+    env = {**os.environ, 'OPEN_MUSIC_DATA_DIR': str(data), 'OPEN_MUSIC_FAKE_SINK': '1',
            'GTK_A11Y': 'none', 'GTK_USE_PORTAL': '0', 'GIO_USE_VFS': 'local', 'GDK_BACKEND': 'x11',
            'GSK_RENDERER': 'cairo', 'XDG_RUNTIME_DIR': str(runtime), 'LANGUAGE': 'en',
-           'OPEN_AUDIO_ITUNES_API': base + '/apple/', 'OPEN_AUDIO_GPODDER_API': base + '/gpodder/'}
+           'OPEN_MUSIC_ITUNES_API': base + '/apple/', 'OPEN_MUSIC_GPODDER_API': base + '/gpodder/'}
     env.pop('WAYLAND_DISPLAY', None)
     log = (temp / 'app.log').open('w+')
     child = subprocess.Popen([str(BINARY), '--import', str(music)], env=env, stdout=log, stderr=log)
     def state():
         return json.loads((data / 'library.json').read_text())
     def snapshot(name):
-        if directory := os.environ.get('OPEN_AUDIO_SCREENSHOTS'):
+        if directory := os.environ.get('OPEN_MUSIC_SCREENSHOTS'):
             Path(directory).mkdir(parents=True, exist_ok=True)
             time.sleep(0.3)
-            windows = subprocess.check_output(['xdotool', 'search', '--onlyvisible', '--name', '^Open Audio'], text=True).splitlines()
+            windows = subprocess.check_output(['xdotool', 'search', '--onlyvisible', '--name', '^Open Music'], text=True).splitlines()
             subprocess.run(['import', '-window', windows[-1], str(Path(directory) / name)], check=True)
     try:
         wait_until(lambda: len(state()['tracks']) == 12 and 'Stopped' in prop('PlaybackStatus'), 45)
@@ -290,7 +290,7 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         action('subscribe-show', show_id(base + '/feed-0.xml'))
         wait_until(lambda: len(state()['subscriptions']) == 2)
         def search_podcasts(term):
-            subprocess.run(['xdotool', 'windowfocus', '--sync', window('Open Audio Player')], check=True)
+            subprocess.run(['xdotool', 'windowfocus', '--sync', window('Open Music Player')], check=True)
             keys('ctrl+f', 'ctrl+a')
             type_text(term)
             keys('Return')
@@ -325,7 +325,7 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         action('page', 'radio')
         snapshot('desktop-empty.png')
         action('page', 'library')
-        main_window = subprocess.check_output(['xdotool', 'search', '--onlyvisible', '--name', '^Open Audio Player$'], text=True).splitlines()[-1]
+        main_window = subprocess.check_output(['xdotool', 'search', '--onlyvisible', '--name', '^Open Music Player$'], text=True).splitlines()[-1]
         subprocess.run(['xdotool', 'windowsize', main_window, '820', '620'], check=True)
         time.sleep(0.3)
         geometry = subprocess.check_output(['xdotool', 'getwindowgeometry', '--shell', main_window], text=True)
@@ -359,7 +359,7 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         assert len(saved['playlists']) == 3 and len(saved['subscriptions']) == 4
         child = subprocess.Popen([str(BINARY)], env=env, stdout=log, stderr=log)
         wait_until(lambda: 'Stopped' in prop('PlaybackStatus'))
-        wait_until(lambda: window_size(window('Open Audio Player')) == saved_size)
+        wait_until(lambda: window_size(window('Open Music Player')) == saved_size)
         assert second in prop('Metadata')
         call(PLAYER, 'Play')
         wait_until(lambda: 'Playing' in prop('PlaybackStatus'))
@@ -375,17 +375,17 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
         assert child.poll() is None and not visible_player_windows()
         assert state()['window'] == saved_window
         subprocess.run([str(BINARY)], env=env, stdout=log, stderr=log, check=True, timeout=10)
-        wait_until(lambda: window('Open Audio Player'))
-        assert window_size(window('Open Audio Player')) == saved_size
-        close_player_window('Open Audio Player')
+        wait_until(lambda: window('Open Music Player'))
+        assert window_size(window('Open Music Player')) == saved_size
+        close_player_window('Open Music Player')
         wait_until(lambda: not visible_player_windows())
         assert child.poll() is None
         call('org.mpris.MediaPlayer2', 'Raise')
-        wait_until(lambda: window('Open Audio Player'))
+        wait_until(lambda: window('Open Music Player'))
         call(PLAYER, 'Play')
         wait_until(lambda: 'Playing' in prop('PlaybackStatus'))
         call(PLAYER, 'Pause')
-        close_player_window('Open Audio Player')
+        close_player_window('Open Music Player')
         wait_until(lambda: not visible_player_windows())
         assert child.poll() is None
         call('org.mpris.MediaPlayer2', 'Quit')
@@ -400,8 +400,8 @@ with tempfile.TemporaryDirectory(prefix='open-audio-test-') as temporary:
             if hidden:
                 assert not visible_player_windows()
                 call('org.mpris.MediaPlayer2', 'Raise')
-            wait_until(lambda: window('Open Audio Player'))
-            close_player_window('Open Audio Player')
+            wait_until(lambda: window('Open Music Player'))
+            close_player_window('Open Music Player')
             assert child.wait(timeout=10) == 0
         log.seek(0)
         output = log.read()

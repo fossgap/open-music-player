@@ -15,16 +15,16 @@ pub(super) fn settle() {
 #[ignore = "requires an isolated display, D-Bus session and data directory; run scripts/ui-test.sh"]
 fn ui_browsing_preserves_scroll_selection_and_collections() {
     assert!(
-        std::env::var_os("OPEN_AUDIO_DATA_DIR").is_some(),
+        std::env::var_os("OPEN_MUSIC_DATA_DIR").is_some(),
         "Use scripts/ui-test.sh to isolate listening data"
     );
-    assert!(std::env::var_os("OPEN_AUDIO_FAKE_SINK").is_some());
+    assert!(std::env::var_os("OPEN_MUSIC_FAKE_SINK").is_some());
     gtk::init().unwrap();
     let bytes =
         glib::Bytes::from_static(include_bytes!(concat!(env!("OUT_DIR"), "/icons.gresource")));
     gio::resources_register(&gio::Resource::from_data(&bytes).unwrap());
     gtk::IconTheme::for_display(&gdk::Display::default().unwrap())
-        .add_resource_path("/io/github/openaudio/Player/icons");
+        .add_resource_path("/io/github/openmusic/Player/icons");
     let directory = tempfile::tempdir().unwrap();
     let audio = directory.path().join("tone.wav");
     let size = 8000_u32 * 2 * 30;
@@ -65,40 +65,40 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     state.create_playlist("Empty", vec![]).unwrap();
     state.sanitize();
     let application = gtk::Application::builder()
-        .application_id("io.github.openaudio.BrowseTest")
+        .application_id("io.github.openmusic.BrowseTest")
         .build();
     application.register(None::<&gio::Cancellable>).unwrap();
     let app = App::new(&application, state).unwrap();
     settle();
-    if std::env::var_os("OPEN_AUDIO_TEST_SEARCH_ONLY").is_some() {
+    if std::env::var_os("OPEN_MUSIC_TEST_SEARCH_ONLY").is_some() {
         super::search::exercise(&app, &audio);
         app.shutdown();
         app.window.destroy();
         object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
         return;
     }
-    if std::env::var_os("OPEN_AUDIO_TEST_TAGS_ONLY").is_some() {
+    if std::env::var_os("OPEN_MUSIC_TEST_TAGS_ONLY").is_some() {
         super::tags::exercise(&app, &audio);
         app.shutdown();
         app.window.destroy();
         object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
         return;
     }
-    if std::env::var_os("OPEN_AUDIO_TEST_PREFERENCES_ONLY").is_some() {
+    if std::env::var_os("OPEN_MUSIC_TEST_PREFERENCES_ONLY").is_some() {
         exercise_preferences(&app);
         app.shutdown();
         app.window.destroy();
         object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
         return;
     }
-    if std::env::var_os("OPEN_AUDIO_TEST_VISUALIZATION_ONLY").is_some() {
+    if std::env::var_os("OPEN_MUSIC_TEST_VISUALIZATION_ONLY").is_some() {
         exercise_visualization(&app, directory.path());
         app.shutdown();
         app.window.destroy();
         object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
         return;
     }
-    if std::env::var_os("OPEN_AUDIO_TEST_INFORMATION_ONLY").is_some() {
+    if std::env::var_os("OPEN_MUSIC_TEST_INFORMATION_ONLY").is_some() {
         exercise_information(&app, &audio);
         super::discography::exercise(&app, &audio);
         app.shutdown();
@@ -106,7 +106,7 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
         object::<gtk::Window>(&app.mini_ui, "mini_window").destroy();
         return;
     }
-    if std::env::var_os("OPEN_AUDIO_TEST_LIBRARY_DETAILS_ONLY").is_some() {
+    if std::env::var_os("OPEN_MUSIC_TEST_LIBRARY_DETAILS_ONLY").is_some() {
         exercise_library_details(&app, &audio);
         app.shutdown();
         app.window.destroy();
@@ -116,7 +116,7 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     // Keep a focused path for iterating on media-transfer UI without replaying
     // the unrelated pointer, provider and library scenarios. The full suite below
     // always exercises the same transfer checks too.
-    if std::env::var_os("OPEN_AUDIO_TEST_DOWNLOADS_ONLY").is_some() {
+    if std::env::var_os("OPEN_MUSIC_TEST_DOWNLOADS_ONLY").is_some() {
         exercise_downloads_and_timing(&app, &audio);
         app.shutdown();
         app.window.destroy();
@@ -1265,16 +1265,16 @@ fn exercise_preferences(app: &Rc<App>) {
         }
         let theme = app.theme.borrow();
         for bg in [
-            "oap_window",
-            "oap_rail",
-            "oap_detail",
-            "oap_field",
-            "oap_raised",
-            "oap_selected",
-            "oap_nav_selected",
-            "oap_row_hover",
+            "omp_window",
+            "omp_rail",
+            "omp_detail",
+            "omp_field",
+            "omp_raised",
+            "omp_selected",
+            "omp_nav_selected",
+            "omp_row_hover",
         ] {
-            for fg in ["oap_text", "oap_muted", "oap_lyrics", "oap_accent"] {
+            for fg in ["omp_text", "omp_muted", "omp_lyrics", "omp_accent"] {
                 let (a, b) = (luminance(theme.color(fg)), luminance(theme.color(bg)));
                 let contrast = (a.max(b) + 0.05) / (a.min(b) + 0.05);
                 assert!(
@@ -1295,7 +1295,7 @@ fn exercise_preferences(app: &Rc<App>) {
     until(|| {
         app.theme
             .borrow()
-            .color("oap_window")
+            .color("omp_window")
             .iter()
             .all(|c| *c > 0.7)
     });
@@ -1336,7 +1336,7 @@ fn exercise_preferences(app: &Rc<App>) {
     until(|| {
         app.theme
             .borrow()
-            .color("oap_window")
+            .color("omp_window")
             .iter()
             .all(|c| *c < 0.3)
     });
@@ -1345,16 +1345,16 @@ fn exercise_preferences(app: &Rc<App>) {
     theme.set_selected(1);
     settle();
     assert_eq!(app.state.borrow().theme, model::Theme::Sage);
-    let sage = app.theme.borrow().color("oap_window");
+    let sage = app.theme.borrow().color("omp_window");
     app.theme.borrow_mut().system_scheme(2);
     settle();
-    assert_eq!(app.theme.borrow().color("oap_window"), sage);
+    assert_eq!(app.theme.borrow().color("omp_window"), sage);
     screenshot(&dialog, "preferences-sage.png");
     theme.set_selected(0);
     until(|| {
         app.theme
             .borrow()
-            .color("oap_window")
+            .color("omp_window")
             .iter()
             .all(|c| *c > 0.7)
     });
@@ -1431,7 +1431,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
         Kind::Music,
     );
     track.id = "visualizerfixture".into();
-    track.artist = "Open Audio test session".into();
+    track.artist = "Open Music test session".into();
     let warm_art = directory.join("visualizer-warm.png");
     let cool_art = directory.join("visualizer-cool.png");
     let artwork = std::process::Command::new("python3").args([
@@ -1520,7 +1520,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
         );
         String::from_utf8(result.stdout).unwrap()
     };
-    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Audio Player$"]);
+    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Music Player$"]);
     let window = windows.lines().last().unwrap();
     xdo(&["windowfocus", "--sync", window]);
     let bounds = button.compute_bounds(&details).unwrap();
@@ -1561,7 +1561,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     assert!(button.has_focus());
     details.vadjustment().set_value(0.0);
     until(|| {
-        let accent = app.theme.borrow().color("oap_accent");
+        let accent = app.theme.borrow().color("omp_accent");
         accent[2] > accent[0] + 0.025
     });
     assert_ne!(skin_pixels(app), original_skin);
@@ -1591,7 +1591,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     let quiet_skin = skin_pixels(app);
     app.seek(24.0);
     until(|| {
-        let accent = app.theme.borrow().color("oap_accent");
+        let accent = app.theme.borrow().color("omp_accent");
         accent[0] > accent[2] + 0.12
     });
     assert_ne!(skin_pixels(app), quiet_skin);
@@ -1607,7 +1607,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     settle();
     app.seek(0.0);
     until(|| {
-        let accent = app.theme.borrow().color("oap_accent");
+        let accent = app.theme.borrow().color("omp_accent");
         accent[2] > accent[0] + 0.025
     });
     let mini: gtk::Window = object(&app.mini_ui, "mini_window");
@@ -1646,7 +1646,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     app.update_player();
     until(|| art.paintable().is_some());
     until(|| {
-        let accent = app.theme.borrow().color("oap_accent");
+        let accent = app.theme.borrow().color("omp_accent");
         accent[0] > accent[2] + 0.12
     });
     until(|| app.watermark.is_visible());
@@ -1755,7 +1755,7 @@ fn exercise_visualization(app: &Rc<App>, directory: &std::path::Path) {
     app.next(false);
     until(|| art.paintable().is_some() && art.paintable() != old_art);
     until(|| {
-        let accent = app.theme.borrow().color("oap_accent");
+        let accent = app.theme.borrow().color("omp_accent");
         accent[2] > accent[0] + 0.10
     });
     assert_eq!(
@@ -1835,9 +1835,9 @@ fn skin_pixels(app: &Rc<App>) -> Vec<[u8; 3]> {
     let mut pixels = vec![0; stride * texture.height() as usize];
     texture.download(&mut pixels, stride);
     [
-        ("sidebar", "oap_rail"),
-        ("content", "oap_window"),
-        ("player_bar", "oap_rail"),
+        ("sidebar", "omp_rail"),
+        ("content", "omp_window"),
+        ("player_bar", "omp_rail"),
     ]
     .into_iter()
     .map(|(id, role)| {
@@ -1863,7 +1863,7 @@ fn skin_pixels(app: &Rc<App>) -> Vec<[u8; 3]> {
                 _ => 0.0,
             };
             for i in 0..3 {
-                let window = theme.color("oap_window")[i];
+                let window = theme.color("omp_window")[i];
                 let bounds = [0.0, 1.0].map(|cover| {
                     let base = window + (cover - window) * watermark::MAX_OPACITY;
                     (base * (1.0 - panel) + expected[i] * panel) * 255.0
@@ -2310,7 +2310,7 @@ fn exercise_audio_summary(app: &Rc<App>) {
         Kind::Radio,
     );
     track.id = "audioformatfixture".into();
-    track.artist = "Open Audio test session".into();
+    track.artist = "Open Music test session".into();
     track.audio_details = crate::audio_info::Details {
         codec: Some("flac".into()),
         bitrate: Some(921_000),
@@ -2429,7 +2429,7 @@ fn exercise_library_details(app: &Rc<App>, tone: &std::path::Path) {
             .find(|t| t.id == id(&timed))
             .unwrap();
         track.title = "A line at a time".into();
-        track.artist = "Open Audio test session".into();
+        track.artist = "Open Music test session".into();
         track.synced_lyrics = Some(
             (0..30)
                 .map(|n| format!("[00:{n:02}.00]Line {n:02} — an original timed lyric"))
@@ -2989,7 +2989,7 @@ fn exercise_pointer_reordering(app: &Rc<App>) {
         }
         false
     }
-    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Audio Player$"]);
+    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Music Player$"]);
     let window = windows.lines().last().unwrap();
     xdo(&["windowfocus", "--sync", window]);
     let pointer = |x: f32, y: f32| {
@@ -3463,7 +3463,7 @@ fn exercise_file_manager(app: &Rc<App>, track: &str, path: &std::path::Path) {
 }
 
 pub(super) fn screenshot(window: &gtk::Window, name: &str) {
-    let Some(directory) = std::env::var_os("OPEN_AUDIO_TEST_SCREENSHOTS") else {
+    let Some(directory) = std::env::var_os("OPEN_MUSIC_TEST_SCREENSHOTS") else {
         return;
     };
     std::fs::create_dir_all(&directory).unwrap();

@@ -132,13 +132,13 @@ impl App {
         let heading = label(&self.tr("Connect your Spotify account"));
         heading.add_css_class("title-2");
         content.append(&heading);
-        content.append(&label(&self.tr("Spotify Premium is required. Sign in securely in your browser; your password is never entered in Open Audio Player.")));
+        content.append(&label(&self.tr("Spotify Premium is required. Sign in securely in your browser; your password is never entered in Open Music Player.")));
         content.append(&label(&self.tr("Sign-in is saved in your desktop keyring. Search music, play tracks and sync your playlists from Streaming.")));
         let advanced = gtk::Expander::new(Some(&self.tr("Advanced connection options")));
         let options = gtk::Box::new(gtk::Orientation::Vertical, 10);
         let client = gtk::Entry::new();
         client.set_placeholder_text(Some(&self.tr("Spotify Client ID (optional)")));
-        if let Ok(value) = std::env::var("OPEN_AUDIO_SPOTIFY_CLIENT_ID") {
+        if let Ok(value) = std::env::var("OPEN_MUSIC_SPOTIFY_CLIENT_ID") {
             client.set_text(&value);
         }
         options.append(&client);

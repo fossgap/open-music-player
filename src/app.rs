@@ -621,22 +621,22 @@ impl App {
             let Some(app) = weak.upgrade() else { return };
             let theme = app.theme.borrow();
             let (x, y) = (f64::from(w) / 2.0, f64::from(h) / 2.0);
-            let [r, g, b] = theme.color("oap_raised");
+            let [r, g, b] = theme.color("omp_raised");
             cr.set_source_rgb(r, g, b);
             cr.arc(x, y, 74.0, 0.0, std::f64::consts::TAU);
             let _ = cr.fill();
-            let [r, g, b] = theme.color("oap_outline");
+            let [r, g, b] = theme.color("omp_outline");
             cr.set_source_rgb(r, g, b);
             cr.set_line_width(1.0);
             for r in [36.0, 43.0, 50.0, 57.0, 64.0] {
                 cr.arc(x, y, r, 0.0, std::f64::consts::TAU);
                 let _ = cr.stroke();
             }
-            let [r, g, b] = theme.color("oap_accent");
+            let [r, g, b] = theme.color("omp_accent");
             cr.set_source_rgb(r, g, b);
             cr.arc(x, y, 27.0, 0.0, std::f64::consts::TAU);
             let _ = cr.fill();
-            let [r, g, b] = theme.color("oap_accent_ink");
+            let [r, g, b] = theme.color("omp_accent_ink");
             cr.set_source_rgb(r, g, b);
             cr.arc(x, y, 5.0, 0.0, std::f64::consts::TAU);
             let _ = cr.fill();
@@ -1339,7 +1339,7 @@ impl App {
         button.set_icon_name(if active {
             "starred-symbolic"
         } else {
-            "open-audio-star-outline-symbolic"
+            "open-music-star-outline-symbolic"
         });
         let label = self.tr(if active {
             "Remove from favorites"

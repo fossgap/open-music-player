@@ -6,6 +6,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build development image
-        run: docker build -t open-audio-dev .
+        run: docker build -t open-music-dev .
       - name: Check, test, and exercise GTK
-        run: docker run --rm open-audio-dev
+        run: docker run --rm open-music-dev

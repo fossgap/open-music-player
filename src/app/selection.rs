@@ -8,7 +8,7 @@ pub(super) enum Collection {
 }
 
 #[derive(Clone, glib::Boxed)]
-#[boxed_type(name = "OpenAudioTrackDrag")]
+#[boxed_type(name = "OpenMusicTrackDrag")]
 pub(super) struct TrackDrag {
     collection: Collection,
     order: Vec<String>,

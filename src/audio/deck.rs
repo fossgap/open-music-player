@@ -135,7 +135,7 @@ impl Deck {
             .map_err(|e| e.to_string())?;
         envelope.set(gst::ClockTime::ZERO, 1.0);
         pipeline.set_property("audio-filter", &filter);
-        let output = if cfg!(test) || std::env::var_os("OPEN_AUDIO_FAKE_SINK").is_some() {
+        let output = if cfg!(test) || std::env::var_os("OPEN_MUSIC_FAKE_SINK").is_some() {
             gst::ElementFactory::make("fakesink")
                 .property("sync", true)
                 .property("signal-handoffs", cfg!(test))

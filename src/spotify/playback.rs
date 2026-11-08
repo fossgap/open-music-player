@@ -28,7 +28,7 @@ struct PcmSink {
 }
 impl PcmSink {
     fn new() -> Result<(Self, gst::Element), String> {
-        let output = if std::env::var_os("OPEN_AUDIO_FAKE_SINK").is_some() {
+        let output = if std::env::var_os("OPEN_MUSIC_FAKE_SINK").is_some() {
             "fakesink sync=true"
         } else {
             "autoaudiosink"

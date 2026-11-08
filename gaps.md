@@ -1,7 +1,7 @@
 
 ## Assistant
 
-**Open Audio Player\u2019s biggest gaps are library management, playlist editing and advanced playback controls.** I catalogued **102 gap items: 70 missing capabilities and 32 areas where basic support already exists but is less complete.**
+**Open Music Player\u2019s biggest gaps are library management, playlist editing and advanced playback controls.** I catalogued **102 gap items: 70 missing capabilities and 32 areas where basic support already exists but is less complete.**
 
 The full inventory includes the current behavior, comparison apps, source-file evidence and qualifications: **[Download the detailed comparison spreadsheet](/tmp/open-audio-player-research-2026-11-06/feature-gaps.csv)**.
 
@@ -15,11 +15,11 @@ I couldn\u2019t substantiate a definitive Linux-wide \u201cthree most used\u201d
 
 Those figures are download counts, not active users or market shares. Other applications, including GNOME Music and Quod Libet, score higher under some [Debian measurements](https://popcon.debian.org/), so this selection should be understood as a practical benchmark rather than a proven popularity podium.
 
-I examined the three official release source distributions alongside their documentation, and compared them with Open Audio Player\u2019s **current working tree, including the recent playlist and podcast improvements**. This is a source and documentation audit; external accounts and physical devices were not exercised.
+I examined the three official release source distributions alongside their documentation, and compared them with Open Music Player\u2019s **current working tree, including the recent playlist and podcast improvements**. This is a source and documentation audit; external accounts and physical devices were not exercised.
 
-Open Audio Player already has playlist creation, renaming, deletion, artwork grids and M3U/M3U8/PLS/XSPF import; album browsing; favorites; queue removal and clearing; shuffle/repeat; podcast discovery, subscriptions and individual resume positions; radio; artwork; local lyrics; a live waveform; MPRIS; tray controls; a mini player; and session persistence. Those are accounted for below.
+Open Music Player already has playlist creation, renaming, deletion, artwork grids and M3U/M3U8/PLS/XSPF import; album browsing; favorites; queue removal and clearing; shuffle/repeat; podcast discovery, subscriptions and individual resume positions; radio; artwork; local lyrics; a live waveform; MPRIS; tray controls; a mini player; and session persistence. Those are accounted for below.
 
-In the tables, **R = Rhythmbox, A = Audacious, S = Strawberry**. **\u201cPartial\u201d** means a related capability already exists in Open Audio Player. The comparison column gives verified examples, not an exhaustive support matrix.
+In the tables, **R = Rhythmbox, A = Audacious, S = Strawberry**. **\u201cPartial\u201d** means a related capability already exists in Open Music Player. The comparison column gives verified examples, not an exhaustive support matrix.
 
 For **metadata and collection information**, the differences extend well beyond reading song titles. Strawberry\u2019s [tag editor](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/dialogs/edittagdialog.ui) and [collection preferences](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/settings/collectionsettingspage.ui) provide concrete examples.
 
@@ -36,7 +36,7 @@ For **metadata and collection information**, the differences extend well beyond 
 | 9 | Read/write ratings and play counts through audio-file tags | S |
 | 10 | **Partial:** track-properties inspector showing codec, bitrate, sample rate, bit depth, size and location | R, S |
 
-For **library browsing and file management**, the main limitation is that Open Audio Player currently offers a relatively fixed view over its indexed tracks. Strawberry\u2019s [grouping controls](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/collection/groupbydialog.ui), [file organizer](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/organize/organizedialog.ui) and [collection watcher](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/collection/collectionwatcher.cpp) illustrate the broader workflows.
+For **library browsing and file management**, the main limitation is that Open Music Player currently offers a relatively fixed view over its indexed tracks. Strawberry\u2019s [grouping controls](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/collection/groupbydialog.ui), [file organizer](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/organize/organizedialog.ui) and [collection watcher](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/collection/collectionwatcher.cpp) illustrate the broader workflows.
 
 | # | Missing or incomplete capability | Examples |
 |---|---|---|
@@ -76,7 +76,7 @@ For **playlists and the queue**, the recent management work supplies the foundat
 | 37 | Batch sorting, reversal, duplicate removal and unavailable-entry cleanup | A, S |
 | 38 | Export multiple playlists in one operation | S |
 
-Open Audio Player currently suppresses repeated tracks when adding/importing them. That prevents accidental duplicates, but also prevents intentional repeated entries in a listening sequence.
+Open Music Player currently suppresses repeated tracks when adding/importing them. That prevents accidental duplicates, but also prevents intentional repeated entries in a listening sequence.
 
 For **playback and sound**, using GStreamer does not automatically provide the controls or transition logic offered by mature applications. These gaps are visible in Strawberry\u2019s [backend settings](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/settings/backendsettingspage.ui), [playback modes](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/playlist/playlistsequence.ui) and Audacious\u2019s [effect plugins](https://github.com/audacious-media-player/audacious-plugins/tree/audacious-plugins-4.6.2/src).
 
@@ -119,7 +119,7 @@ For **formats, discs and conversion**, the distinction is between what the backe
 
 Item 60 concerns the scanner\u2019s extension allowlist; some excluded formats may still be playable through another entry point with suitable GStreamer plugins. CD burning in Rhythmbox depends on its Brasero integration.
 
-For **artwork, lyrics and visualization**, Open Audio Player already handles local material. The missing functionality is predominantly retrieval, editing and richer presentation. See Strawberry\u2019s [cover manager](https://github.com/strawberrymusicplayer/strawberry/tree/1.2.31/src/covermanager), [lyrics controls](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/settings/lyricssettingspage.ui) and [waveform implementation](https://github.com/strawberrymusicplayer/strawberry/tree/1.2.31/src/waveform).
+For **artwork, lyrics and visualization**, Open Music Player already handles local material. The missing functionality is predominantly retrieval, editing and richer presentation. See Strawberry\u2019s [cover manager](https://github.com/strawberrymusicplayer/strawberry/tree/1.2.31/src/covermanager), [lyrics controls](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/settings/lyricssettingspage.ui) and [waveform implementation](https://github.com/strawberrymusicplayer/strawberry/tree/1.2.31/src/waveform).
 
 | # | Missing or incomplete capability | Examples |
 |---|---|---|
@@ -163,7 +163,7 @@ For **services, networking and devices**, the gaps concern integrated libraries 
 | 89 | Update the displayed artist/title from live stream metadata | R, S, A |
 | 90 | **Partial:** network-share/FTP URL workflows and application proxy settings | A for transports; S for proxy settings |
 
-Important qualifications: Strawberry\u2019s commercial-service integrations are **unofficial**, can require paid accounts and optional components, and are not guarantees of continued service access. Mounted network folders already work as local folders in Open Audio Player. Its existing MPRIS support is also real remote control within the desktop session; item 87 concerns a network-accessible remote.
+Important qualifications: Strawberry\u2019s commercial-service integrations are **unofficial**, can require paid accounts and optional components, and are not guarantees of continued service access. Mounted network folders already work as local folders in Open Music Player. Its existing MPRIS support is also real remote control within the desktop session; item 87 concerns a network-accessible remote.
 
 For **desktop behavior and customization**, the missing capabilities are illustrated by Strawberry\u2019s [notification settings](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/settings/notificationssettingspage.ui), [behavior settings](https://github.com/strawberrymusicplayer/strawberry/blob/1.2.31/src/settings/behavioursettingspage.ui), Audacious\u2019s [automation plugin](https://github.com/audacious-media-player/audacious-plugins/blob/audacious-plugins-4.6.2/src/songchange/song_change.cc) and its [recent playback-history additions](https://audacious-media-player.org/news/64-audacious-4-6-released).
 

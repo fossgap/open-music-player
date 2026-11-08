@@ -114,8 +114,8 @@ impl App {
             let data = app.visualization.borrow();
             let (w, h) = (f64::from(width), f64::from(height));
             let theme = app.theme.borrow();
-            let [r, g, b] = theme.color("oap_accent");
-            let skin = theme.color("oap_detail");
+            let [r, g, b] = theme.color("omp_accent");
+            let skin = theme.color("omp_detail");
             match app.state.borrow().visualization {
                 Visualization::Waveform => {
                     let cr =
@@ -224,7 +224,7 @@ impl App {
         let changed = self.theme.borrow_mut().update(tone, visible, animated);
         self.update_watermark(tone.map(|(_, energy)| energy).unwrap_or(0.0), animated);
         if changed {
-            let [r, g, b] = self.theme.borrow().color("oap_accent");
+            let [r, g, b] = self.theme.borrow().color("omp_accent");
             if let Some(tag) = object::<gtk::TextView>(&self.ui, "lyrics_timed")
                 .buffer()
                 .tag_table()

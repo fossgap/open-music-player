@@ -1,15 +1,15 @@
 [Desktop Entry]
 Type=Application
-Name=Open Audio Player
+Name=Open Music Player
 GenericName=Music Player
 GenericName[fr]=Lecteur de musique
 Comment=Music, podcasts, and radio in one place
 Comment[fr]=Musique, podcasts et radio au même endroit
-Exec=open-audio-player
-Icon=io.github.openaudio.Player
+Exec=open-music-player
+Icon=io.github.openmusic.Player
 Terminal=false
 Categories=AudioVideo;Audio;Player;Music;
 Keywords=music;audio;podcast;radio;
 StartupNotify=true
-StartupWMClass=io.github.openaudio.Player
+StartupWMClass=io.github.openmusic.Player
 DBusActivatable=false

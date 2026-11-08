@@ -43,7 +43,7 @@ fn exercise_group_disclosure(
         );
         String::from_utf8(result.stdout).unwrap()
     };
-    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Audio Player$"]);
+    let windows = xdo(&["search", "--onlyvisible", "--name", "^Open Music Player$"]);
     let window = windows.lines().last().unwrap();
     xdo(&["windowfocus", "--sync", window]);
     let current = app.state.borrow().current.clone();
@@ -168,7 +168,7 @@ pub(crate) fn exercise(app: &Rc<App>, tone: &std::path::Path) {
     let feed_url = format!("{}feed", feed.url);
     let cover_url = format!("{}cover.png", feed.url);
     let catalog = Fixture::new(vec![
-        ("/search".into(), 200, String::new(), serde_json::to_vec(&serde_json::json!({"results":[{"feedUrl":feed_url,"collectionName":"Night stories","artistName":"Open Audio fixture","artworkUrl600":cover_url}]})).unwrap()),
+        ("/search".into(), 200, String::new(), serde_json::to_vec(&serde_json::json!({"results":[{"feedUrl":feed_url,"collectionName":"Night stories","artistName":"Open Music fixture","artworkUrl600":cover_url}]})).unwrap()),
         ("/search.json".into(), 503, String::new(), b"Directory temporarily unavailable".to_vec()),
         ("/json/stations/search".into(), 200, String::new(), br#"[{"name":"Night radio","url_resolved":"https://example.test/night-radio","stationuuid":"night-fixture","country":"Test country","tags":"ambient,jazz"}]"#.to_vec()),
     ]);
@@ -184,17 +184,17 @@ pub(crate) fn exercise(app: &Rc<App>, tone: &std::path::Path) {
     .unwrap();
     std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
     let variables = [
-        "OPEN_AUDIO_ITUNES_API",
-        "OPEN_AUDIO_GPODDER_API",
-        "OPEN_AUDIO_RADIO_API",
-        "OPEN_AUDIO_PYTHON",
+        "OPEN_MUSIC_ITUNES_API",
+        "OPEN_MUSIC_GPODDER_API",
+        "OPEN_MUSIC_RADIO_API",
+        "OPEN_MUSIC_PYTHON",
     ];
     let saved_env: Vec<_> = variables.iter().map(std::env::var_os).collect();
     unsafe {
         for key in &variables[..3] {
             std::env::set_var(key, &catalog.url);
         }
-        std::env::set_var("OPEN_AUDIO_PYTHON", &python);
+        std::env::set_var("OPEN_MUSIC_PYTHON", &python);
     }
     let uri = gio::File::for_path(tone).uri().to_string();
     let mut song = Track::new(&uri, "Night song", Kind::Music);

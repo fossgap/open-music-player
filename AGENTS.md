@@ -27,7 +27,7 @@ Use `cargo fmt` for Rust formatting. Use four-space indentation in Rust/Python a
 
 ## Testing Guidelines
 
-Add focused regression tests for behavior changes, using descriptive names such as `playlist_reads_reject_changed_revisions`. Prefer temporary libraries, local HTTP fixtures, and mocked providers over real accounts. Run `make check` and `make test`; run both desktop suites for UI or playback changes. Capture review images with `OPEN_AUDIO_SCREENSHOTS=/tmp/open-audio-screens make smoke`.
+Add focused regression tests for behavior changes, using descriptive names such as `playlist_reads_reject_changed_revisions`. Prefer temporary libraries, local HTTP fixtures, and mocked providers over real accounts. Run `make check` and `make test`; run both desktop suites for UI or playback changes. Capture review images with `OPEN_MUSIC_SCREENSHOTS=/tmp/open-music-screens make smoke`.
 
 ## Commit & Pull Request Guidelines
 
@@ -35,6 +35,6 @@ Use concise imperative subjects, following history: `Add cached cover and lyrics
 
 ## Security & Configuration
 
-Use `OPEN_AUDIO_DATA_DIR=/tmp/open-audio-dev` for isolated manual testing. Store credentials in the desktop keyring, never in source, logs, or `library.json`.
+Use `OPEN_MUSIC_DATA_DIR=/tmp/open-music-dev` for isolated manual testing. Store credentials in the desktop keyring, never in source, logs, or `library.json`.
 
 Seek free, publicly available providers that support anonymous access. Avoid sources requiring subscriptions or API keys unless explicitly requested by the user.

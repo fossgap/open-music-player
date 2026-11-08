@@ -51,7 +51,7 @@ impl Job {
 
 fn entry() -> Result<keyring::Entry, String> {
     keyring::Entry::new(
-        "io.github.openaudio.Player.spotify",
+        "io.github.openmusic.Player.spotify",
         &stable_id(&storage::data_dir().to_string_lossy()),
     )
     .map_err(|_| {
@@ -185,9 +185,9 @@ pub fn login(
                 };
                 let valid = !matches!(&answer, Ok(None));
                 let body = if valid {
-                    "Sign-in received. Return to Open Audio Player to finish connecting."
+                    "Sign-in received. Return to Open Music Player to finish connecting."
                 } else {
-                    "This is not a valid Open Audio Player sign-in callback."
+                    "This is not a valid Open Music Player sign-in callback."
                 };
                 let status = if valid { "200 OK" } else { "400 Bad Request" };
                 let _ = write!(

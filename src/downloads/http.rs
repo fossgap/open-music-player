@@ -49,9 +49,9 @@ async fn transfer(
             .header(
                 header::USER_AGENT,
                 concat!(
-                    "OpenAudioPlayer/",
+                    "OpenMusicPlayer/",
                     env!("CARGO_PKG_VERSION"),
-                    " (https://github.com/fossgap/open-audio-player)"
+                    " (https://github.com/fossgap/open-music-player)"
                 ),
             );
         for (key, value) in &resolved.headers {
@@ -150,7 +150,7 @@ async fn transfer(
         partial.take();
         *partial = Some(Partial {
             file: tempfile::Builder::new()
-                .prefix(".open-audio-")
+                .prefix(".open-music-")
                 .suffix(".part")
                 .tempfile_in(&task.directory)
                 .map_err(|e| e.to_string())?,

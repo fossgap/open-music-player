@@ -567,7 +567,7 @@ fn record(
 ) -> Result<NamedTempFile, String> {
     gst::init().map_err(|e| e.to_string())?;
     let file = tempfile::Builder::new()
-        .prefix(".open-audio-")
+        .prefix(".open-music-")
         .suffix(".part")
         .tempfile_in(&task.directory)
         .map_err(|e| e.to_string())?;

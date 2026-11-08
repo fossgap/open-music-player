@@ -6,41 +6,41 @@ pub(super) type Color = [f64; 3];
 
 // Saturation and lightness preserve the hierarchy of the existing dark skin.
 const ROLES: &[(&str, f64, f64)] = &[
-    ("oap_accent", 0.62, 0.77),
-    ("oap_accent_ink", 0.4, 0.09),
-    ("oap_window", 0.48, 0.14),
-    ("oap_text", 0.18, 0.95),
-    ("oap_rail", 0.54, 0.095),
-    ("oap_raised", 0.4, 0.20),
-    ("oap_muted", 0.2, 0.77),
-    ("oap_header_line", 0.39, 0.205),
-    ("oap_hover", 0.45, 0.25),
-    ("oap_control", 0.18, 0.93),
-    ("oap_active", 0.46, 0.29),
-    ("oap_flat_hover", 0.44, 0.225),
-    ("oap_accent_hover", 0.55, 0.85),
-    ("oap_play_hover", 0.4, 0.87),
-    ("oap_selected", 0.49, 0.24),
-    ("oap_nav_hover", 0.44, 0.18),
-    ("oap_nav_selected", 0.55, 0.225),
-    ("oap_nav_text", 0.5, 0.84),
-    ("oap_separator", 0.4, 0.235),
-    ("oap_field", 0.42, 0.17),
-    ("oap_outline", 0.34, 0.33),
-    ("oap_selection", 0.5, 0.34),
-    ("oap_notice", 0.4, 0.21),
-    ("oap_divider", 0.39, 0.245),
-    ("oap_row_hover", 0.44, 0.205),
-    ("oap_placeholder", 0.44, 0.25),
-    ("oap_placeholder_text", 0.4, 0.78),
-    ("oap_album_placeholder", 0.4, 0.24),
-    ("oap_album_placeholder_text", 0.45, 0.78),
-    ("oap_thumb", 0.3, 0.91),
-    ("oap_detail", 0.45, 0.165),
-    ("oap_lyrics", 0.26, 0.86),
-    ("oap_popover_border", 0.34, 0.36),
-    ("oap_popover_hover", 0.45, 0.28),
-    ("oap_scrollbar", 0.28, 0.47),
+    ("omp_accent", 0.62, 0.77),
+    ("omp_accent_ink", 0.4, 0.09),
+    ("omp_window", 0.48, 0.14),
+    ("omp_text", 0.18, 0.95),
+    ("omp_rail", 0.54, 0.095),
+    ("omp_raised", 0.4, 0.20),
+    ("omp_muted", 0.2, 0.77),
+    ("omp_header_line", 0.39, 0.205),
+    ("omp_hover", 0.45, 0.25),
+    ("omp_control", 0.18, 0.93),
+    ("omp_active", 0.46, 0.29),
+    ("omp_flat_hover", 0.44, 0.225),
+    ("omp_accent_hover", 0.55, 0.85),
+    ("omp_play_hover", 0.4, 0.87),
+    ("omp_selected", 0.49, 0.24),
+    ("omp_nav_hover", 0.44, 0.18),
+    ("omp_nav_selected", 0.55, 0.225),
+    ("omp_nav_text", 0.5, 0.84),
+    ("omp_separator", 0.4, 0.235),
+    ("omp_field", 0.42, 0.17),
+    ("omp_outline", 0.34, 0.33),
+    ("omp_selection", 0.5, 0.34),
+    ("omp_notice", 0.4, 0.21),
+    ("omp_divider", 0.39, 0.245),
+    ("omp_row_hover", 0.44, 0.205),
+    ("omp_placeholder", 0.44, 0.25),
+    ("omp_placeholder_text", 0.4, 0.78),
+    ("omp_album_placeholder", 0.4, 0.24),
+    ("omp_album_placeholder_text", 0.45, 0.78),
+    ("omp_thumb", 0.3, 0.91),
+    ("omp_detail", 0.45, 0.165),
+    ("omp_lyrics", 0.26, 0.86),
+    ("omp_popover_border", 0.34, 0.36),
+    ("omp_popover_hover", 0.45, 0.28),
+    ("omp_scrollbar", 0.28, 0.47),
 ];
 
 fn hue(color: Color) -> f64 {
@@ -417,16 +417,16 @@ mod tests {
                     palette.approach(&target, 0.25);
                     let palette = palette.quantized();
                     for bg in [
-                        "oap_window",
-                        "oap_rail",
-                        "oap_detail",
-                        "oap_field",
-                        "oap_raised",
-                        "oap_selected",
-                        "oap_nav_selected",
-                        "oap_row_hover",
+                        "omp_window",
+                        "omp_rail",
+                        "omp_detail",
+                        "omp_field",
+                        "omp_raised",
+                        "omp_selected",
+                        "omp_nav_selected",
+                        "omp_row_hover",
                     ] {
-                        for fg in ["oap_text", "oap_muted", "oap_lyrics", "oap_accent"] {
+                        for fg in ["omp_text", "omp_muted", "omp_lyrics", "omp_accent"] {
                             assert!(
                                 contrast(palette.color(fg), palette.color(bg)) >= 4.5,
                                 "{h}°, energy {energy}: {fg} on {bg}"
@@ -436,31 +436,31 @@ mod tests {
                     // A white cover is the worst case for light text, including
                     // the translucent sidebar, details, and transport surfaces.
                     let white_cover = palette
-                        .color("oap_window")
+                        .color("omp_window")
                         .map(|c| c + (1.0 - c) * super::super::watermark::MAX_OPACITY);
                     for (role, opacity) in [
-                        ("oap_window", 0.0),
-                        ("oap_rail", 0.6),
-                        ("oap_rail", 0.65),
-                        ("oap_detail", 0.65),
+                        ("omp_window", 0.0),
+                        ("omp_rail", 0.6),
+                        ("omp_rail", 0.65),
+                        ("omp_detail", 0.65),
                     ] {
                         let background = std::array::from_fn(|i| {
                             white_cover[i] * (1.0 - opacity) + palette.color(role)[i] * opacity
                         });
-                        for fg in ["oap_text", "oap_muted", "oap_lyrics", "oap_accent"] {
+                        for fg in ["omp_text", "omp_muted", "omp_lyrics", "omp_accent"] {
                             assert!(
                                 contrast(palette.color(fg), background) >= 4.5,
                                 "White watermark: {h}°, energy {energy}: {fg} on {role}"
                             );
                         }
                     }
-                    for bg in ["oap_accent", "oap_accent_hover", "oap_play_hover"] {
+                    for bg in ["omp_accent", "omp_accent_hover", "omp_play_hover"] {
                         assert!(
-                            contrast(palette.color("oap_accent_ink"), palette.color(bg)) >= 4.5
+                            contrast(palette.color("omp_accent_ink"), palette.color(bg)) >= 4.5
                         );
                     }
                     assert!(
-                        contrast(palette.color("oap_thumb"), palette.color("oap_outline")) >= 3.0
+                        contrast(palette.color("omp_thumb"), palette.color("omp_outline")) >= 3.0
                     );
                 }
             }

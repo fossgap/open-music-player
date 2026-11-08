@@ -397,7 +397,7 @@ fn write_file(
     }
     let parent = path.parent().ok_or("Invalid file location.")?;
     let directory = tempfile::Builder::new()
-        .prefix(".open-audio-tags-")
+        .prefix(".open-music-tags-")
         .tempdir_in(parent)
         .map_err(|e| e.to_string())?;
     let staged = directory.path().join("edited");

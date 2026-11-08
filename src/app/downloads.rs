@@ -119,7 +119,7 @@ impl App {
             .unwrap_or_else(|| {
                 glib::user_special_dir(glib::UserDirectory::Downloads)
                     .unwrap_or_else(|| glib::home_dir().join("Downloads"))
-                    .join("Open Audio Player")
+                    .join("Open Music Player")
             })
     }
 
