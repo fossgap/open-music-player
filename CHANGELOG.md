@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 — 2026-11-09
+
+- Add artist browsing to the library, with bundled artist and drag-handle icons that remain available across desktop icon themes.
+- Complete the interface translations in all ten languages and validate locale coverage in checks and tests.
+- Replace the README demonstration image with live screenshots of a real library, radio, podcasts, streaming, and visualizations, and add `make screenshots` to regenerate them.
+
 ## 0.1.4 — 2026-11-08
 
 - Bundle the duration-column clock icon so it remains available across desktop icon themes.

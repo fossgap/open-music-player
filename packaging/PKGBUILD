@@ -1,5 +1,5 @@
 pkgname=open-music-player
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc='A native home for music, podcasts, and radio'
 arch=('x86_64' 'aarch64')

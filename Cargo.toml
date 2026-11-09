@@ -1,6 +1,6 @@
 [package]
 name = "open-music-player"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 rust-version = "1.89"
 description = "A native Linux home for music, podcasts, and radio"
