@@ -7,6 +7,7 @@ cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
 python3 scripts/test-youtube-music.py
+python3 scripts/test-locales.py
 python3 scripts/check-locales.py
 ```
 
@@ -59,7 +60,11 @@ The default container command runs formatting, lint, unit, translation, and virt
 
 ### Translations
 
-`locales/en.json` is the source catalogue; the other nine files use the same English keys. `scripts/check-locales.py` checks parity and literal UI coverage. Missing keys fall back to English. The system language is the default, or select a language in Settings and restart. Technical errors from external libraries and operating-system dialogs can remain in their own language.
+`locales/en.json` is the source catalogue; the other nine files use the same English keys. Add new messages to every catalogue, including tooltips and messages returned by background services. `scripts/check-locales.py` checks key parity, duplicate keys, empty values, GTK labels/titles/tooltips, and literal Rust translation calls (including conditional branches). It rejects copied English values unless they are reviewed names or shared words listed with a reason in `scripts/translation-exceptions.json`. Versioned product labels are recognized automatically.
+
+`make test` includes regressions for these checks. The GTK suite verifies French playback tooltips, settings, downloads and service errors, and Spanish selection-menu labels. To run that portion alone, use `OPEN_MUSIC_TEST_I18N_ONLY=1 make ui-test`; set `OPEN_MUSIC_TEST_SCREENSHOTS=/tmp/open-music-i18n` to capture its windows.
+
+Missing keys fall back to English. The system language is the default, or select a language in Settings and restart. Technical diagnostics from external libraries and operating-system dialogs can remain in their own language; user-provided titles and artist names are preserved.
 
 ## Project layout
 

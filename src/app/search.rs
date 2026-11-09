@@ -752,7 +752,7 @@ impl App {
                         .borrow()
                         .get(&group)
                         .and_then(|s| match &s.status {
-                            Status::Failed(e) => Some(e.clone()),
+                            Status::Failed(e) => Some(self.tr(e)),
                             Status::Disconnected => {
                                 Some(self.tr("Connect Spotify in Streaming to search."))
                             }
@@ -1006,7 +1006,7 @@ impl App {
     }
     pub(super) fn global_notice(&self, text: &str, error: bool) {
         let banner: gtk::Box = object(&self.search.ui, "global_notice");
-        object::<gtk::Label>(&self.search.ui, "global_message").set_label(text);
+        object::<gtk::Label>(&self.search.ui, "global_message").set_label(&self.tr(text));
         if error {
             banner.add_css_class("error");
         } else {

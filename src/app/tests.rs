@@ -1,5 +1,7 @@
 use super::*;
 
+mod translations;
+
 pub(super) fn settle() {
     let until = Instant::now() + Duration::from_millis(350);
     while Instant::now() < until {
@@ -43,6 +45,10 @@ fn ui_browsing_preserves_scroll_selection_and_collections() {
     wav.resize(44 + size as usize, 0);
     std::fs::write(&audio, wav).unwrap();
     let uri = url::Url::from_file_path(&audio).unwrap().to_string();
+    translations::exercise(&uri);
+    if std::env::var_os("OPEN_MUSIC_TEST_I18N_ONLY").is_some() {
+        return;
+    }
     let mut state = State {
         fetch_covers: false,
         fetch_lyrics: false,

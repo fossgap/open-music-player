@@ -67,6 +67,11 @@ impl I18n {
             {
                 button.set_label(&self.text(&label));
             }
+            if let Some(button) = object.downcast_ref::<gtk::MenuButton>()
+                && let Some(label) = button.label()
+            {
+                button.set_label(&self.text(&label));
+            }
             if let Some(button) = object.downcast_ref::<gtk::CheckButton>()
                 && let Some(label) = button.label()
             {

@@ -799,7 +799,7 @@ impl App {
         } else {
             notice.remove_css_class("error");
         }
-        self.label("notice_text", text);
+        self.label("notice_text", &self.tr(text));
         let spinner: gtk::Spinner = object(&self.ui, "busy_spinner");
         spinner.set_visible(busy);
         spinner.set_spinning(busy);
@@ -1720,10 +1720,14 @@ impl App {
         window.set_transient_for(Some(&self.window));
         window.set_application(Some(&self.application));
         let language: gtk::DropDown = object(&ui, "language");
+        let language_names: Vec<_> = crate::i18n::LANGUAGES
+            .iter()
+            .map(|(_, name)| self.tr(name))
+            .collect();
         language.set_model(Some(&gtk::StringList::new(
-            &crate::i18n::LANGUAGES
+            &language_names
                 .iter()
-                .map(|(_, n)| *n)
+                .map(String::as_str)
                 .collect::<Vec<_>>(),
         )));
         language.set_selected(

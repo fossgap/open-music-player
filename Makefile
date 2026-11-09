@@ -11,6 +11,7 @@ run:
 test:
 	cargo test --locked
 	python3 scripts/test-youtube-music.py
+	python3 scripts/test-locales.py
 check:
 	cargo fmt --check
 	cargo clippy --locked --all-targets -- -D warnings

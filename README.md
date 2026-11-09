@@ -96,7 +96,7 @@ With rustfmt and Clippy installed:
 
 ```sh
 make check                 # Formatting, strict Clippy, translations
-make test                  # Rust and Python bridge tests
+make test                  # Rust, Python bridge and translation tests
 make ui-test               # GTK regressions under Xvfb
 make smoke                 # Offline application/playback integration
 make build                 # Optimized binary

@@ -369,7 +369,7 @@ fn register_tray(app: &Rc<App>, connection: &gio::DBusConnection) {
         icons::NAME,
         pixmaps,
         "Open Music Player",
-        "Music, podcasts, and radio",
+        app.tr("Music, podcasts, and radio"),
     )
         .to_variant();
     let weak = Rc::downgrade(app);

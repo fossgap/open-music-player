@@ -231,7 +231,7 @@ impl App {
     }
     fn spotify_dialog_status(&self, message: &str) {
         if let Some(dialog) = self.spotify.dialog.borrow().as_ref() {
-            dialog.status.set_label(message);
+            dialog.status.set_label(&self.tr(message));
             dialog.connect.set_sensitive(!self.spotify.busy.get());
             dialog.disconnect.set_sensitive(
                 !self.spotify.busy.get() && self.state.borrow().spotify_account.is_some(),

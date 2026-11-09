@@ -250,7 +250,7 @@ impl App {
 
     fn youtube_dialog_status(&self, text: &str) {
         if let Some(dialog) = self.youtube.dialog.borrow().as_ref() {
-            dialog.status.set_label(text);
+            dialog.status.set_label(&self.tr(text));
             dialog.connect.set_sensitive(!self.youtube.busy.get());
             dialog.disconnect.set_sensitive(
                 !self.youtube.busy.get() && self.state.borrow().youtube_account.is_some(),

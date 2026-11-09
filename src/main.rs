@@ -62,8 +62,12 @@ fn main() -> glib::ExitCode {
             app.show();
             return;
         }
-        let result = storage::load(&storage::data_dir().join("library.json"))
-            .and_then(|state| app::App::new(application, state));
+        let state = storage::load(&storage::data_dir().join("library.json"));
+        let language = state
+            .as_ref()
+            .map(|state| state.language.clone())
+            .unwrap_or_else(|_| "system".into());
+        let result = state.and_then(|state| app::App::new(application, state));
         match result {
             Ok(app) => {
                 if let Some(folder) = &import {
@@ -84,10 +88,11 @@ fn main() -> glib::ExitCode {
             }
             Err(error) => {
                 eprintln!("{error}");
+                let i18n = i18n::I18n::new(&language);
                 let dialog = gtk::MessageDialog::builder()
                     .application(application)
-                    .text("Open Music Player could not start")
-                    .secondary_text(error)
+                    .text(i18n.text("Open Music Player could not start"))
+                    .secondary_text(i18n.text(&error))
                     .buttons(gtk::ButtonsType::Close)
                     .build();
                 let application = application.clone();
