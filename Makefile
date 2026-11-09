@@ -3,7 +3,7 @@ DESTDIR ?=
 APP_ID = io.github.openmusic.Player
 BINARY ?= $(or $(CARGO_TARGET_DIR),target)/release/open-music-player
 
-.PHONY: build run test check smoke ui-test install uninstall deb rpm arch arch-source appimage
+.PHONY: build run test check smoke ui-test screenshots install uninstall deb rpm arch arch-source appimage
 build:
 	cargo build --release --locked
 run:
@@ -21,6 +21,9 @@ smoke:
 	xvfb-run -a dbus-run-session -- env GDK_BACKEND=x11 GSK_RENDERER=cairo python3 scripts/smoke-test.py
 ui-test:
 	bash scripts/ui-test.sh
+screenshots:
+	cargo build --locked
+	xvfb-run -a -s "-screen 0 1600x1000x24" dbus-run-session -- env GDK_BACKEND=x11 GSK_RENDERER=cairo python3 scripts/capture-screenshots.py docs/screenshots
 install:
 	install -Dm755 $(BINARY) $(DESTDIR)$(PREFIX)/bin/open-music-player
 	install -Dm755 scripts/setup-youtube-music.sh $(DESTDIR)$(PREFIX)/bin/open-music-setup-youtube

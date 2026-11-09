@@ -17,7 +17,25 @@
 
 [Features](#features) · [User guide](docs/wiki/README.md) · [Installation](#installation) · [Data privacy](docs/wiki/data-privacy.md) · [Building from source](#building-from-source)
 
-![Open Music Player with generated demonstration music](docs/player.png)
+![Open Music Player playing a real album: track list, now playing, synchronized lyrics, and live waveform](docs/screenshots/main-library.png)
+
+## Screenshots
+
+Browse the [screenshot gallery](docs/screenshots/README.md), or click any image below for the full-size version.
+
+| **Live radio** | **Podcasts** |
+| --- | --- |
+| [![Live radio station directory by Radio Browser](docs/screenshots/radio.png)](docs/screenshots/radio.png) | [![Podcast discovery with subscriptions](docs/screenshots/podcasts.png)](docs/screenshots/podcasts.png) |
+| **Streaming** | **Visualizations: spectrum** |
+| [![Streaming with YouTube Music, Spotify, and internet streams](docs/screenshots/streaming.png)](docs/screenshots/streaming.png) | [![Now playing with the audio spectrum visualization and lyrics](docs/screenshots/visualization-spectrum.png)](docs/screenshots/visualization-spectrum.png) |
+| **Visualizations: mood scene** | **Visualizations: album art — Skyrock live** |
+| [![Audio-reactive mood visualization tinting the whole player](docs/screenshots/visualization-mood.png)](docs/screenshots/visualization-mood.png) | [![Skyrock radio playing live with the album art visualization tinting the whole player](docs/screenshots/visualization-album-art.png)](docs/screenshots/visualization-album-art.png) |
+
+**Mini player**
+
+[![Mini player](docs/screenshots/mini-player.png)](docs/screenshots/mini-player.png)
+
+Captured live from the application running normally: a real local library, live Radio Browser search with a station playing, podcast discovery, and a YouTube Music search. Regenerate them with your own library using `make screenshots`.
 
 
 ## Features
@@ -54,8 +72,8 @@ sudo dnf install ./open-music-player-[0-9]*.x86_64.rpm
 sudo pacman -U ./open-music-player-[0-9]*-x86_64.pkg.tar.zst
 
 # AppImage — use the filename you downloaded
-chmod +x OpenMusicPlayer-0.1.4-x86_64.AppImage
-./OpenMusicPlayer-0.1.4-x86_64.AppImage
+chmod +x OpenMusicPlayer-0.1.5-x86_64.AppImage
+./OpenMusicPlayer-0.1.5-x86_64.AppImage
 ```
 
 The build baseline is Debian 12 (glibc 2.36, GTK 4.8). Native packages declare their runtime dependencies; the AppImage bundles GTK, GStreamer, and FFmpeg. Optional YouTube support needs Python, a JavaScript runtime, and the [setup helper](docs/wiki/streaming.md#youtube-music). Account connections need an unlocked desktop keyring. See [installation and updates](docs/wiki/installation.md) for details and running AppImage without FUSE.
