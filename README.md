@@ -5,7 +5,7 @@
 <h1 align="center">Open Music Player</h1>
 
 [![Test CI](https://github.com/fossgap/open-music-player/actions/workflows/test-ci.yml/badge.svg)](https://github.com/fossgap/open-music-player/actions/workflows/test-ci.yml)
-[![Release CI](https://github.com/fossgap/open-music-player/actions/workflows/release-ci.yml/badge.svg)](https://github.com/fossgap/open-music-player/actions/workflows/release-ci.yml)
+[![Release CI](https://github.com/fossgap/open-music-player/actions/workflows/release-ci.yml/badge.svg?event=push)](https://github.com/fossgap/open-music-player/actions/workflows/release-ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/fossgap/open-music-player)](https://github.com/fossgap/open-music-player/releases)
 [![Downloads](https://img.shields.io/github/downloads/fossgap/open-music-player/total)](https://github.com/fossgap/open-music-player/releases)
 [![License: GPL-3.0-only](https://img.shields.io/badge/License-GPL--3.0--only-blue.svg)](LICENSE)
